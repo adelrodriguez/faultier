@@ -1,4 +1,4 @@
-import Fault from "./core"
+import BaseFault from "./base"
 
 /**
  * Extracts all user-facing messages from the fault chain.
@@ -12,10 +12,10 @@ import Fault from "./core"
  * // "Service unavailable. Database connection failed."
  * ```
  */
-export function getIssue(fault: Fault): string {
+export function getIssue(fault: BaseFault): string {
   return fault
     .unwrap()
-    .filter(Fault.isFault)
+    .filter(BaseFault.isFault)
     .map((err) => `${err.message}.`)
     .join(" ")
 }
@@ -32,10 +32,10 @@ export function getIssue(fault: Fault): string {
  * // "Service failed after 3 retries. DB timeout on port 5432."
  * ```
  */
-export function getDebug(fault: Fault): string {
+export function getDebug(fault: BaseFault): string {
   return fault
     .unwrap()
-    .filter(Fault.isFault)
+    .filter(BaseFault.isFault)
     .map((err) => `${err.debug}.`)
     .join(" ")
 }
