@@ -1,19 +1,19 @@
 {
-  "name": "pastry",
+  "name": "faultier",
   "version": "0.0.1",
-  "description": "A simple template to build libraries with Bun",
+  "description": "Extensible error handling for TypeScript",
   "keywords": [
     "bun",
     "template",
     "library"
   ],
-  "homepage": "https://github.com/adelrodriguez/pastry#readme",
+  "homepage": "https://github.com/adelrodriguez/faultier#readme",
   "bugs": {
-    "url": "https://github.com/adelrodriguez/pastry/issues"
+    "url": "https://github.com/adelrodriguez/faultier/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/adelrodriguez/pastry.git"
+    "url": "https://github.com/adelrodriguez/faultier.git"
   },
   "license": "MIT",
   "author": "Adel Rodríguez",

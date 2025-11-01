@@ -1,35 +1,44 @@
 ---
-"pastry": minor
+"faultier": minor
 ---
 
-Add interactive template initialization CLI and comprehensive documentation
+Initial implementation of Faultier - extensible error handling for TypeScript
 
-This release introduces two major features that significantly improve the developer experience when working with the Pastry template:
+Faultier is a comprehensive error handling library built with TypeScript that provides enhanced error objects with tagging, context, debug messages, and error chaining capabilities. This release includes the complete core implementation and comprehensive test coverage.
 
-**Interactive Template CLI** (d3b12c5)
+**Core Architecture**
 
-- Added `bun run template init` command that provides an interactive CLI for scaffolding new projects
-- Prompts users for project name, author, GitHub username, and description
-- Automatically updates package.json, README.md, and removes template documentation
-- Uses @clack/prompts for a polished terminal UI with spinners and progress indicators
-- Includes proper error handling and validation for user inputs
+- **BaseFault class** - Abstract base class providing the foundation for all fault functionality including fluent API methods for error enrichment
+- **Fault class** - Main error class extending BaseFault with static factory methods (`wrap`, `create`, `extend`)
+- **Type-safe registry system** - Module augmentation support through `FaultRegistry` interface allowing applications to define custom fault tags and context schemas with full type inference
+- **Error chaining** - Built-in support for wrapping and unwrapping error chains through the `cause` property
 
-**Comprehensive Documentation** (870d134)
+**Key Features**
 
-- Added detailed migration guide (`docs/migrate-project.md`) with 594 lines of documentation covering:
-  - Three different git merge strategies for preserving project history
-  - Step-by-step post-migration instructions for package.json, source code organization, configuration reconciliation, and dependency updates
-  - Troubleshooting section for common migration issues
-  - Examples and best practices for converting existing projects to the Pastry template
-- Enhanced README.md with a clear overview of included tools (Bun, Bunup, Adamantite, Changesets, GitHub Actions)
-- Improved template script with better user feedback and file cleanup
+- **Tag-based categorization** - Type-safe error classification system using string tags defined in the registry
+- **Structured context** - Attach typed metadata to errors with automatic merging and clearing capabilities
+- **Debug messages** - Separate internal debug messages from user-facing error messages
+- **Chain traversal** - Methods to unwrap error chains (`unwrap`), flatten messages (`flatten`), collect tags (`getTags`), and merge contexts (`getFullContext`)
+- **Custom error extensions** - `Fault.extend()` method to add fault functionality to existing Error subclasses while preserving their properties
+- **Type guards** - `Fault.isFault()` with proper type narrowing to registry types
+- **JSON serialization** - Built-in `toJSON()` for structured error logging
 
-**Claude Code Agent for Changesets**
+**Helper Functions**
 
-- Added a specialized `changeset-writer` agent (`.claude/agents/changeset-writer.md`) for automating changelog generation
-- Analyzes git diffs and generates appropriate changeset entries following semantic versioning principles
-- Provides intelligent version bump recommendations (major/minor/patch) based on change impact
-- Writes user-focused changelog descriptions with proper formatting and examples
-- Integrates seamlessly with the existing changesets workflow
+- `getIssue()` - Extract all user-facing messages from a fault chain
+- `getDebug()` - Extract all debug messages from a fault chain
 
-These additions make it significantly easier for developers to both start new projects from scratch and migrate existing projects to the Pastry template while maintaining their git history.
+**Testing**
+
+Comprehensive test suite with 500+ lines of tests covering:
+- Core functionality (wrapping, tagging, context management)
+- Error chain traversal and context merging
+- Type safety with registry augmentation
+- Custom error class extensions
+- Edge cases and error scenarios
+
+**Documentation**
+
+- Extensive JSDoc comments on all public APIs with usage examples
+- Type definitions exported for consumer applications
+- Module augmentation patterns for custom fault registries

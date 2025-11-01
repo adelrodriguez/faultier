@@ -1,8 +1,10 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: *.ts, *.tsx, package.json
-alwaysApply: false
----
+# CLAUDE.md for Pastry
+
+## Agents
+
+- Always use the `changeset-writer` agent when you need to create or update changeset entries based on git changes.
+
+## Bun
 
 Default to using Bun instead of Node.js.
 
