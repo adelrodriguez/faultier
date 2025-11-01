@@ -1,0 +1,53 @@
+{
+  "name": "pastry",
+  "version": "0.0.1",
+  "description": "A simple template to build libraries with Bun",
+  "keywords": [
+    "bun",
+    "template",
+    "library"
+  ],
+  "homepage": "https://github.com/adelrodriguez/pastry#readme",
+  "bugs": {
+    "url": "https://github.com/adelrodriguez/pastry/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adelrodriguez/pastry.git"
+  },
+  "license": "MIT",
+  "author": "Adel Rodríguez",
+  "type": "module",
+  "module": "src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bunup",
+    "bump:deps": "bun update --interactive",
+    "check": "adamantite check",
+    "dev": "bunup --watch",
+    "fix": "adamantite fix",
+    "release": "changeset publish",
+    "template": "bun run --bun scripts/template.ts",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "test:watch": "bun test --watch",
+    "typecheck": "tsc --noEmit",
+    "version": "changeset version"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.2",
+    "@changesets/cli": "2.29.7",
+    "@clack/prompts": "0.11.0",
+    "@types/bun": "1.3.1",
+    "@types/yargs": "17.0.34",
+    "adamantite": "0.13.0",
+    "bunup": "0.15.13",
+    "yargs": "18.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "packageManager": "bun@1.3.1"
+}
