@@ -1,5 +1,11 @@
 # faultier
 
+## 0.1.2
+
+### Patch Changes
+
+- 7796275: Refactor helper functions to use BaseFault type and add comprehensive test coverage for getIssue and getDebug utilities
+
 ## 0.1.1
 
 ### Patch Changes
