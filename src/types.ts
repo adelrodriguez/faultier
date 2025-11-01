@@ -55,3 +55,27 @@ export interface FaultJSON<
   context: TContext
   cause?: string
 }
+
+/**
+ * Serialized representation of a plain Error (non-Fault).
+ */
+export interface SerializableError {
+  name: string
+  message: string
+}
+
+/**
+ * Serialized representation of a Fault with full error chain support.
+ * Unlike FaultJSON, this preserves the entire cause chain as nested objects.
+ */
+export interface SerializableFault<
+  TTag extends string = string,
+  TContext extends ContextForTag<TTag> = ContextForTag<TTag>,
+> {
+  name: string
+  tag: TTag
+  message: string
+  debug?: string
+  context: TContext
+  cause?: SerializableFault | SerializableError
+}

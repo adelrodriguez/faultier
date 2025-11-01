@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import BaseFault from "../base"
 import Fault from "../core"
 
 type TestErrorCode =
@@ -518,6 +519,128 @@ describe("BaseFault", () => {
       httpFault.cause = rootError
 
       expect(httpFault.flatten()).toBe("Request failed -> Network timeout")
+    })
+  })
+
+  describe("serialization", () => {
+    describe("toSerializable", () => {
+      it("should serialize a single fault", () => {
+        const fault = Fault.create("DATABASE_ERROR")
+          .withDescription("Failed to connect", "Database unavailable")
+          .withContext({ host: "localhost", port: 5432 })
+
+        const serialized = BaseFault.toSerializable(fault)
+
+        expect(serialized).toEqual({
+          name: "Fault",
+          tag: "DATABASE_ERROR",
+          message: "Database unavailable",
+          debug: "Failed to connect",
+          context: { host: "localhost", port: 5432 },
+        })
+      })
+
+      it("should serialize a fault without debug message", () => {
+        const fault = Fault.create("AUTH_ERROR").withContext({
+          userId: "123",
+        })
+
+        const serialized = BaseFault.toSerializable(fault)
+
+        expect(serialized).toEqual({
+          name: "Fault",
+          tag: "AUTH_ERROR",
+          message: "",
+          context: { userId: "123" },
+        })
+        expect(serialized.debug).toBeUndefined()
+      })
+
+      it("should serialize a fault chain", () => {
+        const rootError = new Error("Connection timeout")
+        const fault1 = Fault.wrap(rootError)
+          .withTag("LAYER_1")
+          .withContext({ host: "localhost", port: 5432 })
+
+        const fault2 = Fault.wrap(fault1)
+          .withTag("LAYER_2")
+          .withContext({ service: "database" })
+
+        const fault3 = Fault.wrap(fault2)
+          .withTag("LAYER_3")
+          .withContext({ endpoint: "/api/users" })
+
+        const serialized = BaseFault.toSerializable(fault3)
+
+        expect(serialized).toEqual({
+          name: "Fault",
+          tag: "LAYER_3",
+          message: "Connection timeout",
+          context: { endpoint: "/api/users" },
+          cause: {
+            name: "Fault",
+            tag: "LAYER_2",
+            message: "Connection timeout",
+            context: { service: "database" },
+            cause: {
+              name: "Fault",
+              tag: "LAYER_1",
+              message: "Connection timeout",
+              context: { host: "localhost", port: 5432 },
+              cause: {
+                name: "Error",
+                message: "Connection timeout",
+              },
+            },
+          },
+        })
+      })
+
+      it("should serialize a fault ending in plain Error", () => {
+        const rootError = new Error("Network failure")
+        const fault = Fault.wrap(rootError)
+          .withTag("NETWORK_ERROR")
+          .withDescription("Connection failed")
+
+        const serialized = BaseFault.toSerializable(fault)
+
+        expect(serialized).toEqual({
+          name: "Fault",
+          tag: "NETWORK_ERROR",
+          message: "Network failure",
+          debug: "Connection failed",
+          context: {},
+          cause: {
+            name: "Error",
+            message: "Network failure",
+          },
+        })
+      })
+
+      it("should serialize a fault without cause", () => {
+        const fault = Fault.create("VALIDATION_ERROR")
+          .withDescription("Invalid input")
+          .withContext({ field: "email" })
+
+        const serialized = BaseFault.toSerializable(fault)
+
+        expect(serialized).toEqual({
+          name: "Fault",
+          tag: "VALIDATION_ERROR",
+          message: "",
+          debug: "Invalid input",
+          context: { field: "email" },
+        })
+        expect(serialized.cause).toBeUndefined()
+      })
+
+      it("should serialize empty context", () => {
+        const fault = Fault.create("TEST") as BaseFault
+
+        const serialized = BaseFault.toSerializable(fault)
+
+        expect(serialized.context).toEqual({})
+      })
     })
   })
 })

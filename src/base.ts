@@ -1,4 +1,10 @@
-import type { ContextForTag, FaultJSON, FaultTag } from "./types"
+import type {
+  ContextForTag,
+  FaultJSON,
+  FaultTag,
+  SerializableError,
+  SerializableFault,
+} from "./types"
 
 export const IS_FAULT: symbol = Symbol("isFault")
 
@@ -119,6 +125,55 @@ export default abstract class BaseFault<
       cause: this.cause?.message,
     }
   }
+
+  /**
+   * Serializes a fault and its entire error chain into a plain object.
+   * Unlike toJSON(), this preserves the full cause chain as nested objects.
+   *
+   * @param fault - The fault to serialize
+   * @returns Serialized fault with nested cause chain
+   *
+   * @example
+   * ```ts
+   * const serialized = BaseFault.toSerializable(fault)
+   * // {
+   * //   name: "Fault",
+   * //   tag: "API_ERROR",
+   * //   message: "API request failed",
+   * //   context: { endpoint: "/users" },
+   * //   cause: {
+   * //     name: "Fault",
+   * //     tag: "NETWORK_ERROR",
+   * //     message: "Connection timeout",
+   * //     context: { host: "api.example.com" }
+   * //   }
+   * // }
+   * ```
+   */
+  static toSerializable<
+    T extends string = string,
+    C extends ContextForTag<T> = ContextForTag<T>,
+  >(fault: BaseFault<T, C>): SerializableFault<T, C> {
+    const serialized: SerializableFault<T, C> = {
+      name: fault.name,
+      tag: fault.tag,
+      message: fault.message,
+      context: fault.context,
+      debug: fault.debug,
+    }
+
+    if (fault.cause) {
+      if (BaseFault.isFault(fault.cause)) {
+        serialized.cause = BaseFault.toSerializable(fault.cause)
+      } else {
+        serialized.cause = {
+          name: fault.cause.name,
+          message: fault.cause.message,
+        } satisfies SerializableError
+      }
+    }
+
+    return serialized
   }
 
   /**

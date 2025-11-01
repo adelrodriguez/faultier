@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import BaseFault from "../base"
 import Fault from "../core"
 
 type TestErrorCode =
@@ -424,6 +425,209 @@ describe("Fault", () => {
         .clearContext()
 
       expect(httpFault.context).toEqual({})
+    })
+  })
+
+  describe("fromSerializable", () => {
+    it("should deserialize a single fault", () => {
+      const serialized = {
+        name: "Fault",
+        tag: "DATABASE_ERROR" as const,
+        message: "Database unavailable",
+        debug: "Failed to connect",
+        context: { host: "localhost", port: 5432 },
+      }
+
+      const fault = Fault.fromSerializable(serialized)
+
+      expect(fault.name).toBe("Fault")
+      expect(fault.tag).toBe("DATABASE_ERROR")
+      expect(fault.message).toBe("Database unavailable")
+      expect(fault.debug).toBe("Failed to connect")
+      expect(fault.context).toEqual({ host: "localhost", port: 5432 })
+      expect(fault.cause).toBeUndefined()
+    })
+
+    it("should deserialize a fault without debug message", () => {
+      const serialized = {
+        name: "Fault",
+        tag: "AUTH_ERROR" as const,
+        message: "Unauthorized",
+        context: { userId: "123" },
+      }
+
+      const fault = Fault.fromSerializable(serialized)
+
+      expect(fault.tag).toBe("AUTH_ERROR")
+      expect(fault.debug).toBeUndefined()
+    })
+
+    it("should deserialize a fault chain", () => {
+      const serialized = {
+        name: "Fault",
+        tag: "LAYER_3" as const,
+        message: "Connection timeout",
+        context: { endpoint: "/api/users" },
+        cause: {
+          name: "Fault",
+          tag: "LAYER_2" as const,
+          message: "Connection timeout",
+          context: { service: "database" },
+          cause: {
+            name: "Fault",
+            tag: "LAYER_1" as const,
+            message: "Connection timeout",
+            context: { host: "localhost", port: 5432 },
+            cause: {
+              name: "Error",
+              message: "Connection timeout",
+            },
+          },
+        },
+      }
+
+      const fault = Fault.fromSerializable(serialized)
+      const chain = fault.unwrap()
+
+      expect(chain).toHaveLength(4)
+      expect(Fault.isFault(chain[0]) && chain[0].tag).toBe("LAYER_3")
+      expect(Fault.isFault(chain[1]) && chain[1].tag).toBe("LAYER_2")
+      expect(Fault.isFault(chain[2]) && chain[2].tag).toBe("LAYER_1")
+      expect(chain[3]?.message).toBe("Connection timeout")
+      expect(Fault.isFault(chain[3])).toBe(false)
+    })
+
+    it("should deserialize a fault ending in plain Error", () => {
+      const serialized = {
+        name: "Fault",
+        tag: "NETWORK_ERROR" as const,
+        message: "Network failure",
+        debug: "Connection failed",
+        context: {},
+        cause: {
+          name: "Error",
+          message: "Network failure",
+        },
+      }
+
+      const fault = Fault.fromSerializable(serialized)
+      const chain = fault.unwrap()
+
+      expect(chain).toHaveLength(2)
+      expect(Fault.isFault(chain[0])).toBe(true)
+      expect(Fault.isFault(chain[1])).toBe(false)
+      expect(chain[1]?.message).toBe("Network failure")
+    })
+
+    it("should throw when deserializing plain Error as Fault", () => {
+      const serialized = {
+        name: "Error",
+        message: "Something went wrong",
+      }
+
+      expect(() => Fault.fromSerializable(serialized)).toThrow(
+        "Cannot deserialize SerializableError as Fault"
+      )
+    })
+  })
+
+  describe("round-trip serialization", () => {
+    it("should preserve single fault data through round trip", () => {
+      const original = Fault.create("DATABASE_ERROR")
+        .withDescription("Connection failed", "Database unavailable")
+        .withContext({ host: "localhost", port: 5432 })
+
+      const serialized = BaseFault.toSerializable(original)
+      const json = JSON.stringify(serialized)
+      const parsed = JSON.parse(json)
+      const restored = Fault.fromSerializable(parsed)
+
+      expect(restored.tag).toBe(original.tag)
+      expect(restored.message).toBe(original.message)
+      expect(restored.debug).toBe(original.debug)
+      expect(restored.context).toEqual(original.context)
+      expect(restored.name).toBe(original.name)
+    })
+
+    it("should preserve fault chain through round trip", () => {
+      const rootError = new Error("Network timeout")
+      const fault1 = Fault.wrap(rootError)
+        .withTag("LAYER_1")
+        .withContext({ host: "localhost", port: 5432 })
+
+      const fault2 = Fault.wrap(fault1)
+        .withTag("LAYER_2")
+        .withContext({ service: "database" })
+
+      const fault3 = Fault.wrap(fault2)
+        .withTag("LAYER_3")
+        .withContext({ endpoint: "/api/users" })
+
+      const serialized = BaseFault.toSerializable(fault3)
+      const json = JSON.stringify(serialized)
+      const parsed = JSON.parse(json)
+      const restored = Fault.fromSerializable(parsed)
+
+      const originalChain = fault3.unwrap()
+      const restoredChain = restored.unwrap()
+
+      expect(restoredChain).toHaveLength(originalChain.length)
+
+      for (let i = 0; i < originalChain.length; i++) {
+        const orig = originalChain[i]
+        const rest = restoredChain[i]
+
+        expect(rest?.message).toBe(orig?.message)
+
+        if (Fault.isFault(orig)) {
+          expect(Fault.isFault(rest)).toBe(true)
+          if (Fault.isFault(rest)) {
+            expect(rest.tag).toBe(orig.tag)
+            expect(rest.context).toEqual(orig.context)
+            expect(rest.debug).toBe(orig.debug)
+          }
+        }
+      }
+    })
+
+    it("should preserve empty context through round trip", () => {
+      const original = Fault.create("TEST") as Fault
+
+      const serialized = BaseFault.toSerializable(original)
+      const json = JSON.stringify(serialized)
+      const parsed = JSON.parse(json)
+      const restored = Fault.fromSerializable(parsed)
+
+      expect(restored.context).toEqual({})
+    })
+
+    it("should preserve tags and contexts in chain", () => {
+      const root = new Error("Root cause")
+      const fault1 = Fault.wrap(root)
+        .withTag("LAYER_1")
+        .withContext({ host: "localhost", port: 5432 })
+        .withDescription("Layer 1 debug")
+
+      const fault2 = Fault.wrap(fault1)
+        .withTag("LAYER_2")
+        .withContext({ service: "database" })
+        .withDescription("Layer 2 debug", "Layer 2 message")
+
+      const serialized = BaseFault.toSerializable(fault2)
+      const json = JSON.stringify(serialized)
+      const parsed = JSON.parse(json)
+      const restored = Fault.fromSerializable(parsed)
+
+      expect(restored.getTags()).toEqual(["LAYER_2", "LAYER_1"])
+      expect(restored.tag).toBe("LAYER_2")
+      expect(restored.message).toBe("Layer 2 message")
+      expect(restored.debug).toBe("Layer 2 debug")
+
+      const chain = restored.unwrap()
+      if (Fault.isFault(chain[1])) {
+        expect(chain[1].tag).toBe("LAYER_1")
+        expect(chain[1].debug).toBe("Layer 1 debug")
+      }
     })
   })
 })

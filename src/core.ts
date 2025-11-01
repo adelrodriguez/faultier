@@ -1,5 +1,10 @@
 import BaseFault, { IS_FAULT } from "./base"
-import type { ContextForTag, FaultTag } from "./types"
+import type {
+  ContextForTag,
+  FaultTag,
+  SerializableError,
+  SerializableFault,
+} from "./types"
 
 const FAULT_TAG = "FAULT" as const
 
@@ -106,6 +111,72 @@ export default class Fault<
   static wrap(error: unknown): Fault {
     const cause = error instanceof Error ? error : new Error(String(error))
     return new Fault<FaultTag, ContextForTag<FaultTag>>(cause)
+  }
+
+  /**
+   * Deserializes a fault from a serialized representation, reconstructing
+   * the entire error chain.
+   *
+   * @param data - Serialized fault data
+   * @returns Reconstructed Fault instance with full chain
+   *
+   * @example
+   * ```ts
+   * const serialized = BaseFault.toSerializable(originalFault)
+   * const restored = Fault.fromSerializable(serialized)
+   *
+   * console.log(restored.tag) // Same as original
+   * console.log(restored.unwrap().length) // Same chain length
+   * ```
+   */
+  static fromSerializable<T extends string = FaultTag>(
+    data: SerializableFault<T> | SerializableError
+  ): Fault<T, ContextForTag<T>> {
+    // Helper to reconstruct cause chain recursively
+    const reconstructCause = (
+      causeData: SerializableFault | SerializableError | undefined
+    ): Error | undefined => {
+      if (!causeData) {
+        return
+      }
+
+      // Check if it's a SerializableFault or SerializableError
+      if ("tag" in causeData) {
+        // It's a SerializableFault - recursively reconstruct
+        return Fault.fromSerializable(causeData)
+      }
+
+      // It's a SerializableError - create plain Error
+      const error = new Error(causeData.message)
+      error.name = causeData.name
+      return error
+    }
+
+    // data must be a SerializableFault (not SerializableError) for top level
+    if (!("tag" in data)) {
+      throw new Error(
+        "Cannot deserialize SerializableError as Fault. Top-level must be a Fault."
+      )
+    }
+
+    const cause = reconstructCause(data.cause)
+
+    // Create instance bypassing private constructor
+    // We use Object.create to set up the prototype chain, then manually
+    // call Error's constructor to properly initialize the error internals.
+    // This avoids Fault.create() which would set wrong initial state.
+    const fault = Object.create(Fault.prototype) as Fault<T, ContextForTag<T>>
+    Error.call(fault, cause?.message)
+
+    // Set properties
+    fault.name = data.name
+    fault.tag = data.tag as T
+    fault.message = data.message
+    fault.context = data.context
+    fault.cause = cause
+    fault.debug = data.debug
+
+    return fault
   }
 
   /**
