@@ -1,6 +1,6 @@
 {
   "name": "faultier",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Extensible error handling for TypeScript",
   "keywords": [
     "bun",
