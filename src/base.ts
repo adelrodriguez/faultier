@@ -1,4 +1,5 @@
 import type {
+  ChainFormattingOptions,
   ContextForTag,
   FaultJSON,
   FaultTag,
@@ -7,6 +8,7 @@ import type {
 } from "./types"
 
 export const IS_FAULT: symbol = Symbol("isFault")
+const HAS_PUNCTUATION = /[.!?]$/
 
 export default abstract class BaseFault<
   TTag extends string = string,
@@ -119,8 +121,8 @@ export default abstract class BaseFault<
     return {
       name: this.name,
       tag: this.tag,
-      message: this.message,
-      debug: this.debug,
+      message: BaseFault.getIssue(this, { separator: " → " }),
+      debug: BaseFault.getDebug(this, { separator: " → " }),
       context: this.context,
       cause: this.cause?.message,
     }
@@ -210,7 +212,7 @@ export default abstract class BaseFault<
    * Flattens all messages from the fault chain into a single string.
    * Duplicate consecutive messages are automatically skipped.
    *
-   * @param separator - String to join messages with (default: "->")
+   * @param options - Formatting options (separator and formatter)
    * @returns Flattened string of all messages in the chain
    *
    * @example
@@ -218,23 +220,30 @@ export default abstract class BaseFault<
    * fault.flatten()
    * // "API failed -> Service unavailable -> Database timeout"
    *
-   * fault.flatten("|")
+   * fault.flatten({ separator: " | " })
    * // "API failed | Service unavailable | Database timeout"
+   *
+   * fault.flatten({ formatter: msg => msg.toUpperCase() })
+   * // "API FAILED -> SERVICE UNAVAILABLE -> DATABASE TIMEOUT"
    * ```
    */
-  flatten(separator = "->"): string {
+  flatten(options?: Partial<ChainFormattingOptions>): string {
+    const defaultFormatter = (msg: string) => msg.trim()
+    const { separator = " -> ", formatter = defaultFormatter } = options || {}
+
     const chain = this.unwrap()
     const messages: string[] = []
     let lastMessage: string | undefined
 
     for (const err of chain) {
-      if (err.message !== lastMessage) {
-        messages.push(err.message)
-        lastMessage = err.message
+      const formatted = formatter(err.message)
+      if (formatted !== lastMessage) {
+        messages.push(formatted)
+        lastMessage = formatted
       }
     }
 
-    return messages.join(` ${separator} `)
+    return messages.join(separator)
   }
 
   /**
@@ -313,5 +322,79 @@ export default abstract class BaseFault<
     }
 
     return IS_FAULT in value
+  }
+
+  /**
+   * Extracts all user-facing messages from the fault chain.
+   *
+   * @param fault - The fault to extract messages from
+   * @param options - Formatting options (separator and formatter)
+   * @returns Formatted messages joined by separator
+   *
+   * @example
+   * ```ts
+   * BaseFault.getIssue(fault)
+   * // "Service unavailable. Database connection failed."
+   *
+   * BaseFault.getIssue(fault, { separator: " | " })
+   * // "Service unavailable. | Database connection failed."
+   *
+   * BaseFault.getIssue(fault, { formatter: msg => msg.toUpperCase() })
+   * // "SERVICE UNAVAILABLE DATABASE CONNECTION FAILED"
+   * ```
+   */
+  static getIssue(
+    fault: BaseFault,
+    options?: Partial<ChainFormattingOptions>
+  ): string {
+    const {
+      separator = " ",
+      formatter = (msg: string) => {
+        const trimmed = msg.trim()
+        return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
+      },
+    } = options || {}
+
+    return fault
+      .unwrap()
+      .filter(BaseFault.isFault)
+      .map((err) => formatter(err.message))
+      .join(separator)
+  }
+
+  /**
+   * Extracts all debug messages from the fault chain.
+   *
+   * @param fault - The fault to extract debug messages from
+   * @param options - Formatting options (separator and formatter)
+   * @returns Formatted debug messages joined by separator
+   *
+   * @example
+   * ```ts
+   * BaseFault.getDebug(fault)
+   * // "Service failed after 3 retries. DB timeout on port 5432."
+   *
+   * BaseFault.getDebug(fault, { separator: " -> " })
+   * // "Service failed after 3 retries. -> DB timeout on port 5432."
+   * ```
+   */
+  static getDebug(
+    fault: BaseFault,
+    options?: Partial<ChainFormattingOptions>
+  ): string {
+    const {
+      separator = " ",
+      formatter = (msg: string) => {
+        const trimmed = msg.trim()
+        return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
+      },
+    } = options || {}
+
+    return fault
+      .unwrap()
+      .filter(BaseFault.isFault)
+      .map((err) => formatter(err.debug ?? ""))
+      .filter((msg) => msg.trim() !== "" && msg !== ".")
+      .join(separator)
   }
 }

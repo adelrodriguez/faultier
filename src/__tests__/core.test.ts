@@ -213,9 +213,10 @@ describe("Fault", () => {
       expect(json).toEqual({
         name: "HttpError",
         tag: "HTTP_NOT_FOUND",
-        message: "The requested resource was not found",
-        debug: "Resource not found in database",
+        message: "The requested resource was not found.",
+        debug: "Resource not found in database.",
         context: { path: "/api/users/123", method: "GET" },
+        cause: undefined,
       })
     })
 
@@ -235,9 +236,10 @@ describe("Fault", () => {
       expect(json).toEqual({
         name: "SimpleError",
         tag: "FAULT",
-        message: "Something failed",
-        debug: undefined,
+        message: "Something failed.",
+        debug: "",
         context: {},
+        cause: undefined,
       })
     })
 

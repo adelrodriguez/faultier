@@ -44,6 +44,16 @@ export type ContextForTag<TTag extends string> =
     ? FaultContextSchema[TTag]
     : Record<string, unknown>
 
+/**
+ * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.
+ */
+export type ChainFormattingOptions = {
+  /** Separator used to join messages from the fault chain */
+  separator: string
+  /** Function to format each message before joining */
+  formatter: (message: string) => string
+}
+
 export interface FaultJSON<
   TTag extends string = string,
   TContext extends ContextForTag<TTag> = ContextForTag<TTag>,

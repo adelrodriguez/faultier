@@ -1,6 +1,6 @@
 export { default as Fault } from "./core"
-export { getDebug, getIssue } from "./helpers"
 export type {
+  ChainFormattingOptions,
   FaultRegistry,
   SerializableError,
   SerializableFault,
