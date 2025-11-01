@@ -23,14 +23,14 @@ type TestErrorCode =
 
 interface TestContext extends Record<TestErrorCode, Record<string, unknown>> {
   FAULT: Record<string, unknown>
-  MY_TAG: { requestId: string }
-  MY_ERROR_TAG: { errorCode: number }
+  MY_TAG: { requestId: string; errorCode: number; userId?: string }
+  MY_ERROR_TAG: { errorCode: number; userId?: string }
   LAYER_1: { host: string; port: number }
   LAYER_2: { service: string }
   LAYER_3: { endpoint: string }
 }
 
-declare module "../index" {
+declare module "../types" {
   interface FaultRegistry {
     tags: TestErrorCode
     context: TestContext
@@ -201,7 +201,7 @@ describe("Fault", () => {
       const HttpFault = Fault.extend(HttpError)
 
       const httpFault = HttpFault.create("Not Found", 404)
-        .withTag("HTTP_NOT_FOUND")
+        .withTag("HTTP_ERROR")
         .withDescription(
           "Resource not found in database",
           "The requested resource was not found"
@@ -212,7 +212,7 @@ describe("Fault", () => {
 
       expect(json).toEqual({
         name: "HttpError",
-        tag: "HTTP_NOT_FOUND",
+        tag: "HTTP_ERROR",
         message: "The requested resource was not found.",
         debug: "Resource not found in database.",
         context: { path: "/api/users/123", method: "GET" },
@@ -322,7 +322,7 @@ describe("Fault", () => {
       const networkFault = NetworkFault.create(
         "Request timeout",
         30_000
-      ).withTag("NETWORK_TIMEOUT")
+      ).withTag("NETWORK_ERROR")
       networkFault.cause = fault1
 
       const fault2 = Fault.wrap(networkFault).withTag("REQUEST_FAILED")
@@ -363,10 +363,10 @@ describe("Fault", () => {
           "Please enter a valid email address"
         )
         .withContext({ field: "email", value: "not-an-email" })
-        .withTag("INPUT_ERROR") // Should override previous tag
+        .withTag("VALIDATION_ERROR") // Should override previous tag
         .withContext({ attempt: 1 }) // Should merge with previous context
 
-      expect(validationFault.tag).toBe("INPUT_ERROR")
+      expect(validationFault.tag).toBe("VALIDATION_ERROR")
       expect(validationFault.debug).toBe("Email format is invalid")
       expect(validationFault.message).toBe("Please enter a valid email address")
       expect(validationFault.context).toEqual({

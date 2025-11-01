@@ -82,10 +82,10 @@ export default class Fault<
    *   .withContext({ query: "SELECT *" })
    * ```
    */
-  static create<Tag extends FaultTag>(
-    tag: Tag
-  ): Omit<Fault<Tag, ContextForTag<Tag>>, "withTag"> {
-    return new Fault<Tag, ContextForTag<Tag>>().withTag(tag)
+  static create<TCreateTag extends FaultTag>(
+    tag: TCreateTag
+  ): Omit<Fault<TCreateTag, ContextForTag<TCreateTag>>, "withTag"> {
+    return new Fault<TCreateTag, ContextForTag<TCreateTag>>().withTag(tag)
   }
 
   /**
@@ -130,7 +130,7 @@ export default class Fault<
    * ```
    */
   static fromSerializable<T extends string = FaultTag>(
-    data: SerializableFault<T> | SerializableError
+    data: SerializableFault | SerializableError
   ): Fault<T, ContextForTag<T>> {
     // Helper to reconstruct cause chain recursively
     const reconstructCause = (
@@ -172,7 +172,7 @@ export default class Fault<
     fault.name = data.name
     fault.tag = data.tag as T
     fault.message = data.message
-    fault.context = data.context
+    fault.context = data.context as ContextForTag<T>
     fault.cause = cause
     fault.debug = data.debug
 
@@ -243,10 +243,12 @@ export default class Fault<
     return ExtendedFault as unknown as {
       new (
         ...constructorArgs: ConstructorParameters<TErrorClass>
-      ): BaseFault & InstanceType<TErrorClass>
+      ): BaseFault<FaultTag, ContextForTag<FaultTag>> &
+        InstanceType<TErrorClass>
       create(
         ...createArgs: ConstructorParameters<TErrorClass>
-      ): BaseFault & InstanceType<TErrorClass>
+      ): BaseFault<FaultTag, ContextForTag<FaultTag>> &
+        InstanceType<TErrorClass>
     } & TErrorClass
   }
 }

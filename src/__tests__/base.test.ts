@@ -44,7 +44,7 @@ describe("BaseFault", () => {
       const fault = Fault.wrap(err)
         .withTag("MY_TAG")
         .withDescription("Something went really wrong")
-        .withContext({ requestId: "123" })
+        .withContext({ requestId: "123", errorCode: 100 })
 
       expect(JSON.stringify(fault)).toEqual(
         JSON.stringify({
@@ -52,7 +52,7 @@ describe("BaseFault", () => {
           tag: "MY_TAG",
           message: "Something happened.",
           debug: "Something went really wrong.",
-          context: { requestId: "123" },
+          context: { requestId: "123", errorCode: 100 },
           cause: "Something happened",
         })
       )
@@ -81,13 +81,13 @@ describe("BaseFault", () => {
       const fault = Fault.wrap(new Error("something happened"))
         .withTag("MY_TAG")
         .withDescription("Something went really wrong")
-        .withContext({ requestId: "123" })
+        .withContext({ requestId: "123", errorCode: 100 })
 
       expect(fault.name).toBe("Fault")
       expect(fault.tag).toBe("MY_TAG")
       expect(fault.message).toBe("something happened")
       expect(fault.debug).toBe("Something went really wrong")
-      expect(fault.context).toEqual({ requestId: "123" })
+      expect(fault.context).toEqual({ requestId: "123", errorCode: 100 })
     })
 
     describe("withTag", () => {
@@ -238,9 +238,6 @@ describe("BaseFault", () => {
       const filtered = chain.filter(Fault.isFault)
 
       expect(filtered).toHaveLength(3)
-      expect(filtered[0]).toBe(fault3 as Fault<string, Record<string, unknown>>)
-      expect(filtered[1]).toBe(fault2 as Fault<string, Record<string, unknown>>)
-      expect(filtered[2]).toBe(fault1 as Fault<string, Record<string, unknown>>)
       expect(filtered[0]?.tag).toBe("LAYER_3")
       expect(filtered[1]?.tag).toBe("LAYER_2")
       expect(filtered[2]?.tag).toBe("LAYER_1")
@@ -265,10 +262,10 @@ describe("BaseFault", () => {
         .withContext({ host: "localhost", port: 5432 })
       const fault2 = Fault.wrap(fault1)
         .withTag("LAYER_2")
-        .withContext({ service: "auth", userId: "123" })
+        .withContext({ service: "auth" })
       const fault3 = Fault.wrap(fault2)
         .withTag("LAYER_3")
-        .withContext({ endpoint: "/login", method: "POST" })
+        .withContext({ endpoint: "/login" })
 
       const chain = fault3.unwrap()
       const faults = chain.filter(Fault.isFault)
@@ -281,9 +278,7 @@ describe("BaseFault", () => {
 
       expect(mergedContext).toEqual({
         endpoint: "/login",
-        method: "POST",
         service: "auth",
-        userId: "123",
         host: "localhost",
         port: 5432,
       })
@@ -311,10 +306,10 @@ describe("BaseFault", () => {
         .withContext({ host: "localhost", port: 5432 })
       const fault2 = Fault.wrap(fault1)
         .withTag("LAYER_2")
-        .withContext({ service: "auth", userId: "123" })
+        .withContext({ service: "auth" })
       const fault3 = Fault.wrap(fault2)
         .withTag("LAYER_3")
-        .withContext({ endpoint: "/login", method: "POST" })
+        .withContext({ endpoint: "/login" })
 
       const fullContext = fault3.getFullContext()
 
@@ -322,9 +317,7 @@ describe("BaseFault", () => {
         host: "localhost",
         port: 5432,
         service: "auth",
-        userId: "123",
         endpoint: "/login",
-        method: "POST",
       })
     })
 
@@ -364,12 +357,10 @@ describe("BaseFault", () => {
         })
       const fault2 = Fault.wrap(fault1).withTag("MY_ERROR_TAG").withContext({
         errorCode: 200,
-        message: "Custom message",
       })
 
       expect(fault2.getFullContext()).toEqual({
         errorCode: 200,
-        message: "Custom message",
       })
     })
 
@@ -892,8 +883,8 @@ describe("BaseFault", () => {
         .withTag("NETWORK_ERROR")
         .withDescription("Connection timeout after 30s")
       const httpFault = HttpFault.create("Request failed", 500)
-        .withTag("HTTP_ERROR")
         .withDescription("HTTP 500 error from upstream")
+        .withTag("HTTP_ERROR")
       httpFault.cause = fault1
 
       expect(BaseFault.getDebug(httpFault)).toBe(

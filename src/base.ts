@@ -42,9 +42,17 @@ export default abstract class BaseFault<
    *   .withContext({ query: "SELECT *", host: "localhost" }) // Type-safe!
    * ```
    */
-  withTag<SelectedTag extends TTag>(tag: SelectedTag): this {
+  withTag<SelectedTag extends TTag>(
+    tag: SelectedTag
+  ): BaseFault<SelectedTag, ContextForTag<SelectedTag>> &
+    Omit<this, keyof BaseFault<SelectedTag, ContextForTag<SelectedTag>>> {
     this.tag = tag
-    return this
+
+    return this as unknown as BaseFault<
+      SelectedTag,
+      ContextForTag<SelectedTag>
+    > &
+      Omit<this, keyof BaseFault<SelectedTag, ContextForTag<SelectedTag>>>
   }
   /**
    * Sets debug and/or user-facing messages for this fault.
@@ -86,9 +94,7 @@ export default abstract class BaseFault<
    * // Context is now: { userId: "123", requestId: "abc", sessionId: "xyz" }
    * ```
    */
-  withContext(
-    context: TContext extends object ? Partial<TContext> : TContext
-  ): this {
+  withContext(context: TContext extends object ? TContext : TContext): this {
     if (typeof context === "object" && typeof this.context === "object") {
       this.context = { ...this.context, ...context } as TContext
     } else {
@@ -152,11 +158,8 @@ export default abstract class BaseFault<
    * // }
    * ```
    */
-  static toSerializable<
-    T extends string = string,
-    C extends ContextForTag<T> = ContextForTag<T>,
-  >(fault: BaseFault<T, C>): SerializableFault<T, C> {
-    const serialized: SerializableFault<T, C> = {
+  static toSerializable(fault: BaseFault): SerializableFault {
+    const serialized: SerializableFault = {
       name: fault.name,
       tag: fault.tag,
       message: fault.message,
@@ -295,7 +298,7 @@ export default abstract class BaseFault<
 
   /**
    * Type guard to check if a value is a Fault instance.
-   * Automatically narrows to FaultRegistry types (from FaultRegistry.tags and FaultRegistry.context).
+   * Narrows to BaseFault with generic string tag and context.
    *
    * @param value - Value to check
    * @returns True if value is a Fault
@@ -304,15 +307,12 @@ export default abstract class BaseFault<
    * ```ts
    * if (Fault.isFault(err)) {
    *   console.log(err.tag) // TypeScript knows err is a Fault
-   *   switch (err.tag) {
-   *     case "DATABASE_ERROR":
-   *       console.log(err.context.query) // Typed from FaultRegistry.context!
-   *       break
-   *   }
    * }
    * ```
    */
-  static isFault(value: unknown): value is BaseFault {
+  static isFault(value: unknown): value is {
+    [K in FaultTag]: BaseFault<K, ContextForTag<K>>
+  }[FaultTag] {
     if (value instanceof BaseFault) {
       return true
     }
