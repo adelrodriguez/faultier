@@ -107,7 +107,7 @@ export default abstract class BaseFault<
 
   /**
    * @internal
-   * Serializes the fault for JSON.stringify(). Not intended for direct use.
+   * Serializes a single fault for JSON.stringify(). Not intended for direct use.
    */
   toJSON(): FaultJSON<TTag, TContext> {
     return {
@@ -116,7 +116,9 @@ export default abstract class BaseFault<
       message: this.message,
       debug: this.debug,
       context: this.context,
+      cause: this.cause?.message,
     }
+  }
   }
 
   /**

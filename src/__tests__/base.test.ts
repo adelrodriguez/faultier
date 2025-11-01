@@ -52,6 +52,7 @@ describe("BaseFault", () => {
           message: "Something happened",
           debug: "Something went really wrong",
           context: { requestId: "123" },
+          cause: "Something happened",
         })
       )
     })

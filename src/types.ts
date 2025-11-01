@@ -53,4 +53,5 @@ export interface FaultJSON<
   message: string
   debug?: string
   context: TContext
+  cause?: string
 }
