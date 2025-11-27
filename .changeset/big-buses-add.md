@@ -58,8 +58,16 @@ const HttpFault = extend(HttpError);
 - Added `withDebug(debug)` method to set only the debug message
 - Added `withMessage(message)` method to set only the user-facing message
 
+**Bug Fixes**
+
+- Fixed `IS_FAULT` symbol being lost after calling `clearContext()` on extended faults. The symbol is now properly preserved using `Object.defineProperty()` with non-enumerable configuration, ensuring `Fault.isFault()` checks work correctly throughout the fault's lifecycle.
+- Fixed stack traces being lost when calling `withTag()` or `withContext()` on extended faults. Stack traces now correctly point to the original fault creation location rather than where transformation methods were called, improving debuggability.
+- Improved type safety for `IS_FAULT` and `UNKNOWN` symbols by declaring them as `unique symbol` types instead of plain `symbol`, preventing accidental symbol collisions.
+
 **Internal Changes**
 
 - Deleted `src/core.ts` in favor of reorganized `src/lib/index.ts`
 - Moved all tests to `src/lib/__tests__/` directory
 - Updated build configuration to support multiple entry points
+- Refactored `IS_FAULT` symbol initialization to use `Object.defineProperty()` in constructors instead of class field initialization
+- Added `WithIsFault` type helper for safer symbol property access in type guards

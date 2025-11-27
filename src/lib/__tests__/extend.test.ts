@@ -394,6 +394,27 @@ describe("extend", () => {
       expect(httpFault.context).toEqual({})
     })
 
+    it("should preserve isFault check after clearContext is called", () => {
+      class HttpError extends Error {
+        statusCode: number
+
+        constructor(message: string, statusCode: number) {
+          super(message)
+          this.statusCode = statusCode
+        }
+      }
+
+      const HttpFault = extend(HttpError)
+
+      const httpFault = HttpFault.create("Not found", 404)
+        .withTag("LAYER_1")
+        .withContext({ host: "localhost", port: 5432 })
+        .clearContext()
+
+      // This should still be true after clearContext
+      expect(Fault.isFault(httpFault)).toBe(true)
+    })
+
     it("should get merged context from full error chain", () => {
       class HttpError extends Error {
         statusCode: number
@@ -456,6 +477,43 @@ describe("extend", () => {
         database: "users",
       })
       expect(validationFault.field).toBe("email")
+    })
+  })
+
+  describe("stack trace preservation", () => {
+    it("should preserve stack trace pointing to original creation after withTag", () => {
+      class CustomError extends Error {}
+
+      const CustomFault = extend(CustomError)
+
+      // Create the fault and capture stack at this line
+      const fault = CustomFault.create("Test error")
+      const originalStack = fault.stack
+
+      // Call withTag - this should NOT change the stack trace origin
+      const faultWithTag = fault.withTag("LAYER_1")
+
+      // The stack trace should still point to where we created the fault,
+      // not where we called withTag
+      expect(faultWithTag.stack).toBe(originalStack)
+    })
+
+    it("should preserve stack trace pointing to original creation after withContext", () => {
+      class CustomError extends Error {}
+
+      const CustomFault = extend(CustomError)
+
+      // Create the fault and capture stack at this line
+      const fault = CustomFault.create("Test error")
+      const originalStack = fault.stack
+
+      // Call withTag and withContext - this should NOT change the stack trace origin
+      const faultWithContext = fault
+        .withTag("LAYER_1")
+        .withContext({ retries: 3 })
+
+      // The stack trace should still point to where we created the fault
+      expect(faultWithContext.stack).toBe(originalStack)
     })
   })
 

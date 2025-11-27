@@ -15,7 +15,6 @@ type WithBaseFaultMethods = Pick<
   | "withDescription"
   | "withDebug"
   | "withMessage"
-  | typeof IS_FAULT
 >
 
 /**
@@ -93,8 +92,18 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     tag: FaultTag | "No fault tag set" = "No fault tag set"
     context: Record<string, unknown> = {}
     debug?: string
-    declare cause?: Error;
-    [IS_FAULT] = true as const
+    declare cause?: Error
+
+    constructor(...args: ConstructorParameters<ErrorClassType>) {
+      super(...args)
+      // Initialize the IS_FAULT symbol property
+      Object.defineProperty(this, IS_FAULT, {
+        value: true,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      })
+    }
 
     withTag<T extends FaultTag>(
       tag: T
@@ -144,7 +153,9 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     constructor(fault: ExtendedFault, tag: FaultTag) {
       // Get constructor args from fault to call parent constructor
-      const args = new Array(ErrorClass.length).fill(undefined)
+      const args = new Array(ErrorClass.length).fill(
+        undefined
+      ) as ConstructorParameters<ErrorClassType>
       super(...args)
 
       this.tag = tag
@@ -152,6 +163,11 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       this.name = fault.name
       this.cause = fault.cause
       this.debug = fault.debug
+
+      // Preserve original stack trace
+      if (fault.stack) {
+        this.stack = fault.stack
+      }
 
       // Copy all original error properties (skip symbol properties)
       for (const key of Object.keys(fault)) {
@@ -201,6 +217,11 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       this.cause = fault.cause
       this.debug = fault.debug
 
+      // Preserve original stack trace
+      if (fault.stack) {
+        this.stack = fault.stack
+      }
+
       // Copy all original error properties (skip symbol properties)
       for (const key of Object.keys(fault)) {
         if (
@@ -223,6 +244,13 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       const fault = Object.create(ExtendedFaultWithTagClass.prototype)
       Object.assign(fault, this)
       fault.context = {}
+      // Preserve IS_FAULT symbol (Object.assign doesn't copy non-enumerable properties)
+      Object.defineProperty(fault, IS_FAULT, {
+        value: true,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      })
       return fault as ExtendedFaultWithTag<FaultTag> &
         InstanceType<TErrorClass> &
         WithBaseFaultMethods

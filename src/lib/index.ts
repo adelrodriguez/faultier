@@ -9,8 +9,14 @@ import type {
 import { HAS_PUNCTUATION } from "./utils"
 
 // Symbol to identify Fault instances
-export const IS_FAULT = Symbol("IS_FAULT")
-export const UNKNOWN = Symbol("UNKNOWN")
+export const IS_FAULT: unique symbol = Symbol("IS_FAULT")
+export const UNKNOWN: unique symbol = Symbol("UNKNOWN")
+
+// Type helper for objects with IS_FAULT symbol
+type WithIsFault = {
+  readonly [IS_FAULT]: true
+}
+
 export abstract class BaseFault extends Error {
   abstract tag: FaultTag | "No fault tag set"
   abstract context: ContextForTag<FaultTag> | Record<string, unknown>
@@ -19,14 +25,20 @@ export abstract class BaseFault extends Error {
   declare message: string
   declare cause?: Error
 
-  debug?: string;
-  [IS_FAULT] = true as const
+  debug?: string
 
   constructor(cause?: Error, debug?: string, message?: string) {
     super(message ?? cause?.message)
     this.name = "Fault"
     this.cause = cause
     this.debug = debug
+    // Initialize the IS_FAULT symbol property
+    Object.defineProperty(this, IS_FAULT, {
+      value: true,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    })
   }
 
   /**
@@ -243,7 +255,7 @@ export abstract class BaseFault extends Error {
       return false
     }
 
-    return IS_FAULT in value && value[IS_FAULT] === true
+    return IS_FAULT in value && (value as WithIsFault)[IS_FAULT] === true
   }
 
   /**
