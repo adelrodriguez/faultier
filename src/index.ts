@@ -1,7 +1,8 @@
-export { default as Fault } from "./core"
+export { default as Fault } from "./lib"
 export type {
-  ChainFormattingOptions,
-  FaultRegistry,
+  ContextForTag,
+  FaultJSON,
+  FaultTag,
   SerializableError,
   SerializableFault,
-} from "./types"
+} from "./lib/types"

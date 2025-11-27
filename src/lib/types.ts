@@ -44,14 +44,18 @@ export type ContextForTag<TTag extends string> =
     ? FaultContextSchema[TTag]
     : Record<string, unknown>
 
+export type WithoutWithTag<T> = Omit<T, "withTag">
+export type WithoutWithContext<T> = Omit<T, "withContext">
+export type WithoutClearContext<T> = Omit<T, "clearContext">
+
 /**
  * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.
  */
 export type ChainFormattingOptions = {
   /** Separator used to join messages from the fault chain */
-  separator: string
+  separator?: string
   /** Function to format each message before joining */
-  formatter: (message: string) => string
+  formatter?: (message: string) => string
 }
 
 export type FaultJSON<
