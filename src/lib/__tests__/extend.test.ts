@@ -85,6 +85,48 @@ describe("extend", () => {
       expect(fault.message).toBe("Overridden message")
       expect(fault.level).toBe(1)
     })
+
+    it("should allow withDebug to set debug while preserving other properties", () => {
+      class CustomError extends Error {
+        level: 1 | 2 | 3 | 4 | 5
+
+        constructor(message: string, level: 1 | 2 | 3 | 4 | 5) {
+          super(message)
+          this.level = level
+        }
+      }
+
+      const CustomFault = extend(CustomError)
+
+      const fault = CustomFault.create("Original message", 2).withDebug(
+        "Debug information"
+      )
+
+      expect(fault.debug).toBe("Debug information")
+      expect(fault.message).toBe("Original message")
+      expect(fault.level).toBe(2)
+    })
+
+    it("should allow withMessage to set message while preserving other properties", () => {
+      class CustomError extends Error {
+        level: 1 | 2 | 3 | 4 | 5
+
+        constructor(message: string, level: 1 | 2 | 3 | 4 | 5) {
+          super(message)
+          this.level = level
+        }
+      }
+
+      const CustomFault = extend(CustomError)
+
+      const fault = CustomFault.create("Original message", 3)
+        .withDescription("Debug info")
+        .withMessage("New user message")
+
+      expect(fault.message).toBe("New user message")
+      expect(fault.debug).toBe("Debug info")
+      expect(fault.level).toBe(3)
+    })
   })
 
   describe("tags and defaults", () => {

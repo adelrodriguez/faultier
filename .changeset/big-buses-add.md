@@ -12,7 +12,6 @@ Refactor internal architecture and add dedicated extend export
    - **Removed exports**: `ChainFormattingOptions`, `FaultRegistry` (internal implementation details)
    - **Added exports**: `ContextForTag`, `FaultJSON`, `FaultTag` (type-safe registry utilities)
    - **Unchanged exports**: `SerializableError`, `SerializableFault`
-   
 3. **New package export**: Added `faultier/extend` export providing the `extend()` function as a standalone entry point for extending custom Error classes with Fault functionality.
 
 4. **TypeScript peer dependency**: Locked to specific version `5.9.3` (previously `^5`). This ensures consistent type behavior across installations.
@@ -24,11 +23,12 @@ Most users should experience no breaking changes. The core API (`Fault.wrap()`, 
 **If you were importing removed types:**
 
 - `FaultRegistry` - This was never meant to be imported directly. Use module augmentation instead:
+
   ```ts
   declare module "faultier" {
     interface FaultRegistry {
-      tags: "MY_TAG"
-      context: { MY_TAG: { foo: string } }
+      tags: "MY_TAG";
+      context: { MY_TAG: { foo: string } };
     }
   }
   ```
@@ -40,21 +40,23 @@ Most users should experience no breaking changes. The core API (`Fault.wrap()`, 
 You can now import `extend()` directly from `faultier/extend`:
 
 ```ts
-import { extend } from "faultier/extend"
+import { extend } from "faultier/extend";
 
 class HttpError extends Error {
   constructor(message: string, public statusCode: number) {
-    super(message)
+    super(message);
   }
 }
 
-const HttpFault = extend(HttpError)
+const HttpFault = extend(HttpError);
 ```
 
 **New Features**
 
 - Dedicated `./extend` export for cleaner imports of the `extend()` function
 - Improved internal organization for better maintainability
+- Added `withDebug(debug)` method to set only the debug message
+- Added `withMessage(message)` method to set only the user-facing message
 
 **Internal Changes**
 

@@ -119,6 +119,59 @@ describe("Fault", () => {
       })
     })
 
+    describe("withDebug", () => {
+      it("should set only the debug message, preserving the original message", () => {
+        const fault = Fault.wrap(new Error("something happened")).withDebug(
+          "Something went really wrong"
+        )
+
+        expect(fault.debug).toBe("Something went really wrong")
+        expect(fault.message).toBe("something happened")
+      })
+
+      it("should allow chaining", () => {
+        const fault = Fault.wrap(new Error("test"))
+          .withTag("MY_TAG")
+          .withDebug("Debug message")
+          .withContext({ requestId: "123" })
+
+        expect(fault.debug).toBe("Debug message")
+        expect(fault.tag).toBe("MY_TAG")
+        expect(fault.context).toEqual({ requestId: "123" })
+      })
+    })
+
+    describe("withMessage", () => {
+      it("should set only the message, not affecting debug", () => {
+        const fault = Fault.wrap(new Error("original message"))
+          .withDescription("Debug info")
+          .withMessage("User-facing message")
+
+        expect(fault.message).toBe("User-facing message")
+        expect(fault.debug).toBe("Debug info")
+      })
+
+      it("should override message without setting debug", () => {
+        const fault = Fault.wrap(new Error("original message")).withMessage(
+          "New message"
+        )
+
+        expect(fault.message).toBe("New message")
+        expect(fault.debug).toBeUndefined()
+      })
+
+      it("should allow chaining", () => {
+        const fault = Fault.wrap(new Error("test"))
+          .withTag("MY_TAG")
+          .withMessage("User message")
+          .withContext({ requestId: "123" })
+
+        expect(fault.message).toBe("User message")
+        expect(fault.tag).toBe("MY_TAG")
+        expect(fault.context).toEqual({ requestId: "123" })
+      })
+    })
+
     describe("withContext", () => {
       it("should default to empty object", () => {
         const fault = Fault.wrap(new Error("test"))

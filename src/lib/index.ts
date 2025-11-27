@@ -55,6 +55,38 @@ export abstract class BaseFault extends Error {
   }
 
   /**
+   * Sets only the debug message for this fault.
+   *
+   * @param debug - Internal debug message (for developers/logs)
+   * @returns This fault instance for method chaining
+   *
+   * @example
+   * ```ts
+   * fault.withDebug("Failed to connect to PostgreSQL on port 5432")
+   * ```
+   */
+  withDebug(debug: string): this {
+    this.debug = debug
+    return this
+  }
+
+  /**
+   * Sets only the user-facing message for this fault.
+   *
+   * @param message - User-facing message (overrides the original error message)
+   * @returns This fault instance for method chaining
+   *
+   * @example
+   * ```ts
+   * fault.withMessage("Database is temporarily unavailable")
+   * ```
+   */
+  withMessage(message: string): this {
+    this.message = message
+    return this
+  }
+
+  /**
    * Gets the full error chain from this fault, including all causes.
    *
    * @returns Array starting with this fault, followed by all causes in order

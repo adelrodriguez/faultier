@@ -13,6 +13,8 @@ type WithBaseFaultMethods = Pick<
   | "getFullContext"
   | "toJSON"
   | "withDescription"
+  | "withDebug"
+  | "withMessage"
   | typeof IS_FAULT
 >
 
@@ -61,6 +63,8 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       InstanceType<TErrorClass> &
       WithBaseFaultMethods
     withDescription(debug: string, message?: string): this
+    withDebug(debug: string): this
+    withMessage(message: string): this
   }
 
   // Interface for fault with context
@@ -78,6 +82,8 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       InstanceType<TErrorClass> &
       WithBaseFaultMethods
     withDescription(debug: string, message?: string): this
+    withDebug(debug: string): this
+    withMessage(message: string): this
   }
 
   // Create base extended fault class
@@ -106,6 +112,16 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     withDescription(debug: string, message?: string): this {
       this.debug = debug
       this.message = message ?? this.message
+      return this
+    }
+
+    withDebug(debug: string): this {
+      this.debug = debug
+      return this
+    }
+
+    withMessage(message: string): this {
+      this.message = message
       return this
     }
 
