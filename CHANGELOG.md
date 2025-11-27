@@ -1,5 +1,11 @@
 # faultier
 
+## 1.0.1
+
+### Patch Changes
+
+- a4f13a8: Improve README documentation structure by reorganizing sections under a parent "Usage" heading for better navigation and clarity
+
 ## 1.0.0
 
 ### Major Changes
