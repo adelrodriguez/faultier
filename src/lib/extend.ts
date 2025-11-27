@@ -58,9 +58,11 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     name: string
     withContext<C extends ContextForTag<T>>(
       context: C
-    ): ExtendedFaultWithContext<T, C> &
-      InstanceType<TErrorClass> &
-      WithBaseFaultMethods
+    ): ContextForTag<T> extends never
+      ? never
+      : ExtendedFaultWithContext<T, C> &
+          InstanceType<TErrorClass> &
+          WithBaseFaultMethods
     withDescription(debug: string, message?: string): this
     withDebug(debug: string): this
     withMessage(message: string): this
@@ -187,9 +189,12 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     withContext<C extends ContextForTag<FaultTag>>(
       context: C
-    ): ExtendedFaultWithContext<FaultTag, C> &
-      InstanceType<TErrorClass> &
-      WithBaseFaultMethods {
+    ): ContextForTag<FaultTag> extends never
+      ? never
+      : ExtendedFaultWithContext<FaultTag, C> &
+          InstanceType<TErrorClass> &
+          WithBaseFaultMethods {
+      // Type assertion needed because TypeScript can't narrow the conditional return type
       return new ExtendedFaultWithContextClass(
         this,
         this.tag as FaultTag,

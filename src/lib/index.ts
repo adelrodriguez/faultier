@@ -463,8 +463,11 @@ export abstract class BaseFault extends Error {
    */
   static handle<
     H extends {
-      // biome-ignore lint/suspicious/noExplicitAny: generic
-      [T in FaultTag]: (fault: FaultWithContext<T, ContextForTag<T>>) => any
+      [T in FaultTag]: ContextForTag<T> extends never
+        ? // biome-ignore lint/suspicious/noExplicitAny: generic handler return type
+          (fault: FaultWithTag<T>) => any
+        : // biome-ignore lint/suspicious/noExplicitAny: generic handler return type
+          (fault: FaultWithContext<T, ContextForTag<T>>) => any
     },
   >(
     error: unknown,
@@ -553,8 +556,12 @@ class FaultWithTag<T extends FaultTag> extends BaseFault {
     this.tag = tag
   }
 
-  withContext<C extends ContextForTag<T>>(context: C): FaultWithContext<T, C> {
-    return new FaultWithContext(this, this.tag, context)
+  withContext<C extends ContextForTag<T>>(
+    context: C
+  ): ContextForTag<T> extends never ? never : FaultWithContext<T, C> {
+    // Type assertion needed because TypeScript can't narrow the conditional return type
+    // biome-ignore lint/suspicious/noExplicitAny: Conditional return type requires assertion
+    return new FaultWithContext(this, this.tag, context) as any
   }
 }
 

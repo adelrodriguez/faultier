@@ -54,13 +54,11 @@ Define your error types using module augmentation:
 ```ts
 declare module "faultier" {
   interface FaultRegistry {
-    tags: "DATABASE_ERROR" | "AUTH_ERROR" | "NOT_FOUND" | "VALIDATION_ERROR";
-    context: {
-      DATABASE_ERROR: { query: string; host?: string };
-      AUTH_ERROR: { userId: string; reason: string };
-      NOT_FOUND: { resource: string; id: string };
-      VALIDATION_ERROR: { field: string; message: string };
-    };
+    DATABASE_ERROR: { query: string; host?: string };
+    AUTH_ERROR: { userId: string; reason: string };
+    NOT_FOUND: { resource: string; id: string };
+    VALIDATION_ERROR: { field: string; message: string };
+    GENERIC_ERROR: never; // No context allowed - withContext will error
   }
 }
 ```
@@ -74,6 +72,38 @@ Fault.create("DATABASE_ERROR").withContext({ query: "SELECT *" }); // OK
 Fault.create("DATABASE_ERROR").withContext({ userId: "123" }); // Type error: missing 'query'
 
 Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" }); // OK
+
+Fault.create("GENERIC_ERROR").withContext({ anything: "value" }); // Type error: withContext returns never
+```
+
+For larger applications with many error types, you can organize them into groups:
+
+```ts
+// Group related errors together
+type DatabaseErrors = {
+  DB_CONNECTION_ERROR: { host: string; port: number };
+  DB_QUERY_ERROR: { query: string; table: string };
+  DB_TIMEOUT_ERROR: { timeout: number };
+};
+
+type AuthErrors = {
+  AUTH_INVALID_TOKEN: { token: string; reason: string };
+  AUTH_EXPIRED_SESSION: { sessionId: string };
+  AUTH_INSUFFICIENT_PERMISSIONS: { userId: string; required: string[] };
+};
+
+type ValidationErrors = {
+  VALIDATION_FAILED: { field: string; message: string };
+  VALIDATION_SCHEMA_ERROR: { errors: string[] };
+};
+
+// Combine all error types in your registry
+declare module "faultier" {
+  interface FaultRegistry extends DatabaseErrors, AuthErrors, ValidationErrors {
+    // Add any standalone errors here
+    GENERIC_ERROR: never;
+  }
+}
 ```
 
 ## Error Chaining

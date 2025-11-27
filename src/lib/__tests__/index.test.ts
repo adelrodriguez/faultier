@@ -4,35 +4,33 @@ import type { FaultTag } from "../types"
 
 declare module "../types" {
   interface FaultRegistry {
-    tags: "MY_TAG" | "LAYER_1" | "LAYER_2" | "LAYER_3"
-    context: {
-      MY_TAG: {
-        requestId?: string
-        errorCode?: number
-        userId?: string
-        sessionId?: string
-        timestamp?: number
-      }
-      LAYER_1: {
-        host?: string
-        port?: number
-        database?: string
-        timeout?: number
-        retries?: number
-      }
-      LAYER_2: {
-        service?: string
-        method?: string
-        statusCode?: number
-        timeout?: number
-      }
-      LAYER_3: {
-        endpoint?: string
-        method?: string
-        statusCode?: number
-        headers?: Record<string, string>
-      }
+    MY_TAG: {
+      requestId?: string
+      errorCode?: number
+      userId?: string
+      sessionId?: string
+      timestamp?: number
     }
+    LAYER_1: {
+      host?: string
+      port?: number
+      database?: string
+      timeout?: number
+      retries?: number
+    }
+    LAYER_2: {
+      service?: string
+      method?: string
+      statusCode?: number
+      timeout?: number
+    }
+    LAYER_3: {
+      endpoint?: string
+      method?: string
+      statusCode?: number
+      headers?: Record<string, string>
+    }
+    NO_CONTEXT_TAG: never // Tag that doesn't accept context
   }
 }
 
@@ -179,6 +177,17 @@ describe("Fault", () => {
         // @ts-expect-error - we want to test the default context
         expect(fault.context).toEqual({})
       })
+
+      it("should prevent withContext on tags with never context type", () => {
+        const fault = Fault.create("NO_CONTEXT_TAG")
+
+        // @ts-expect-error - withContext should return never for tags with never context
+        // This verifies that TypeScript correctly prevents calling withContext on tags with never context
+        const _result = fault.withContext({ any: "value" })
+
+        // At runtime, withContext would still execute, but TypeScript prevents the call
+        // The @ts-expect-error above verifies the type error exists
+      })
     })
 
     describe("clearContext", () => {
@@ -301,6 +310,7 @@ describe("Fault", () => {
         LAYER_1: () => "not handled",
         LAYER_2: () => "not handled",
         LAYER_3: () => "not handled",
+        NO_CONTEXT_TAG: () => "not handled",
       })
 
       expect(result).toBe("handled")
@@ -314,6 +324,7 @@ describe("Fault", () => {
         LAYER_1: () => "handled",
         LAYER_2: () => "handled",
         LAYER_3: () => "handled",
+        NO_CONTEXT_TAG: () => "handled",
       })
 
       expect(result).toBe(UNKNOWN)
@@ -328,6 +339,7 @@ describe("Fault", () => {
         LAYER_2: () => "handled",
         LAYER_3: () => "handled",
         MY_TAG: () => "handled",
+        NO_CONTEXT_TAG: () => "handled",
       })
 
       expect(result).toBe(UNKNOWN)
@@ -339,17 +351,20 @@ describe("Fault", () => {
       const handler2 = () => "handler2"
       const handler3 = () => "handler3"
       const handler4 = () => "handler4"
+      const handler5 = () => "handler5"
 
       const spy1 = handler1
       const spy2 = handler2
       const spy3 = handler3
       const spy4 = handler4
+      const spy5 = handler5
 
       const result = Fault.handle(fault, {
         MY_TAG: spy1,
         LAYER_1: spy2,
         LAYER_2: spy3,
         LAYER_3: spy4,
+        NO_CONTEXT_TAG: spy5,
       })
 
       expect(result).toBe("handler2")

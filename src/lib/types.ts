@@ -6,42 +6,37 @@
  * ```ts
  * declare module "faultier" {
  *   interface FaultRegistry {
- *     tags: "DATABASE_ERROR" | "AUTH_ERROR" | "NOT_FOUND"
- *     context: {
- *       DATABASE_ERROR: { query: string; host: string }
- *       AUTH_ERROR: { userId: string; reason: string }
- *       NOT_FOUND: { path: string }
- *     }
+ *     DATABASE_ERROR: { query: string; host: string }
+ *     AUTH_ERROR: { userId: string; reason: string }
+ *     NOT_FOUND: { path: string }
+ *     GENERIC_ERROR: never  // no context allowed - withContext will error
  *   }
  * }
  * ```
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Module augmentation
 export interface FaultRegistry {
-  // tags
-  // context
+  // Define tags as keys with their context types as values
+  // Use never for tags that don't require context
 }
 
 /**
- * Extracts tag keys from FaultRegistry.tags.
+ * Extracts tag keys from FaultRegistry.
  */
-export type FaultTag = FaultRegistry extends { tags: infer Tags }
-  ? Tags
-  : string
-
-/**
- * Extracts context schema from FaultRegistry.context.
- */
-export type FaultContextSchema = FaultRegistry extends { context: infer Schema }
-  ? Schema
-  : Record<string, unknown>
+export type FaultTag = keyof FaultRegistry extends never
+  ? string
+  : keyof FaultRegistry
 
 /**
  * Gets the context type for a specific tag.
+ * Returns never for tags without context (undefined or never), preventing withContext from being called.
+ * Returns Record<string, unknown> for unknown tags.
  */
 export type ContextForTag<TTag extends string> =
-  TTag extends keyof FaultContextSchema
-    ? FaultContextSchema[TTag]
+  TTag extends keyof FaultRegistry
+    ? FaultRegistry[TTag] extends undefined | never
+      ? never
+      : FaultRegistry[TTag]
     : Record<string, unknown>
 
 export type WithoutWithTag<T> = Omit<T, "withTag">
