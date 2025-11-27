@@ -29,7 +29,9 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 npm install faultier
 ```
 
-## Quick Start
+## Usage
+
+### Quick Start
 
 ```ts
 import Fault from "faultier";
@@ -47,7 +49,7 @@ try {
 throw Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" });
 ```
 
-## Type Safety
+### Type Safety
 
 Define your error types using module augmentation:
 
@@ -106,7 +108,7 @@ declare module "faultier" {
 }
 ```
 
-## Error Chaining
+### Error Chaining
 
 Faults preserve the full error chain:
 
@@ -134,7 +136,7 @@ fault.getTags(); // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"]
 fault.getFullContext(); // Merged context from all faults
 ```
 
-## Handling Faults
+### Handling Faults
 
 Use `Fault.handle` to dispatch based on tag:
 
@@ -157,7 +159,7 @@ if (result === Fault.UNKNOWN) {
 }
 ```
 
-## Extending Error Classes
+### Extending Error Classes
 
 Use `faultier/extend` to add Fault functionality to existing Error classes:
 
@@ -181,7 +183,7 @@ console.log(fault.tag); // "HTTP_ERROR"
 console.log(fault.flatten()); // Works like regular Fault
 ```
 
-## API Reference
+### API Reference
 
 ### Fault
 
