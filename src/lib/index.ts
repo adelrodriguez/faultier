@@ -448,6 +448,24 @@ export abstract class BaseFault extends Error {
       .join(separator)
   }
 
+  /**
+   * Asserts that the given error is a Fault instance.
+   * If the error is not a Fault, it is re-thrown.
+   *
+   * @param error - The error to check
+   * @throws The original error if it is not a Fault instance
+   *
+   * @example
+   * ```ts
+   * try {
+   *   doSomething()
+   * } catch (error) {
+   *   Fault.assert(error)
+   *   // error is now typed as BaseFault
+   *   console.log(error.tag)
+   * }
+   * ```
+   */
   static assert(error: unknown): asserts error is BaseFault {
     if (!BaseFault.isFault(error)) {
       throw error
