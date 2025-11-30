@@ -1,5 +1,11 @@
 # faultier
 
+## 1.0.3
+
+### Patch Changes
+
+- d42ee7e: Add JSDoc documentation for `Fault.assert()` method with usage example
+
 ## 1.0.2
 
 ### Patch Changes
