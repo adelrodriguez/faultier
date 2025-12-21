@@ -1,4 +1,4 @@
-# CLAUDE.md for Pastry
+# AGENTS.md for Faultier
 
 ## Agents
 

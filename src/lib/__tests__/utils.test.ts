@@ -20,9 +20,7 @@ describe("utils", () => {
     })
 
     it("should not match punctuation in the middle of the string", () => {
-      expect(HAS_PUNCTUATION.test("This is fine. But what about this")).toBe(
-        false
-      )
+      expect(HAS_PUNCTUATION.test("This is fine. But what about this")).toBe(false)
     })
 
     it("should match only if punctuation is last, even with whitespace", () => {

@@ -23,21 +23,18 @@ export interface FaultRegistry {
 /**
  * Extracts tag keys from FaultRegistry.
  */
-export type FaultTag = keyof FaultRegistry extends never
-  ? string
-  : keyof FaultRegistry
+export type FaultTag = keyof FaultRegistry extends never ? string : keyof FaultRegistry
 
 /**
  * Gets the context type for a specific tag.
  * Returns never for tags without context (undefined or never), preventing withContext from being called.
  * Returns Record<string, unknown> for unknown tags.
  */
-export type ContextForTag<TTag extends string> =
-  TTag extends keyof FaultRegistry
-    ? FaultRegistry[TTag] extends undefined | never
-      ? never
-      : FaultRegistry[TTag]
-    : Record<string, unknown>
+export type ContextForTag<TTag extends string> = TTag extends keyof FaultRegistry
+  ? FaultRegistry[TTag] extends undefined | never
+    ? never
+    : FaultRegistry[TTag]
+  : Record<string, unknown>
 
 export type WithoutWithTag<T> = Omit<T, "withTag">
 export type WithoutWithContext<T> = Omit<T, "withContext">

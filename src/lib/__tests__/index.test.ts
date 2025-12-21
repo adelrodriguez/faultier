@@ -97,9 +97,9 @@ describe("Fault", () => {
 
     describe("withDescription", () => {
       it("should preserve the original message", () => {
-        const fault = Fault.wrap(
-          new Error("something happened")
-        ).withDescription("Something went really wrong")
+        const fault = Fault.wrap(new Error("something happened")).withDescription(
+          "Something went really wrong"
+        )
 
         expect(fault.debug).toBe("Something went really wrong")
         expect(fault.message).toBe("something happened")
@@ -150,9 +150,7 @@ describe("Fault", () => {
       })
 
       it("should override message without setting debug", () => {
-        const fault = Fault.wrap(new Error("original message")).withMessage(
-          "New message"
-        )
+        const fault = Fault.wrap(new Error("original message")).withMessage("New message")
 
         expect(fault.message).toBe("New message")
         expect(fault.debug).toBeUndefined()
@@ -232,9 +230,7 @@ describe("Fault", () => {
     it("should return true if the value is a fault", () => {
       const err = new Error("Something happened")
 
-      const fault = Fault.wrap(err)
-        .withTag("MY_TAG")
-        .withDescription("Something went really wrong")
+      const fault = Fault.wrap(err).withTag("MY_TAG").withDescription("Something went really wrong")
 
       expect(Fault.isFault(new Date())).toBe(false)
       expect(Fault.isFault(null)).toBe(false)
@@ -389,12 +385,8 @@ describe("Fault", () => {
       const fault1 = Fault.wrap(dbError)
         .withTag("LAYER_1")
         .withContext({ host: "localhost", port: 5432 })
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withContext({ service: "auth" })
-      const fault3 = Fault.wrap(fault2)
-        .withTag("LAYER_3")
-        .withContext({ endpoint: "/login" })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
 
       const chain = fault3.unwrap()
       expect(chain).toHaveLength(4)
@@ -428,12 +420,8 @@ describe("Fault", () => {
       const fault1 = Fault.wrap(dbError)
         .withTag("LAYER_1")
         .withContext({ host: "localhost", port: 5432 })
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withContext({ service: "auth" })
-      const fault3 = Fault.wrap(fault2)
-        .withTag("LAYER_3")
-        .withContext({ endpoint: "/login" })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
 
       const chain = fault3.unwrap()
       const faults = chain.filter(Fault.isFault)
@@ -473,12 +461,8 @@ describe("Fault", () => {
       const fault1 = Fault.wrap(dbError)
         .withTag("LAYER_1")
         .withContext({ host: "localhost", port: 5432 })
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withContext({ service: "auth" })
-      const fault3 = Fault.wrap(fault2)
-        .withTag("LAYER_3")
-        .withContext({ endpoint: "/login" })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
 
       const fullContext = fault3.getFullContext()
 
@@ -491,13 +475,11 @@ describe("Fault", () => {
     })
 
     it("should override duplicate keys from root to current", () => {
-      const fault1 = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({
-          requestId: "abc",
-          errorCode: 100,
-          userId: "user123",
-        })
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
+        requestId: "abc",
+        errorCode: 100,
+        userId: "user123",
+      })
       const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({
         errorCode: 200,
         requestId: "def",
@@ -516,21 +498,17 @@ describe("Fault", () => {
     })
 
     it("should work with single fault", () => {
-      const fault = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({
-          requestId: "value",
-        })
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
+        requestId: "value",
+      })
 
       expect(fault.getFullContext()).toEqual({ requestId: "value" })
     })
 
     it("should work with registry-typed faults", () => {
-      const fault1 = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({
-          errorCode: 100,
-        })
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
+        errorCode: 100,
+      })
       const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({
         errorCode: 200,
       })
@@ -542,9 +520,7 @@ describe("Fault", () => {
 
     it("should handle empty contexts", () => {
       const fault1 = Fault.wrap(new Error("test"))
-      const fault2 = Fault.wrap(fault1)
-        .withTag("MY_TAG")
-        .withContext({ requestId: "value" })
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({ requestId: "value" })
 
       expect(fault2.getFullContext()).toEqual({ requestId: "value" })
     })
@@ -666,9 +642,7 @@ describe("Fault", () => {
         formatter: (msg) => msg.toUpperCase(),
       })
 
-      expect(flattened).toBe(
-        "SERVICE UNAVAILABLE | FAILED TO CONNECT | DATABASE ERROR"
-      )
+      expect(flattened).toBe("SERVICE UNAVAILABLE | FAILED TO CONNECT | DATABASE ERROR")
     })
 
     it("should deduplicate consecutive identical messages across multiple chained faults", () => {
@@ -792,9 +766,7 @@ describe("Fault", () => {
 
       it("should serialize a fault ending in plain Error", () => {
         const rootError = new Error("Network failure")
-        const fault = Fault.wrap(rootError)
-          .withTag("LAYER_1")
-          .withDescription("Connection failed")
+        const fault = Fault.wrap(rootError).withTag("LAYER_1").withDescription("Connection failed")
 
         const serialized = Fault.toSerializable(fault)
 
@@ -879,9 +851,7 @@ describe("Fault", () => {
 
     it("should use original error message when no user message provided", () => {
       const originalError = new Error("Original error message")
-      const fault = Fault.wrap(originalError)
-        .withTag("LAYER_1")
-        .withDescription("Debug info")
+      const fault = Fault.wrap(originalError).withTag("LAYER_1").withDescription("Debug info")
 
       expect(Fault.getIssue(fault)).toBe("Original error message.")
     })
@@ -890,9 +860,7 @@ describe("Fault", () => {
       const fault1 = Fault.wrap(new Error("Error 1"))
         .withTag("LAYER_1")
         .withDescription("Debug", "Message 1")
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withDescription("Debug", "Message 2")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withDescription("Debug", "Message 2")
 
       const result = Fault.getIssue(fault2)
       expect(result).toBe("Message 2. Message 1.")
@@ -907,9 +875,7 @@ describe("Fault", () => {
         .withTag("LAYER_2")
         .withDescription("Auth failed", "Authentication failed")
 
-      expect(Fault.getIssue(fault2)).toBe(
-        "Authentication failed. Token expired."
-      )
+      expect(Fault.getIssue(fault2)).toBe("Authentication failed. Token expired.")
     })
 
     it("should handle empty message strings", () => {
@@ -926,33 +892,25 @@ describe("Fault", () => {
     })
 
     it("should not add period if message already has punctuation", () => {
-      const fault = Fault.wrap(new Error("Something happened!")).withTag(
-        "MY_TAG"
-      )
+      const fault = Fault.wrap(new Error("Something happened!")).withTag("MY_TAG")
 
       expect(Fault.getIssue(fault)).toBe("Something happened!")
     })
 
     it("should allow custom separator", () => {
       const fault1 = Fault.wrap(new Error("Error 1")).withTag("LAYER_1")
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withDescription("Debug", "Error 2")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withDescription("Debug", "Error 2")
 
-      expect(Fault.getIssue(fault2, { separator: " | " })).toBe(
-        "Error 2. | Error 1."
-      )
+      expect(Fault.getIssue(fault2, { separator: " | " })).toBe("Error 2. | Error 1.")
     })
 
     it("should allow custom formatter", () => {
       const fault1 = Fault.wrap(new Error("error 1")).withTag("LAYER_1")
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withDescription("Debug", "error 2")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withDescription("Debug", "error 2")
 
-      expect(
-        Fault.getIssue(fault2, { formatter: (msg) => msg.toUpperCase() })
-      ).toBe("ERROR 2 ERROR 1")
+      expect(Fault.getIssue(fault2, { formatter: (msg) => msg.toUpperCase() })).toBe(
+        "ERROR 2 ERROR 1"
+      )
     })
   })
 
@@ -972,10 +930,7 @@ describe("Fault", () => {
         .withDescription("DB timeout on port 5432", "Failed to connect")
       const fault2 = Fault.wrap(fault1)
         .withTag("LAYER_2")
-        .withDescription(
-          "Service failed after 3 retries",
-          "Service unavailable"
-        )
+        .withDescription("Service failed after 3 retries", "Service unavailable")
       const fault3 = Fault.wrap(fault2)
         .withTag("LAYER_3")
         .withDescription("API call timeout", "API failed")
@@ -999,12 +954,8 @@ describe("Fault", () => {
     })
 
     it("should add periods and join with spaces by default", () => {
-      const fault1 = Fault.wrap(new Error("Error 1"))
-        .withTag("LAYER_1")
-        .withDescription("Debug 1")
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withDescription("Debug 2")
+      const fault1 = Fault.wrap(new Error("Error 1")).withTag("LAYER_1").withDescription("Debug 1")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withDescription("Debug 2")
 
       const result = Fault.getDebug(fault2)
       expect(result).toBe("Debug 2. Debug 1.")
@@ -1019,32 +970,24 @@ describe("Fault", () => {
         .withTag("LAYER_2")
         .withDescription("Auth service returned 401")
 
-      expect(Fault.getDebug(fault2)).toBe(
-        "Auth service returned 401. Token validation failed."
-      )
+      expect(Fault.getDebug(fault2)).toBe("Auth service returned 401. Token validation failed.")
     })
 
     it("should handle undefined debug messages", () => {
-      const fault = Fault.wrap(new Error("Something happened")).withTag(
-        "MY_TAG"
-      )
+      const fault = Fault.wrap(new Error("Something happened")).withTag("MY_TAG")
 
       // When debug is undefined, it becomes empty string after filtering
       expect(Fault.getDebug(fault)).toBe("")
     })
 
     it("should handle empty debug strings", () => {
-      const fault = Fault.wrap(new Error("Error"))
-        .withTag("MY_TAG")
-        .withDescription("")
+      const fault = Fault.wrap(new Error("Error")).withTag("MY_TAG").withDescription("")
 
       expect(Fault.getDebug(fault)).toBe("")
     })
 
     it("should filter out undefined/empty debug messages in chains", () => {
-      const fault1 = Fault.wrap(new Error("Error 1"))
-        .withTag("LAYER_1")
-        .withDescription("Debug 1")
+      const fault1 = Fault.wrap(new Error("Error 1")).withTag("LAYER_1").withDescription("Debug 1")
       const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
       // No debug description
 
@@ -1062,9 +1005,7 @@ describe("Fault", () => {
 
       const result = Fault.getDebug(fault2, { separator: " -> " })
 
-      expect(result).toBe(
-        "Service failed after 3 retries. -> DB timeout on port 5432."
-      )
+      expect(result).toBe("Service failed after 3 retries. -> DB timeout on port 5432.")
     })
 
     it("should support custom formatter", () => {
@@ -1084,15 +1025,11 @@ describe("Fault", () => {
       })
 
       // Custom formatter replaces default, so no automatic period addition
-      expect(result).toBe(
-        "SERVICE FAILED AFTER 3 RETRIES DB TIMEOUT ON PORT 5432"
-      )
+      expect(result).toBe("SERVICE FAILED AFTER 3 RETRIES DB TIMEOUT ON PORT 5432")
     })
 
     it("should filter empty messages after formatting", () => {
-      const fault1 = Fault.wrap(new Error("Error 1"))
-        .withTag("LAYER_1")
-        .withDescription("Debug 1")
+      const fault1 = Fault.wrap(new Error("Error 1")).withTag("LAYER_1").withDescription("Debug 1")
       const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
       // No debug description
 
@@ -1143,9 +1080,7 @@ describe("Fault", () => {
     it("should keep the original error message", () => {
       const myErr = new Error("Something happened")
 
-      const fault = Fault.wrap(myErr)
-        .withTag("MY_TAG")
-        .withDescription("Testing error message")
+      const fault = Fault.wrap(myErr).withTag("MY_TAG").withDescription("Testing error message")
 
       expect(fault.message).toBe(myErr.message)
     })
@@ -1325,13 +1260,9 @@ describe("Fault", () => {
         .withTag("LAYER_1")
         .withContext({ host: "localhost", port: 5432 })
 
-      const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withContext({ service: "database" })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "database" })
 
-      const fault3 = Fault.wrap(fault2)
-        .withTag("LAYER_3")
-        .withContext({ endpoint: "/api/users" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/api/users" })
 
       const serialized = Fault.toSerializable(fault3)
       const json = JSON.stringify(serialized)

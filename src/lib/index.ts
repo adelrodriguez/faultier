@@ -110,10 +110,7 @@ export abstract class BaseFault extends Error {
    * ```
    */
   unwrap(): [...FaultWithContext<FaultTag, ContextForTag<FaultTag>>[], Error] {
-    const chain: [
-      ...FaultWithContext<FaultTag, ContextForTag<FaultTag>>[],
-      Error,
-    ] = [this]
+    const chain: [...FaultWithContext<FaultTag, ContextForTag<FaultTag>>[], Error] = [this]
 
     let current = this.cause
 
@@ -346,9 +343,7 @@ export abstract class BaseFault extends Error {
 
     // data must be a SerializableFault (not SerializableError) for top level
     if (!("tag" in data)) {
-      throw new Error(
-        "Cannot deserialize SerializableError as Fault. Top-level must be a Fault."
-      )
+      throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
     }
 
     const cause = reconstructCause(data.cause)
@@ -357,10 +352,7 @@ export abstract class BaseFault extends Error {
     // We use Object.create to set up the prototype chain, then manually
     // call Error's constructor to properly initialize the error internals.
     // This avoids Fault.create() which would set wrong initial state.
-    const fault = Object.create(Fault.prototype) as FaultWithContext<
-      T,
-      ContextForTag<T>
-    >
+    const fault = Object.create(Fault.prototype) as FaultWithContext<T, ContextForTag<T>>
     Error.call(fault, cause?.message)
 
     // Set properties
@@ -393,10 +385,7 @@ export abstract class BaseFault extends Error {
    * // "SERVICE UNAVAILABLE DATABASE CONNECTION FAILED"
    * ```
    */
-  static getIssue(
-    fault: BaseFault,
-    options?: Partial<ChainFormattingOptions>
-  ): string {
+  static getIssue(fault: BaseFault, options?: Partial<ChainFormattingOptions>): string {
     const {
       separator = " ",
       formatter = (msg: string) => {
@@ -428,10 +417,7 @@ export abstract class BaseFault extends Error {
    * // "Service failed after 3 retries. -> DB timeout on port 5432."
    * ```
    */
-  static getDebug(
-    fault: BaseFault,
-    options?: Partial<ChainFormattingOptions>
-  ): string {
+  static getDebug(fault: BaseFault, options?: Partial<ChainFormattingOptions>): string {
     const {
       separator = " ",
       formatter = (msg: string) => {
@@ -583,10 +569,7 @@ class FaultWithTag<T extends FaultTag> extends BaseFault {
   }
 }
 
-class FaultWithContext<
-  T extends FaultTag,
-  C extends ContextForTag<T>,
-> extends BaseFault {
+class FaultWithContext<T extends FaultTag, C extends ContextForTag<T>> extends BaseFault {
   tag: T
   context: C
 

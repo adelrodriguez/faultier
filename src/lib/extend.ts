@@ -37,9 +37,7 @@ export interface ExtendedFaultWithTag<
     context: C
   ): ContextForTag<T> extends never
     ? never
-    : ExtendedFaultWithContext<TErrorClass, T, C> &
-        InstanceType<TErrorClass> &
-        WithBaseFaultMethods
+    : ExtendedFaultWithContext<TErrorClass, T, C> & InstanceType<TErrorClass> & WithBaseFaultMethods
   withDescription(debug: string, message?: string): this
   withDebug(debug: string): this
   withMessage(message: string): this
@@ -73,11 +71,7 @@ export interface ExtendedFaultWithContext<
 /**
  * Interface for a base extended fault (before `.withTag()` is called).
  */
-export interface ExtendedFaultBase<
-  TErrorClass extends new (
-    ...args: any[]
-  ) => Error,
-> {
+export interface ExtendedFaultBase<TErrorClass extends new (...args: any[]) => Error> {
   tag: FaultTag | "No fault tag set"
   context: Record<string, unknown>
   debug?: string
@@ -86,9 +80,7 @@ export interface ExtendedFaultBase<
   name: string
   withTag<T extends FaultTag>(
     tag: T
-  ): ExtendedFaultWithTag<TErrorClass, T> &
-    InstanceType<TErrorClass> &
-    WithBaseFaultMethods
+  ): ExtendedFaultWithTag<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods
   withDescription(debug: string, message?: string): this
   withDebug(debug: string): this
   withMessage(message: string): this
@@ -124,22 +116,16 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 ): {
   new (
     ...args: ConstructorParameters<TErrorClass>
-  ): ExtendedFaultBase<TErrorClass> &
-    InstanceType<TErrorClass> &
-    WithBaseFaultMethods
+  ): ExtendedFaultBase<TErrorClass> & InstanceType<TErrorClass> & WithBaseFaultMethods
   create(
     ...args: ConstructorParameters<TErrorClass>
-  ): ExtendedFaultBase<TErrorClass> &
-    InstanceType<TErrorClass> &
-    WithBaseFaultMethods
+  ): ExtendedFaultBase<TErrorClass> & InstanceType<TErrorClass> & WithBaseFaultMethods
 } {
   // Use a type alias to avoid TypeScript compiler crash with nested generic class extends
   type ErrorClassType = TErrorClass
 
   // Create base extended fault class
-  const ExtendedFaultBaseClass = class extends (ErrorClass as new (
-    ...args: any[]
-  ) => Error) {
+  const ExtendedFaultBaseClass = class extends (ErrorClass as new (...args: any[]) => Error) {
     tag: FaultTag | "No fault tag set" = "No fault tag set"
     context: Record<string, unknown> = {}
     debug?: string
@@ -158,13 +144,11 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     withTag<T extends FaultTag>(
       tag: T
-    ): ExtendedFaultWithTag<TErrorClass, T> &
-      InstanceType<TErrorClass> &
-      WithBaseFaultMethods {
-      return new ExtendedFaultWithTagClass(
-        this,
-        tag
-      ) as unknown as ExtendedFaultWithTag<TErrorClass, T> &
+    ): ExtendedFaultWithTag<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods {
+      return new ExtendedFaultWithTagClass(this, tag) as unknown as ExtendedFaultWithTag<
+        TErrorClass,
+        T
+      > &
         InstanceType<TErrorClass> &
         WithBaseFaultMethods
     }
@@ -187,12 +171,8 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     static create(
       ...args: ConstructorParameters<ErrorClassType>
-    ): ExtendedFaultBase<TErrorClass> &
-      InstanceType<TErrorClass> &
-      WithBaseFaultMethods {
-      return new ExtendedFaultBaseClass(
-        ...args
-      ) as ExtendedFaultBase<TErrorClass> &
+    ): ExtendedFaultBase<TErrorClass> & InstanceType<TErrorClass> & WithBaseFaultMethods {
+      return new ExtendedFaultBaseClass(...args) as ExtendedFaultBase<TErrorClass> &
         InstanceType<TErrorClass> &
         WithBaseFaultMethods
     }
@@ -327,13 +307,9 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
   return ExtendedFaultBaseClass as unknown as {
     new (
       ...args: ConstructorParameters<TErrorClass>
-    ): ExtendedFaultBase<TErrorClass> &
-      InstanceType<TErrorClass> &
-      WithBaseFaultMethods
+    ): ExtendedFaultBase<TErrorClass> & InstanceType<TErrorClass> & WithBaseFaultMethods
     create(
       ...args: ConstructorParameters<TErrorClass>
-    ): ExtendedFaultBase<TErrorClass> &
-      InstanceType<TErrorClass> &
-      WithBaseFaultMethods
+    ): ExtendedFaultBase<TErrorClass> & InstanceType<TErrorClass> & WithBaseFaultMethods
   }
 }

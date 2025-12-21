@@ -17,9 +17,7 @@ describe("extend", () => {
 
       const LibraryFault = extend(LibraryError)
 
-      const libraryFault = LibraryFault.create("My test message", 404).withTag(
-        "LAYER_1"
-      )
+      const libraryFault = LibraryFault.create("My test message", 404).withTag("LAYER_1")
 
       expect(libraryFault instanceof LibraryError).toBe(true)
       expect(libraryFault instanceof LibraryFault).toBe(true)
@@ -44,11 +42,7 @@ describe("extend", () => {
 
       const EmailFault = extend(EmailError)
 
-      const emailFault = EmailFault.create(
-        "Failed to send email",
-        "test@example.com",
-        1
-      )
+      const emailFault = EmailFault.create("Failed to send email", "test@example.com", 1)
         .withTag("LAYER_1")
         .withContext({ host: "smtp.example.com", port: 587, retries: 3 })
 
@@ -98,9 +92,7 @@ describe("extend", () => {
 
       const CustomFault = extend(CustomError)
 
-      const fault = CustomFault.create("Original message", 2).withDebug(
-        "Debug information"
-      )
+      const fault = CustomFault.create("Original message", 2).withDebug("Debug information")
 
       expect(fault.debug).toBe("Debug information")
       expect(fault.message).toBe("Original message")
@@ -135,8 +127,7 @@ describe("extend", () => {
 
       const CustomFault = extend(CustomError)
 
-      const fault =
-        CustomFault.create("Test message").withDescription("Debug info")
+      const fault = CustomFault.create("Test message").withDescription("Debug info")
 
       expect(fault.tag).toBe("No fault tag set")
     })
@@ -158,10 +149,7 @@ describe("extend", () => {
 
       const httpFault = HttpFault.create("Not Found", 404)
         .withTag("LAYER_3")
-        .withDescription(
-          "Resource not found in database",
-          "The requested resource was not found"
-        )
+        .withDescription("Resource not found in database", "The requested resource was not found")
         .withContext({ endpoint: "/api/users/123", method: "GET" })
 
       const json = httpFault.toJSON()
@@ -251,10 +239,7 @@ describe("extend", () => {
         .withContext({ host: "localhost", port: 5432 })
 
       // Manually set the cause on the ServiceFault
-      const serviceFault = ServiceFault.create(
-        "Service unavailable",
-        "auth-service"
-      )
+      const serviceFault = ServiceFault.create("Service unavailable", "auth-service")
         .withTag("LAYER_2")
         .withContext({ service: "auth" })
       serviceFault.cause = dbFault
@@ -280,10 +265,9 @@ describe("extend", () => {
       }
 
       const ApiFault = extend(ApiError)
-      const apiFault = ApiFault.create(
-        "API rate limit exceeded",
-        "/api/v1/users"
-      ).withTag("LAYER_1")
+      const apiFault = ApiFault.create("API rate limit exceeded", "/api/v1/users").withTag(
+        "LAYER_1"
+      )
 
       const chain = apiFault.unwrap()
 
@@ -307,10 +291,7 @@ describe("extend", () => {
       // Create a complex chain: rootError -> fault1 -> networkFault -> fault2
       const rootError = new Error("Connection reset")
       const fault1 = Fault.wrap(rootError).withTag("LAYER_1")
-      const networkFault = NetworkFault.create(
-        "Request timeout",
-        30_000
-      ).withTag("LAYER_2")
+      const networkFault = NetworkFault.create("Request timeout", 30_000).withTag("LAYER_2")
       networkFault.cause = fault1
 
       const fault2 = Fault.wrap(networkFault).withTag("LAYER_3")
@@ -348,14 +329,12 @@ describe("extend", () => {
 
       const HttpFault = extend(HttpError)
 
-      const httpFault = HttpFault.create("Not found", 404)
-        .withTag("LAYER_1")
-        .withContext({
-          host: "localhost",
-          port: 5432,
-          database: "users",
-          timeout: 30_000,
-        })
+      const httpFault = HttpFault.create("Not found", 404).withTag("LAYER_1").withContext({
+        host: "localhost",
+        port: 5432,
+        database: "users",
+        timeout: 30_000,
+      })
 
       expect(httpFault.context).toEqual({
         host: "localhost",
@@ -426,17 +405,13 @@ describe("extend", () => {
 
       const HttpFault = extend(HttpError)
 
-      const fault1 = Fault.wrap(new Error("test"))
-        .withTag("LAYER_1")
-        .withContext({
-          host: "localhost",
-        })
-      const httpFault = HttpFault.create("Request failed", 500)
-        .withTag("LAYER_2")
-        .withContext({
-          service: "api",
-          method: "GET",
-        })
+      const fault1 = Fault.wrap(new Error("test")).withTag("LAYER_1").withContext({
+        host: "localhost",
+      })
+      const httpFault = HttpFault.create("Request failed", 500).withTag("LAYER_2").withContext({
+        service: "api",
+        method: "GET",
+      })
       httpFault.cause = fault1
 
       expect(httpFault.getFullContext()).toEqual({
@@ -464,10 +439,7 @@ describe("extend", () => {
       const validationFault = ValidationFault.create("Invalid input", "email")
         .withTag("LAYER_1")
         .withContext({ host: "localhost", database: "users" })
-        .withDescription(
-          "Email format is invalid",
-          "Please enter a valid email address"
-        )
+        .withDescription("Email format is invalid", "Please enter a valid email address")
 
       expect(validationFault.tag).toBe("LAYER_1")
       expect(validationFault.debug).toBe("Email format is invalid")
@@ -508,9 +480,7 @@ describe("extend", () => {
       const originalStack = fault.stack
 
       // Call withTag and withContext - this should NOT change the stack trace origin
-      const faultWithContext = fault
-        .withTag("LAYER_1")
-        .withContext({ retries: 3 })
+      const faultWithContext = fault.withTag("LAYER_1").withContext({ retries: 3 })
 
       // The stack trace should still point to where we created the fault
       expect(faultWithContext.stack).toBe(originalStack)
@@ -531,9 +501,7 @@ describe("extend", () => {
 
       const rootError = new Error("Network timeout")
       const fault1 = Fault.wrap(rootError).withTag("LAYER_1")
-      const httpFault = HttpFault.create("Request failed", 500).withTag(
-        "LAYER_2"
-      )
+      const httpFault = HttpFault.create("Request failed", 500).withTag("LAYER_2")
       httpFault.cause = fault1
 
       expect(httpFault.getTags()).toEqual(["LAYER_2", "LAYER_1"])
@@ -604,9 +572,7 @@ describe("extend", () => {
         .withDescription("HTTP error", "Service unavailable")
       httpFault.cause = fault1
 
-      expect(BaseFault.getIssue(httpFault)).toBe(
-        "Service unavailable. Connection timeout."
-      )
+      expect(BaseFault.getIssue(httpFault)).toBe("Service unavailable. Connection timeout.")
     })
   })
 })

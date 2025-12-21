@@ -1,13 +1,5 @@
 import Bun from "bun"
-import {
-  cancel,
-  intro,
-  isCancel,
-  log,
-  outro,
-  spinner,
-  text,
-} from "@clack/prompts"
+import { cancel, intro, isCancel, log, outro, spinner, text } from "@clack/prompts"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { defineCommand } from "./utils"
