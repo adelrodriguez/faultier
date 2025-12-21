@@ -4,10 +4,6 @@
   <p align="center">
     <strong>Extensible error handling for TypeScript</strong>
   </p>
-
-  <p align="center">
-    Work in progress.
-  </p>
 </div>
 
 Faultier provides a structured way to create, wrap, and handle errors with type-safe tags and context. Define your error types in one place, then use them throughout your application with full TypeScript support for error classification and associated metadata.
