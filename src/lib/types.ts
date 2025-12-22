@@ -36,6 +36,16 @@ export type ContextForTag<TTag extends string> = TTag extends keyof FaultRegistr
     : FaultRegistry[TTag]
   : Record<string, unknown>
 
+/**
+ * Gets the partial context type for a specific tag.
+ * Used when reading context (e.g., after isFault()) since context may not have been provided.
+ */
+export type PartialContextForTag<TTag extends string> = TTag extends keyof FaultRegistry
+  ? FaultRegistry[TTag] extends undefined | never
+    ? never
+    : Partial<FaultRegistry[TTag]>
+  : Record<string, unknown>
+
 export type WithoutWithTag<T> = Omit<T, "withTag">
 export type WithoutWithContext<T> = Omit<T, "withContext">
 export type WithoutClearContext<T> = Omit<T, "clearContext">

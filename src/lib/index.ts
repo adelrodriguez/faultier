@@ -3,6 +3,7 @@ import type {
   ContextForTag,
   FaultJSON,
   FaultTag,
+  PartialContextForTag,
   SerializableError,
   SerializableFault,
 } from "./types"
@@ -109,8 +110,8 @@ export abstract class BaseFault extends Error {
    * // [fault3, fault2, fault1, originalError]
    * ```
    */
-  unwrap(): [...FaultWithContext<FaultTag, ContextForTag<FaultTag>>[], Error] {
-    const chain: [...FaultWithContext<FaultTag, ContextForTag<FaultTag>>[], Error] = [this]
+  unwrap(): [...TaggedFault<FaultTag>[], Error] {
+    const chain: [...TaggedFault<FaultTag>[], Error] = [this]
 
     let current = this.cause
 
@@ -242,7 +243,7 @@ export abstract class BaseFault extends Error {
    * ```
    */
   static isFault(value: unknown): value is {
-    [K in FaultTag]: FaultWithContext<K, ContextForTag<K>>
+    [K in FaultTag]: TaggedFault<K>
   }[FaultTag] {
     if (value instanceof BaseFault) {
       return true
@@ -320,7 +321,7 @@ export abstract class BaseFault extends Error {
    */
   static fromSerializable<T extends FaultTag = FaultTag>(
     data: SerializableFault | SerializableError
-  ): FaultWithContext<T, ContextForTag<T>> {
+  ): TaggedFault<T> {
     // Helper to reconstruct cause chain recursively
     const reconstructCause = (
       causeData: SerializableFault | SerializableError | undefined
@@ -348,18 +349,10 @@ export abstract class BaseFault extends Error {
 
     const cause = reconstructCause(data.cause)
 
-    // Create instance bypassing private constructor
-    // We use Object.create to set up the prototype chain, then manually
-    // call Error's constructor to properly initialize the error internals.
-    // This avoids Fault.create() which would set wrong initial state.
-    const fault = Object.create(Fault.prototype) as FaultWithContext<T, ContextForTag<T>>
-    Error.call(fault, cause?.message)
-
-    // Set properties
+    // Create TaggedFault instance with the deserialized data
+    const fault = new TaggedFault(null, data.tag as T, data.context as ContextForTag<T>)
     fault.name = data.name
-    fault.tag = data.tag as T
     fault.message = data.message
-    fault.context = data.context as ContextForTag<T>
     fault.cause = cause
     fault.debug = data.debug
 
@@ -467,11 +460,8 @@ export abstract class BaseFault extends Error {
    */
   static handle<
     H extends {
-      [T in FaultTag]: ContextForTag<T> extends never
-        ? // biome-ignore lint/suspicious/noExplicitAny: generic handler return type
-          (fault: FaultWithTag<T>) => any
-        : // biome-ignore lint/suspicious/noExplicitAny: generic handler return type
-          (fault: FaultWithContext<T, ContextForTag<T>>) => any
+      [T in FaultTag]: // biome-ignore lint/suspicious/noExplicitAny: generic handler return type
+      (fault: TaggedFault<T>) => any
     },
   >(
     error: unknown,
@@ -498,14 +488,14 @@ export abstract class BaseFault extends Error {
 
 export default class Fault extends BaseFault {
   tag = "No fault tag set" as const
-  context = {} as never
+  context: Record<string, unknown> = {}
 
   private constructor(cause?: Error) {
     super(cause)
   }
 
-  withTag<T extends FaultTag>(tag: T): FaultWithTag<T> {
-    return new FaultWithTag(this, tag)
+  withTag<T extends FaultTag>(tag: T): TaggedFault<T> {
+    return new TaggedFault(this, tag)
   }
 
   /**
@@ -546,41 +536,28 @@ export default class Fault extends BaseFault {
    *   .withContext({ query: "SELECT *" })
    * ```
    */
-  static create<T extends FaultTag>(tag: T): FaultWithTag<T> {
-    return new FaultWithTag(null, tag)
+  static create<T extends FaultTag>(tag: T): TaggedFault<T> {
+    return new TaggedFault(null, tag)
   }
 }
 
-class FaultWithTag<T extends FaultTag> extends BaseFault {
+class TaggedFault<T extends FaultTag> extends BaseFault {
   tag: T
-  context = {} as never
+  context: PartialContextForTag<T>
 
-  constructor(fault: Fault | null, tag: T) {
+  constructor(fault: Fault | TaggedFault<T> | null, tag: T, context?: ContextForTag<T>) {
     super(fault?.cause, fault?.debug, fault?.message)
     this.tag = tag
+    this.context = (context ?? {}) as PartialContextForTag<T>
   }
 
-  withContext<C extends ContextForTag<T>>(
-    context: C
-  ): ContextForTag<T> extends never ? never : FaultWithContext<T, C> {
+  withContext(context: ContextForTag<T>): ContextForTag<T> extends never ? never : TaggedFault<T> {
     // Type assertion needed because TypeScript can't narrow the conditional return type
     // biome-ignore lint/suspicious/noExplicitAny: Conditional return type requires assertion
-    return new FaultWithContext(this, this.tag, context) as any
-  }
-}
-
-class FaultWithContext<T extends FaultTag, C extends ContextForTag<T>> extends BaseFault {
-  tag: T
-  context: C
-
-  constructor(fault: FaultWithTag<T>, tag: T, context: C) {
-    super(fault.cause, fault.debug, fault.message)
-    this.tag = tag
-    this.context = context
+    return new TaggedFault(this, this.tag, context) as any
   }
 
-  clearContext(): FaultWithTag<T> {
-    this.context = {} as never
-    return new FaultWithTag(this as unknown as Fault, this.tag)
+  clearContext(): TaggedFault<T> {
+    return new TaggedFault(this, this.tag)
   }
 }

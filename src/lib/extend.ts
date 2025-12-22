@@ -2,7 +2,7 @@
 // biome-ignore-all lint/nursery/noShadow: Allow shadowing of args variable
 
 import { BaseFault, IS_FAULT } from "./index"
-import type { ContextForTag, FaultTag } from "./types"
+import type { ContextForTag, FaultTag, PartialContextForTag } from "./types"
 
 // Helper type to ensure extended faults have BaseFault methods
 export type WithBaseFaultMethods = Pick<
@@ -20,15 +20,16 @@ export type WithBaseFaultMethods = Pick<
 /**
  * Interface for an extended fault with a tag set.
  * This represents the state after calling `.withTag()` on an extended fault.
+ * Both `withContext()` and `clearContext()` are available on all tagged faults.
  */
-export interface ExtendedFaultWithTag<
+export interface ExtendedTaggedFault<
   TErrorClass extends new (
     ...args: any[]
   ) => Error,
   T extends FaultTag,
 > {
   tag: T
-  context: Record<string, unknown>
+  context: PartialContextForTag<T>
   debug?: string
   cause?: Error
   message: string
@@ -37,30 +38,8 @@ export interface ExtendedFaultWithTag<
     context: C
   ): ContextForTag<T> extends never
     ? never
-    : ExtendedFaultWithContext<TErrorClass, T, C> & InstanceType<TErrorClass> & WithBaseFaultMethods
-  withDescription(debug: string, message?: string): this
-  withDebug(debug: string): this
-  withMessage(message: string): this
-}
-
-/**
- * Interface for an extended fault with both tag and context set.
- * This represents the state after calling `.withContext()` on a tagged extended fault.
- */
-export interface ExtendedFaultWithContext<
-  TErrorClass extends new (
-    ...args: any[]
-  ) => Error,
-  T extends FaultTag,
-  C extends ContextForTag<T>,
-> {
-  tag: T
-  context: C
-  debug?: string
-  cause?: Error
-  message: string
-  name: string
-  clearContext(): ExtendedFaultWithTag<TErrorClass, T> &
+    : ExtendedTaggedFault<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods
+  clearContext(): ExtendedTaggedFault<TErrorClass, T> &
     InstanceType<TErrorClass> &
     WithBaseFaultMethods
   withDescription(debug: string, message?: string): this
@@ -80,7 +59,7 @@ export interface ExtendedFaultBase<TErrorClass extends new (...args: any[]) => E
   name: string
   withTag<T extends FaultTag>(
     tag: T
-  ): ExtendedFaultWithTag<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods
+  ): ExtendedTaggedFault<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods
   withDescription(debug: string, message?: string): this
   withDebug(debug: string): this
   withMessage(message: string): this
@@ -144,8 +123,8 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     withTag<T extends FaultTag>(
       tag: T
-    ): ExtendedFaultWithTag<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods {
-      return new ExtendedFaultWithTagClass(this, tag) as unknown as ExtendedFaultWithTag<
+    ): ExtendedTaggedFault<TErrorClass, T> & InstanceType<TErrorClass> & WithBaseFaultMethods {
+      return new ExtendedTaggedFaultClass(this, tag) as unknown as ExtendedTaggedFault<
         TErrorClass,
         T
       > &
@@ -181,19 +160,21 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
   // Type for the extended fault instance
   type ExtendedFaultInstance = InstanceType<typeof ExtendedFaultBaseClass>
 
-  // Create fault with tag class - extends the base class cast to Error
-  const ExtendedFaultWithTagClass = class extends ExtendedFaultBaseClass {
+  // Create tagged fault class - extends the base class cast to Error
+  const ExtendedTaggedFaultClass = class extends ExtendedFaultBaseClass {
     override tag: FaultTag | "No fault tag set" = "No fault tag set"
     override context: Record<string, unknown> = {}
 
-    constructor(fault: ExtendedFaultInstance, tag: FaultTag) {
+    constructor(fault: ExtendedFaultInstance, tag: FaultTag, context?: ContextForTag<FaultTag>) {
       // Get constructor args from fault to call parent constructor
-      const args = new Array(ErrorClass.length).fill(
-        undefined
+      const args = Array.from(
+        { length: ErrorClass.length },
+        () => undefined
       ) as ConstructorParameters<ErrorClassType>
       super(...args)
 
       this.tag = tag
+      this.context = (context ?? {}) as Record<string, unknown>
       this.message = fault.message
       this.name = fault.name
       this.cause = fault.cause
@@ -224,79 +205,33 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       context: C
     ): ContextForTag<FaultTag> extends never
       ? never
-      : ExtendedFaultWithContext<TErrorClass, FaultTag, C> &
+      : ExtendedTaggedFault<TErrorClass, FaultTag> &
           InstanceType<TErrorClass> &
           WithBaseFaultMethods {
       // Type assertion needed because TypeScript can't narrow the conditional return type
-      return new ExtendedFaultWithContextClass(
+      return new ExtendedTaggedFaultClass(
         this,
         this.tag as FaultTag,
         context
-      ) as unknown as ExtendedFaultWithContext<TErrorClass, FaultTag, C> &
+      ) as unknown as ExtendedTaggedFault<TErrorClass, FaultTag> &
         InstanceType<TErrorClass> &
         WithBaseFaultMethods
     }
-  }
 
-  // Create fault with context class
-  const ExtendedFaultWithContextClass = class extends ExtendedFaultWithTagClass {
-    override context: ContextForTag<FaultTag> = {} as ContextForTag<FaultTag>
-
-    constructor(
-      fault: InstanceType<typeof ExtendedFaultWithTagClass>,
-      tag: FaultTag,
-      context: ContextForTag<FaultTag>
-    ) {
-      super(fault as unknown as ExtendedFaultInstance, tag)
-
-      this.context = context
-      this.message = fault.message
-      this.name = fault.name
-      this.cause = fault.cause
-      this.debug = fault.debug
-
-      // Preserve original stack trace
-      if (fault.stack) {
-        this.stack = fault.stack
-      }
-
-      // Copy all original error properties (skip symbol properties)
-      for (const key of Object.keys(fault)) {
-        if (
-          key !== "tag" &&
-          key !== "context" &&
-          key !== "cause" &&
-          key !== "debug" &&
-          key !== "message" &&
-          key !== "name" &&
-          key !== "stack"
-        ) {
-          ;(this as any)[key] = (fault as any)[key]
-        }
-      }
-    }
-
-    clearContext(): ExtendedFaultWithTag<TErrorClass, FaultTag> &
+    clearContext(): ExtendedTaggedFault<TErrorClass, FaultTag> &
       InstanceType<TErrorClass> &
       WithBaseFaultMethods {
-      const fault = Object.create(ExtendedFaultWithTagClass.prototype)
-      Object.assign(fault, this)
-      fault.context = {}
-      // Preserve IS_FAULT symbol (Object.assign doesn't copy non-enumerable properties)
-      Object.defineProperty(fault, IS_FAULT, {
-        value: true,
-        writable: false,
-        enumerable: false,
-        configurable: false,
-      })
-      return fault as ExtendedFaultWithTag<TErrorClass, FaultTag> &
+      return new ExtendedTaggedFaultClass(
+        this,
+        this.tag as FaultTag
+      ) as unknown as ExtendedTaggedFault<TErrorClass, FaultTag> &
         InstanceType<TErrorClass> &
         WithBaseFaultMethods
     }
   }
 
   // Copy all BaseFault prototype methods to ExtendedFaultBaseClass
-  // ExtendedFaultWithTagClass and ExtendedFaultWithContextClass will inherit them
+  // ExtendedTaggedFaultClass will inherit them
   const descriptors = Object.getOwnPropertyDescriptors(BaseFault.prototype)
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (key !== "constructor" && !(key in ExtendedFaultBaseClass.prototype)) {

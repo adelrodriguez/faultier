@@ -307,11 +307,8 @@ describe("extend", () => {
       // Verify IS_FAULT symbol works with extended faults
       const faults = chain.filter(Fault.isFault)
       expect(faults).toHaveLength(3)
-      // @ts-expect-error - FaultWithContext is not assignable to FaultWithTag
       expect(faults[0]).toBe(fault2)
-      // @ts-expect-error - FaultWithContext is not assignable to FaultWithTag
       expect(faults[1]).toBe(networkFault)
-      // @ts-expect-error - FaultWithContext is not assignable to FaultWithTag
       expect(faults[2]).toBe(fault1)
     })
   })
