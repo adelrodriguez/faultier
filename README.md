@@ -4,16 +4,41 @@
   <p align="center">
     <strong>Extensible error handling for TypeScript</strong>
   </p>
+
+  <p align="center">
+    [![npm version](https://img.shields.io/npm/v/faultier)](https://www.npmjs.com/package/faultier)
+    [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+    [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+  </p>
 </div>
 
 Faultier provides a structured way to create, wrap, and handle errors with type-safe tags and context. Define your error types in one place, then use them throughout your application with full TypeScript support for error classification and associated metadata.
 
 Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 
+<details>
+<summary>Table of Contents</summary>
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Quick Start](#quick-start)
+  - [Type Safety](#type-safety)
+  - [Error Chaining](#error-chaining)
+  - [Handling Faults](#handling-faults)
+  - [Extending Error Classes](#extending-error-classes)
+- [API Reference](#api-reference)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
+
+</details>
+
 ## Features
 
 - **Type-safe tags** - Define error tags and get autocomplete and type checking
 - **Typed context** - Associate structured metadata with each error type
+- **Dual messages** - Separate debug messages for logs from user-facing messages
 - **Error chaining** - Wrap and re-throw errors while preserving the full chain
 - **Extensible** - Extend existing Error classes with Fault functionality
 - **Serializable** - Convert faults to JSON and reconstruct them
@@ -22,7 +47,17 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 ## Installation
 
 ```bash
+# npm
 npm install faultier
+
+# yarn
+yarn add faultier
+
+# pnpm
+pnpm add faultier
+
+# bun
+bun add faultier
 ```
 
 ## Usage
@@ -32,22 +67,28 @@ npm install faultier
 ```ts
 import Fault from "faultier";
 
-// Wrap an error with a tag
+// Wrap an existing error and add classification
 try {
   await database.query();
 } catch (err) {
-  throw Fault.wrap(err)
-    .withTag("DATABASE_ERROR")
-    .withContext({ query: "SELECT * FROM users" });
+  throw Fault.wrap(err) // Wrap any error as a Fault
+    .withTag("DATABASE_ERROR") // Classify with a tag
+    .withContext({ query: "SELECT * FROM users" }); // Attach metadata
 }
 
-// Create a fault directly
+// Or create a fault directly when you control the error
 throw Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" });
+
+// Separate debug info from user-facing messages
+throw Fault.wrap(err).withTag("PAYMENT_ERROR").withDescription(
+  "Stripe API error 402: card_declined (insufficient_funds)", // Debug (for logs)
+  "Payment failed. Please try a different card." // User-facing message
+);
 ```
 
 ### Type Safety
 
-Define your error types using module augmentation:
+Define your error types using [module augmentation](https://www.typescriptlang.org/docs/handbook/declaration-merging.html#module-augmentation). This tells TypeScript about your custom error tags and their expected context shapes:
 
 ```ts
 declare module "faultier" {
@@ -126,10 +167,10 @@ const fault = Fault.wrap(originalError)
   .withTag("API_ERROR")
   .withContext({ endpoint: "/users" });
 
-fault.unwrap(); // [fault, ...causes, originalError]
-fault.flatten(); // "API failed -> Service error -> Connection timeout"
-fault.getTags(); // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"]
-fault.getFullContext(); // Merged context from all faults
+fault.unwrap(); // [fault, ...causes, originalError] - full chain as array
+fault.flatten(); // "API failed -> Service error -> Connection timeout" - messages joined
+fault.getTags(); // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"] - all tags in chain
+fault.getFullContext(); // { endpoint: "/users", host: "..." } - merged context from all faults
 ```
 
 ### Handling Faults
@@ -179,7 +220,7 @@ console.log(fault.tag); // "HTTP_ERROR"
 console.log(fault.flatten()); // Works like regular Fault
 ```
 
-### API Reference
+## API Reference
 
 ### Fault
 
@@ -368,6 +409,10 @@ try {
   console.log(error.context);
 }
 ```
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Acknowledgments
 
