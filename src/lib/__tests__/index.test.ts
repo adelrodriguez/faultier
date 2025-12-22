@@ -30,6 +30,9 @@ declare module "../types" {
       statusCode?: number
       headers?: Record<string, string>
     }
+    LAYER_4: {
+      path: string
+    }
     NO_CONTEXT_TAG: never // Tag that doesn't accept context
   }
 }
@@ -172,7 +175,6 @@ describe("Fault", () => {
       it("should default to empty object", () => {
         const fault = Fault.wrap(new Error("test"))
 
-        // @ts-expect-error - we want to test the default context
         expect(fault.context).toEqual({})
       })
 
@@ -189,7 +191,7 @@ describe("Fault", () => {
     })
 
     describe("clearContext", () => {
-      it("should return FaultWithTag preserving tag and message with empty context", () => {
+      it("should return TaggedFault preserving tag and message with empty context", () => {
         const fault = Fault.wrap(new Error("Original error"))
           .withTag("MY_TAG")
           .withDescription("Debug message", "User message")
@@ -199,7 +201,7 @@ describe("Fault", () => {
 
         expect(cleared.tag).toBe("MY_TAG")
         expect(cleared.message).toBe("User message")
-        expect(cleared.context).toEqual({} as never)
+        expect(cleared.context).toEqual({})
       })
 
       it("should allow re-applying context after clearing", () => {
@@ -306,6 +308,7 @@ describe("Fault", () => {
         LAYER_1: () => "not handled",
         LAYER_2: () => "not handled",
         LAYER_3: () => "not handled",
+        LAYER_4: () => "not handled",
         NO_CONTEXT_TAG: () => "not handled",
       })
 
@@ -320,6 +323,7 @@ describe("Fault", () => {
         LAYER_1: () => "handled",
         LAYER_2: () => "handled",
         LAYER_3: () => "handled",
+        LAYER_4: () => "handled",
         NO_CONTEXT_TAG: () => "handled",
       })
 
@@ -334,6 +338,7 @@ describe("Fault", () => {
         LAYER_1: () => "handled",
         LAYER_2: () => "handled",
         LAYER_3: () => "handled",
+        LAYER_4: () => "handled",
         MY_TAG: () => "handled",
         NO_CONTEXT_TAG: () => "handled",
       })
@@ -360,6 +365,7 @@ describe("Fault", () => {
         LAYER_1: spy2,
         LAYER_2: spy3,
         LAYER_3: spy4,
+        LAYER_4: () => "not used",
         NO_CONTEXT_TAG: spy5,
       })
 
@@ -1330,5 +1336,96 @@ describe("Fault", () => {
         expect(chain[1].debug).toBe("Layer 1 debug")
       }
     })
+  })
+
+  describe("context type safety", () => {
+    it("should have empty context when withContext is not called", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      expect(fault.context).toEqual({})
+      expect(Object.keys(fault.context)).toHaveLength(0)
+    })
+
+    it("should allow narrowing context with 'in' operator after isFault", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      if (Fault.isFault(fault)) {
+        // Context might be empty - need to check
+        if ("requestId" in fault.context) {
+          expect(typeof fault.context.requestId).toBe("string")
+        } else {
+          // Empty context case
+          expect(fault.context).toEqual({})
+        }
+      }
+    })
+
+    it("should have typed context when withContext is called", () => {
+      const fault = Fault.wrap(new Error("test"))
+        .withTag("MY_TAG")
+        .withContext({ requestId: "123", errorCode: 500 })
+
+      // Direct access works - no narrowing needed
+      expect(fault.context.requestId).toBe("123")
+      expect(fault.context.errorCode).toBe(500)
+    })
+
+    it("should work with getFullContext even with empty contexts in chain", () => {
+      const fault1 = Fault.wrap(new Error("test")).withTag("LAYER_1")
+      // No withContext called
+
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
+
+      const fullContext = fault2.getFullContext()
+
+      expect(fullContext).toEqual({ service: "auth" })
+    })
+
+    it("should handle mixed context/no-context faults in chain", () => {
+      const fault1 = Fault.wrap(new Error("db error"))
+        .withTag("LAYER_1")
+        .withContext({ host: "localhost", port: 5432 })
+
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
+      // No context on layer 2
+
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/api" })
+
+      expect(fault3.getFullContext()).toEqual({
+        host: "localhost",
+        port: 5432,
+        endpoint: "/api",
+      })
+    })
+  })
+})
+
+describe("partial context type narrowing", () => {
+  it("should narrow context type after tag check", () => {
+    const fault = Fault.create("LAYER_4").withContext({ path: "/api" })
+
+    if (Fault.isFault(fault) && fault.tag === "LAYER_4") {
+      // Context should be Partial<{ path: string }> = { path?: string }
+      expect(fault.context.path).toBe("/api")
+      if (fault.context.path) {
+        // Should be string, not unknown
+        expect(typeof fault.context.path).toBe("string")
+        expect(fault.context.path.toUpperCase()).toBe("/API")
+      }
+    }
+  })
+
+  it("should handle empty context with partial type", () => {
+    const fault = Fault.create("LAYER_4")
+    // No withContext called
+
+    if (Fault.isFault(fault) && fault.tag === "LAYER_4") {
+      // Context should be Partial<{ path: string }> = { path?: string }
+      expect(fault.context.path).toBeUndefined()
+      if (fault.context.path) {
+        // This branch won't execute, but type should be string if it did
+        expect(typeof fault.context.path).toBe("string")
+      }
+    }
   })
 })
