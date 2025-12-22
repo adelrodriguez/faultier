@@ -257,6 +257,28 @@ export abstract class BaseFault extends Error {
   }
 
   /**
+   * Checks if a match result is UNKNOWN (not a fault or no handler matched).
+   * Use this to check the result of matchTag, matchTags, or handle.
+   *
+   * @param value - The result from matchTag, matchTags, or handle
+   * @returns True if the value is UNKNOWN
+   *
+   * @example
+   * ```ts
+   * const result = Fault.matchTags(error, {
+   *   NOT_FOUND: (fault) => ({ status: 404 }),
+   * });
+   *
+   * if (Fault.isUnknown(result)) {
+   *   // Not a fault or unhandled tag
+   * }
+   * ```
+   */
+  static isUnknown(value: unknown): value is typeof UNKNOWN {
+    return value === UNKNOWN
+  }
+
+  /**
    * Serializes a fault and its entire error chain into a plain object.
    * Unlike toJSON(), this preserves the full cause chain as nested objects.
    *
@@ -452,10 +474,12 @@ export abstract class BaseFault extends Error {
   }
 
   /**
-   * Dispatches a fault to the handler corresponding to its tag.
+   * Exhaustively dispatches a fault to handlers for all registered tags.
+   * Use this in global error handlers where you need to handle every possible fault type.
+   * For partial matching, use `matchTag` or `matchTags` instead.
    *
    * @param error - The value that may be a fault (or any error-like value)
-   * @param handlers - An object mapping each fault tag to a handler function
+   * @param handlers - Handlers for ALL tags in FaultRegistry
    * @returns The result of the handler if a matching handler exists for the fault's tag, or UNKNOWN if error is not a fault or there is no handler for its tag
    */
   static handle<
@@ -480,6 +504,90 @@ export abstract class BaseFault extends Error {
     if (handler) {
       // biome-ignore lint/suspicious/noExplicitAny: We know this is safe at runtime because handler matches error.tag
       return handler(error as any)
+    }
+
+    return UNKNOWN
+  }
+
+  /**
+   * Matches a fault against a single tag.
+   * Runs the callback only if the error is a fault with the specified tag.
+   *
+   * @param error - The value that may be a fault
+   * @param tag - The tag to match against
+   * @param callback - Handler to run if the tag matches
+   * @returns The callback result, or UNKNOWN if not matched
+   *
+   * @example
+   * ```ts
+   * const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
+   *   logger.error("DB error", fault.context.query);
+   *   return { status: 500 };
+   * });
+   *
+   * if (Fault.isUnknown(result)) {
+   *   // Not a fault or different tag
+   * }
+   * ```
+   */
+  static matchTag<TTag extends FaultTag, TResult>(
+    error: unknown,
+    tag: TTag,
+    callback: (fault: TaggedFault<TTag>) => TResult
+  ): TResult | typeof UNKNOWN {
+    if (!BaseFault.isFault(error)) {
+      return UNKNOWN
+    }
+
+    if (error.tag === tag) {
+      return callback(error as TaggedFault<TTag>)
+    }
+
+    return UNKNOWN
+  }
+
+  /**
+   * Matches a fault against multiple tags.
+   * Runs the matching handler if the error is a fault with one of the specified tags.
+   * Unlike `handle`, only requires handlers for the tags you want to match.
+   *
+   * @param error - The value that may be a fault
+   * @param handlers - Handlers for the tags you want to match
+   * @returns The handler result, or UNKNOWN if not matched
+   *
+   * @example
+   * ```ts
+   * const result = Fault.matchTags(error, {
+   *   NOT_FOUND: (fault) => ({ status: 404 }),
+   *   DB_ERROR: (fault) => ({ status: 500 }),
+   * });
+   *
+   * if (Fault.isUnknown(result)) {
+   *   // Not a fault or unhandled tag
+   * }
+   * ```
+   */
+  static matchTags<
+    THandlers extends {
+      [K in keyof THandlers]: K extends FaultTag ? (fault: TaggedFault<K>) => unknown : never
+    },
+  >(
+    error: unknown,
+    handlers: THandlers
+  ):
+    | {
+        [K in keyof THandlers]: ReturnType<THandlers[K]>
+      }[keyof THandlers]
+    | typeof UNKNOWN {
+    if (!BaseFault.isFault(error)) {
+      return UNKNOWN
+    }
+
+    const handler = handlers[error.tag as keyof THandlers]
+
+    if (handler) {
+      // biome-ignore lint/suspicious/noExplicitAny: Type-safe at runtime, TypeScript can't narrow union types here
+      return (handler as any)(error as any) as any
     }
 
     return UNKNOWN

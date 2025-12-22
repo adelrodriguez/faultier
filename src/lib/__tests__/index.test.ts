@@ -273,6 +273,54 @@ describe("Fault", () => {
     })
   })
 
+  describe("isUnknown", () => {
+    it("should return true for UNKNOWN symbol", () => {
+      const result = Fault.handle(new Error("test"), {
+        MY_TAG: () => "handled",
+        LAYER_1: () => "handled",
+        LAYER_2: () => "handled",
+        LAYER_3: () => "handled",
+        LAYER_4: () => "handled",
+        NO_CONTEXT_TAG: () => "handled",
+      })
+
+      expect(Fault.isUnknown(result)).toBe(true)
+    })
+
+    it("should return false for handler results", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      const result = Fault.matchTag(fault, "MY_TAG", () => "matched")
+
+      expect(Fault.isUnknown(result)).toBe(false)
+      expect(result).toBe("matched")
+    })
+
+    it("should return false for other values", () => {
+      expect(Fault.isUnknown("string")).toBe(false)
+      expect(Fault.isUnknown(123)).toBe(false)
+      expect(Fault.isUnknown(null)).toBe(false)
+      expect(Fault.isUnknown(undefined)).toBe(false)
+      expect(Fault.isUnknown({})).toBe(false)
+      expect(Fault.isUnknown([])).toBe(false)
+      expect(Fault.isUnknown(true)).toBe(false)
+    })
+
+    it("should work with matchTags result", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      const matched = Fault.matchTags(fault, {
+        MY_TAG: () => ({ status: 404 }),
+      })
+      const unmatched = Fault.matchTags(fault, {
+        LAYER_1: () => ({ status: 500 }),
+      })
+
+      expect(Fault.isUnknown(matched)).toBe(false)
+      expect(Fault.isUnknown(unmatched)).toBe(true)
+    })
+  })
+
   describe("assert", () => {
     it("should not throw when given a Fault instance", () => {
       const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
@@ -370,6 +418,181 @@ describe("Fault", () => {
       })
 
       expect(result).toBe("handler2")
+    })
+  })
+
+  describe("matchTag", () => {
+    it("should return callback result when tag matches", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      const result = Fault.matchTag(fault, "MY_TAG", (f) => {
+        expect(f.tag).toBe("MY_TAG")
+        return "matched"
+      })
+
+      expect(result).toBe("matched")
+    })
+
+    it("should return UNKNOWN when tag doesn't match", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      const result = Fault.matchTag(fault, "LAYER_1", () => "should not run")
+
+      expect(result).toBe(UNKNOWN)
+    })
+
+    it("should return UNKNOWN when error is not a fault", () => {
+      const plainError = new Error("Not a fault")
+
+      const result = Fault.matchTag(plainError, "MY_TAG", () => "should not run")
+
+      expect(result).toBe(UNKNOWN)
+    })
+
+    it("should provide correctly typed fault in callback", () => {
+      const fault = Fault.wrap(new Error("test"))
+        .withTag("MY_TAG")
+        .withContext({ requestId: "123", errorCode: 100 })
+
+      const result = Fault.matchTag(fault, "MY_TAG", (f) => {
+        // TypeScript should know f.context has requestId and errorCode
+        expect(f.context.requestId).toBe("123")
+        expect(f.context.errorCode).toBe(100)
+        return f.context.requestId
+      })
+
+      expect(result).toBe("123")
+    })
+
+    it("should work with faults created via Fault.create", () => {
+      const fault = Fault.create("MY_TAG").withContext({ requestId: "123" })
+
+      const result = Fault.matchTag(fault, "MY_TAG", (f) => f.context.requestId)
+
+      expect(result).toBe("123")
+    })
+
+    it("should work with faults created via Fault.wrap", () => {
+      const fault = Fault.wrap(new Error("original"))
+        .withTag("LAYER_1")
+        .withContext({ host: "localhost" })
+
+      const result = Fault.matchTag(fault, "LAYER_1", (f) => f.context.host)
+
+      expect(result).toBe("localhost")
+    })
+  })
+
+  describe("matchTags", () => {
+    it("should return handler result when tag matches", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      const result = Fault.matchTags(fault, {
+        MY_TAG: (f) => {
+          expect(f.tag).toBe("MY_TAG")
+          return { status: 404 }
+        },
+      })
+
+      expect(result).toEqual({ status: 404 })
+    })
+
+    it("should return UNKNOWN when no handler matches", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("LAYER_1")
+
+      const result = Fault.matchTags(fault, {
+        MY_TAG: (_f) => ({ status: 404 }),
+      })
+
+      expect(result).toBe(UNKNOWN)
+    })
+
+    it("should return UNKNOWN when error is not a fault", () => {
+      const plainError = new Error("Not a fault")
+
+      const result = Fault.matchTags(plainError, {
+        MY_TAG: (_f) => ({ status: 404 }),
+      })
+
+      expect(result).toBe(UNKNOWN)
+    })
+
+    it("should only require specified tags (partial matching)", () => {
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG")
+      const fault2 = Fault.wrap(new Error("test")).withTag("LAYER_1")
+
+      const handler = (error: unknown) =>
+        Fault.matchTags(error, {
+          MY_TAG: (f) => {
+            expect(f.tag).toBe("MY_TAG")
+            return { status: 404 }
+          },
+          LAYER_1: (f) => {
+            expect(f.tag).toBe("LAYER_1")
+            return { status: 500 }
+          },
+        })
+
+      const result1 = handler(fault1)
+      const result2 = handler(fault2)
+
+      expect(result1).toEqual({ status: 404 })
+      expect(result2).toEqual({ status: 500 })
+    })
+
+    it("should provide type-safe handler arguments with context", () => {
+      const fault = Fault.wrap(new Error("test"))
+        .withTag("MY_TAG")
+        .withContext({ requestId: "123", errorCode: 100 })
+
+      const result = Fault.matchTags(fault, {
+        MY_TAG: (f) => {
+          // TypeScript should know f.context has requestId and errorCode
+          expect(f.context.requestId).toBe("123")
+          expect(f.context.errorCode).toBe(100)
+          return f.context.requestId
+        },
+      })
+
+      expect(result).toBe("123")
+    })
+
+    it("should return union of handler return types", () => {
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG")
+      const fault2 = Fault.wrap(new Error("test")).withTag("LAYER_1")
+
+      const handler = (error: unknown) =>
+        Fault.matchTags(error, {
+          MY_TAG: () => "string result",
+          LAYER_1: () => 42,
+        })
+
+      const result1 = handler(fault1)
+      const result2 = handler(fault2)
+
+      expect(result1).toBe("string result")
+      expect(result2).toBe(42)
+    })
+
+    it("should handle multiple tags", () => {
+      const faults = [
+        Fault.wrap(new Error("test")).withTag("MY_TAG"),
+        Fault.wrap(new Error("test")).withTag("LAYER_1"),
+        Fault.wrap(new Error("test")).withTag("LAYER_2"),
+        Fault.wrap(new Error("test")).withTag("LAYER_3"),
+      ]
+
+      const handler = (error: unknown) =>
+        Fault.matchTags(error, {
+          MY_TAG: () => 1,
+          LAYER_1: () => 2,
+          LAYER_2: () => 3,
+          LAYER_3: () => 4,
+        })
+
+      const results = faults.map(handler)
+
+      expect(results).toEqual([1, 2, 3, 4])
     })
   })
 
@@ -1107,7 +1330,7 @@ describe("Fault", () => {
 
       expect(fault.tag).toBe("No fault tag set")
       expect(fault.debug).toBe("Debug message")
-      expect(fault.context).toEqual({} as never)
+      expect(fault.context).toEqual({})
     })
 
     it("should wrap a string", () => {

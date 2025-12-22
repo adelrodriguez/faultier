@@ -6,9 +6,9 @@
   </p>
 
   <p align="center">
-    [![npm version](https://img.shields.io/npm/v/faultier)](https://www.npmjs.com/package/faultier)
-    [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-    [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+    <a href="https://www.npmjs.com/package/faultier"><img src="https://img.shields.io/npm/v/faultier" alt="npm version" /></a>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg" alt="TypeScript" /></a>
   </p>
 </div>
 
@@ -175,7 +175,40 @@ fault.getFullContext(); // { endpoint: "/users", host: "..." } - merged context 
 
 ### Handling Faults
 
-Use `Fault.handle` to dispatch based on tag:
+#### Single Tag Matching
+
+Use `Fault.matchTag` when you only need to handle one specific fault type:
+
+```ts
+const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
+  logger.error("DB error", fault.context.query);
+  return { status: 500 };
+});
+
+if (Fault.isUnknown(result)) {
+  // Not a fault or different tag
+}
+```
+
+#### Multiple Tag Matching
+
+Use `Fault.matchTags` to handle several fault types:
+
+```ts
+const result = Fault.matchTags(error, {
+  NOT_FOUND: (fault) => ({ status: 404 }),
+  AUTH_ERROR: (fault) => ({ status: 401 }),
+});
+
+if (Fault.isUnknown(result)) {
+  // Not a fault or unhandled tag
+}
+```
+
+#### Global Error Handling
+
+Use `Fault.handle` in global error handlers where you need to handle
+every possible fault type. It requires handlers for ALL registered tags:
 
 ```ts
 const result = Fault.handle(error, {
@@ -189,10 +222,11 @@ const result = Fault.handle(error, {
   AUTH_ERROR: (fault) => {
     return { status: 401 };
   },
+  // ... all registered tags
 });
 
-if (result === Fault.UNKNOWN) {
-  // Not a fault or no handler for this tag
+if (Fault.isUnknown(result)) {
+  // Not a fault
 }
 ```
 
@@ -366,13 +400,46 @@ Fault.getDebug(fault, { separator: " -> " });
 // "Connection to postgres:5432 timed out after 30s. -> Original DB error."
 ```
 
-#### `Fault.handle(error, handlers)`
+#### `Fault.matchTag(error, tag, callback)`
 
-Dispatches a fault to the handler matching its tag. Returns `UNKNOWN` if the error is not a Fault or has no matching handler.
+Matches a fault against a single tag. Runs the callback only if the error is a fault with the specified tag.
 
 ```ts
-import Fault, { UNKNOWN } from "faultier";
+const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
+  logger.error("DB error", { query: fault.context.query });
+  return { status: 500 };
+});
 
+if (Fault.isUnknown(result)) {
+  // Not a fault or different tag
+}
+```
+
+#### `Fault.matchTags(error, handlers)`
+
+Matches a fault against multiple tags. Runs the matching handler if the error is a fault with one of the specified tags. Unlike `handle`, only requires handlers for the tags you want to match.
+
+```ts
+const result = Fault.matchTags(error, {
+  NOT_FOUND: (fault) => {
+    return { status: 404, resource: fault.context.resource };
+  },
+  DB_ERROR: (fault) => {
+    logger.error("DB error", { query: fault.context.query });
+    return { status: 500 };
+  },
+});
+
+if (Fault.isUnknown(result)) {
+  // Not a fault or unhandled tag
+}
+```
+
+#### `Fault.handle(error, handlers)`
+
+Exhaustively dispatches a fault to handlers for all registered tags. Use this in global error handlers where you need to handle every possible fault type. For partial matching, use `matchTag` or `matchTags` instead.
+
+```ts
 const result = Fault.handle(error, {
   DATABASE_ERROR: (fault) => {
     logger.error("DB error", { query: fault.context.query });
@@ -384,14 +451,32 @@ const result = Fault.handle(error, {
   AUTH_ERROR: (fault) => {
     return { status: 401, reason: fault.context.reason };
   },
+  // ... all registered tags
 });
 
-if (result === UNKNOWN) {
-  // Error is not a Fault, or no handler matched the tag
+if (Fault.isUnknown(result)) {
+  // Error is not a Fault
   throw error;
 }
 
 return result; // { status: 404, resource: "user" }
+```
+
+#### `Fault.isUnknown(value)`
+
+Checks if a match result is UNKNOWN (not a fault or no handler matched). Use this to check the result of `matchTag`, `matchTags`, or `handle`.
+
+```ts
+const result = Fault.matchTags(error, {
+  NOT_FOUND: (fault) => ({ status: 404 }),
+});
+
+if (Fault.isUnknown(result)) {
+  // Not a fault or unhandled tag
+  throw error;
+}
+
+// result is typed as { status: number } here
 ```
 
 #### `Fault.assert(error)`
