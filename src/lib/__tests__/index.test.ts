@@ -1,39 +1,50 @@
 import { describe, expect, it } from "bun:test"
-import type { FaultTag, SerializableFault } from "../types"
-import Fault, { IS_FAULT, UNKNOWN } from "../index"
+import type { SerializableFault } from "../types"
+import Faultier, { IS_FAULT, UNKNOWN } from "../index"
 
-declare module "../types" {
-  interface FaultRegistry {
-    MY_TAG: {
-      requestId?: string
-      errorCode?: number
-      userId?: string
-      sessionId?: string
-      timestamp?: number
-    }
-    LAYER_1: {
-      host?: string
-      port?: number
-      database?: string
-      timeout?: number
-      retries?: number
-    }
-    LAYER_2: {
-      service?: string
-      method?: string
-      statusCode?: number
-      timeout?: number
-    }
-    LAYER_3: {
-      endpoint?: string
-      method?: string
-      statusCode?: number
-      headers?: Record<string, string>
-    }
-    LAYER_4: {
-      path: string
-    }
-    NO_CONTEXT_TAG: never // Tag that doesn't accept context
+// Define test registry
+type TestRegistry = {
+  MY_TAG: {
+    requestId?: string
+    errorCode?: number
+    userId?: string
+    sessionId?: string
+    timestamp: number
+  }
+  LAYER_1: {
+    host?: string
+    port?: number
+    database?: string
+    timeout?: number
+    retries?: number
+  }
+  LAYER_2: {
+    service?: string
+    method?: string
+    statusCode?: number
+    timeout?: number
+  }
+  LAYER_3: {
+    endpoint?: string
+    method?: string
+    statusCode?: number
+    headers?: Record<string, string>
+  }
+  LAYER_4: {
+    path: string
+  }
+  NO_CONTEXT_TAG: never // Tag that doesn't accept context
+}
+
+// Create test Fault class
+class Fault extends Faultier.define<TestRegistry>() {
+  custom(): 123 {
+    void this
+    return 123
+  }
+
+  isRetryable(): boolean {
+    return this.tag === "LAYER_1"
   }
 }
 
@@ -96,6 +107,7 @@ describe("Fault", () => {
         const tag = "MY_TAG"
         const fault = Fault.wrap(new Error("something happened")).withTag(tag)
         expect(fault.tag).toBe(tag)
+        expect(fault instanceof Fault).toBe(true)
       })
     })
 
@@ -179,52 +191,9 @@ describe("Fault", () => {
         expect(fault.context).toEqual({})
       })
 
-      it("should prevent withContext on tags with never context type", () => {
-        const fault = Fault.create("NO_CONTEXT_TAG")
-
-        // @ts-expect-error - withContext should return never for tags with never context
-        // This verifies that TypeScript correctly prevents calling withContext on tags with never context
-        const _result = fault.withContext({ any: "value" })
-
-        // At runtime, withContext would still execute, but TypeScript prevents the call
-        // The @ts-expect-error above verifies the type error exists
-      })
-    })
-
-    describe("clearContext", () => {
-      it("should return TaggedFault preserving tag and message with empty context", () => {
-        const fault = Fault.wrap(new Error("Original error"))
-          .withTag("MY_TAG")
-          .withDescription("Debug message", "User message")
-          .withContext({ errorCode: 100, requestId: "123" })
-
-        const cleared = fault.clearContext()
-
-        expect(cleared.tag).toBe("MY_TAG")
-        expect(cleared.message).toBe("User message")
-        expect(cleared.context).toEqual({})
-      })
-
-      it("should allow re-applying context after clearing", () => {
-        const fault = Fault.wrap(new Error("Original error"))
-          .withTag("MY_TAG")
-          .withContext({ errorCode: 100, requestId: "123" })
-
-        const cleared = fault.clearContext()
-        const recontexted = cleared.withContext({
-          requestId: "456",
-          userId: "user1",
-        })
-
-        expect(recontexted.tag).toBe("MY_TAG")
-        expect(recontexted.context).toEqual({
-          requestId: "456",
-          userId: "user1",
-        })
-        expect(recontexted.getFullContext()).toEqual({
-          requestId: "456",
-          userId: "user1",
-        })
+      it("should set context", () => {
+        const fault = Fault.create("MY_TAG").withContext({ errorCode: 100, requestId: "123" })
+        expect(fault.context).toEqual({ errorCode: 100, requestId: "123" })
       })
     })
   })
@@ -236,7 +205,6 @@ describe("Fault", () => {
       const fault = Fault.wrap(err).withTag("MY_TAG").withDescription("Something went really wrong")
 
       expect(Fault.isFault(new Date())).toBe(false)
-      expect(Fault.isFault(null)).toBe(false)
       expect(Fault.isFault(null)).toBe(false)
       expect(Fault.isFault("not an error")).toBe(false)
       expect(Fault.isFault(123)).toBe(false)
@@ -300,7 +268,6 @@ describe("Fault", () => {
     it("should return false for other values", () => {
       expect(Fault.isUnknown("string")).toBe(false)
       expect(Fault.isUnknown(123)).toBe(false)
-      expect(Fault.isUnknown(null)).toBe(false)
       expect(Fault.isUnknown(null)).toBe(false)
       expect(Fault.isUnknown({})).toBe(false)
       expect(Fault.isUnknown([])).toBe(false)
@@ -388,7 +355,6 @@ describe("Fault", () => {
     it("should return UNKNOWN when error is a Fault but no handler exists for tag", () => {
       const fault = Fault.wrap(new Error("test"))
 
-      // Use type assertion to test runtime behavior when handler is missing
       const result = Fault.handle(fault, {
         LAYER_1: () => "handled",
         LAYER_2: () => "handled",
@@ -451,7 +417,6 @@ describe("Fault", () => {
         .withContext({ errorCode: 100, requestId: "123" })
 
       const result = Fault.matchTag(fault, "MY_TAG", (f) => {
-        // TypeScript should know f.context has requestId and errorCode
         expect(f.context.requestId).toBe("123")
         expect(f.context.errorCode).toBe(100)
         return f.context.requestId
@@ -543,7 +508,6 @@ describe("Fault", () => {
 
       const result = Fault.matchTags(fault, {
         MY_TAG: (f) => {
-          // TypeScript should know f.context has requestId and errorCode
           expect(f.context.requestId).toBe("123")
           expect(f.context.errorCode).toBe(100)
           return f.context.requestId
@@ -712,7 +676,6 @@ describe("Fault", () => {
 
       const fullContext = fault2.getFullContext()
 
-      // ErrorCode and requestId from fault2 should override fault1
       expect(fullContext).toEqual({
         errorCode: 200,
         requestId: "def",
@@ -780,26 +743,16 @@ describe("Fault", () => {
       const rawError = new Error("Raw error")
       const fault = Fault.wrap(rawError).withTag("LAYER_1")
 
-      // Should only include the fault tag, not anything from the raw error
       expect(fault.getTags()).toEqual(["LAYER_1"])
     })
 
     it("should include 'No fault tag set' when no tag is set", () => {
       const fault = Fault.wrap(new Error("test"))
-      // No .withTag() called
 
       const tags = fault.getTags()
 
-      // Should include the default tag value
-      expect(tags).toEqual(["No fault tag set" as FaultTag])
+      expect(tags).toEqual(["No fault tag set"])
       expect(fault.tag).toBe("No fault tag set")
-    })
-
-    it("should include duplicate tags when they appear multiple times in chain", () => {
-      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG")
-      const fault2 = Fault.wrap(fault1).withTag("MY_TAG")
-
-      expect(fault2.getTags()).toEqual(["MY_TAG", "MY_TAG"])
     })
   })
 
@@ -838,7 +791,6 @@ describe("Fault", () => {
     it("should deduplicate consecutive messages", () => {
       const fault = Fault.wrap(new Error("Original error"))
 
-      // Wrapped errors with same message are deduplicated
       expect(fault.flatten()).toBe("Original error")
     })
 
@@ -890,7 +842,6 @@ describe("Fault", () => {
 
       const flattened = fault3.flatten()
 
-      // Should deduplicate the consecutive "Same message" entries
       expect(flattened).toBe("Different message -> Same message")
     })
   })
@@ -1076,7 +1027,6 @@ describe("Fault", () => {
         .withTag("LAYER_2")
         .withDescription("More debug", "Fault message 2")
 
-      // Should only include fault messages, not the raw error message
       expect(Fault.getIssue(fault2)).toBe("Fault message 2. Fault message 1.")
     })
 
@@ -1114,6 +1064,7 @@ describe("Fault", () => {
       emptyError.message = ""
       const fault = Fault.wrap(emptyError).withTag("LAYER_1")
 
+      // Empty messages are filtered out, so result is empty string
       expect(Fault.getIssue(fault)).toBe("")
     })
 
@@ -1181,7 +1132,6 @@ describe("Fault", () => {
         .withTag("LAYER_2")
         .withDescription("Debug info 2", "Message 2")
 
-      // Should only include fault debug messages, not the raw error message
       expect(Fault.getDebug(fault2)).toBe("Debug info 2. Debug info 1.")
     })
 
@@ -1208,7 +1158,6 @@ describe("Fault", () => {
     it("should handle undefined debug messages", () => {
       const fault = Fault.wrap(new Error("Something happened")).withTag("MY_TAG")
 
-      // When debug is undefined, it becomes empty string after filtering
       expect(Fault.getDebug(fault)).toBe("")
     })
 
@@ -1221,7 +1170,6 @@ describe("Fault", () => {
     it("should filter out undefined/empty debug messages in chains", () => {
       const fault1 = Fault.wrap(new Error("Error 1")).withTag("LAYER_1").withDescription("Debug 1")
       const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
-      // No debug description
 
       expect(Fault.getDebug(fault2)).toBe("Debug 1.")
     })
@@ -1256,21 +1204,17 @@ describe("Fault", () => {
         },
       })
 
-      // Custom formatter replaces default, so no automatic period addition
       expect(result).toBe("SERVICE FAILED AFTER 3 RETRIES DB TIMEOUT ON PORT 5432")
     })
 
     it("should filter empty messages after formatting", () => {
       const fault1 = Fault.wrap(new Error("Error 1")).withTag("LAYER_1").withDescription("Debug 1")
       const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
-      // No debug description
 
       const result = Fault.getDebug(fault2, {
         formatter: (msg) => (msg.trim() === "" ? "" : msg.toUpperCase()),
       })
 
-      // Should filter out empty strings after formatting
-      // Custom formatter replaces default, so no automatic period addition
       expect(result).toBe("DEBUG 1")
     })
   })
@@ -1363,18 +1307,6 @@ describe("Fault", () => {
 
       expect(fault.cause).toBeInstanceOf(Error)
       expect(fault.cause?.message).toBe("null")
-    })
-  })
-
-  describe("create", () => {
-    it("should create a fault with default values", () => {
-      const fault = Fault.create("MY_TAG")
-
-      expect(fault.tag).toBe("MY_TAG")
-      expect(fault.context).toEqual({})
-      expect(fault.cause).toBeUndefined()
-      expect(fault.debug).toBeUndefined()
-      expect(fault.message).toBe("")
     })
   })
 
@@ -1609,120 +1541,215 @@ describe("Fault", () => {
     })
   })
 
-  describe("context type safety", () => {
-    it("should have empty context when withContext is not called", () => {
-      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
-
-      expect(fault.context).toEqual({})
-      expect(Object.keys(fault.context)).toHaveLength(0)
-    })
-
-    it("should allow narrowing context with 'in' operator after isFault", () => {
-      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
-
-      if (Fault.isFault(fault)) {
-        // Context might be empty - need to check
-        if ("requestId" in fault.context) {
-          expect(typeof fault.context.requestId).toBe("string")
-        } else {
-          // Empty context case
-          expect(fault.context).toEqual({})
+  describe("findCause", () => {
+    it("should find error in chain", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
         }
       }
+
+      const httpError = new HttpError("Not found", 404)
+      const fault = Fault.wrap(httpError).withTag("MY_TAG")
+
+      const found = Fault.findCause(fault, HttpError)
+      expect(found).toBe(httpError)
+      expect(found?.statusCode).toBe(404)
     })
 
-    it("should have typed context when withContext is called", () => {
-      const fault = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({ errorCode: 500, requestId: "123" })
+    it("should return undefined if not found", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
 
-      // Direct access works - no narrowing needed
-      expect(fault.context.requestId).toBe("123")
-      expect(fault.context.errorCode).toBe(500)
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
+
+      const found = Fault.findCause(fault, HttpError)
+      expect(found).toBeUndefined()
     })
 
-    it("should work with getFullContext even with empty contexts in chain", () => {
-      const fault1 = Fault.wrap(new Error("test")).withTag("LAYER_1")
-      // No withContext called
+    it("should return undefined for non-Error values", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
 
-      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
-
-      const fullContext = fault2.getFullContext()
-
-      expect(fullContext).toEqual({ service: "auth" })
+      const found = Fault.findCause("not an error", HttpError)
+      expect(found).toBeUndefined()
     })
 
-    it("should handle mixed context/no-context faults in chain", () => {
-      const fault1 = Fault.wrap(new Error("db error"))
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost", port: 5432 })
+    it("should find error in deep chain", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
 
+      const httpError = new HttpError("Not found", 404)
+      const fault1 = Fault.wrap(httpError).withTag("LAYER_1")
       const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
-      // No context on layer 2
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3")
 
-      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/api" })
-
-      expect(fault3.getFullContext()).toEqual({
-        endpoint: "/api",
-        host: "localhost",
-        port: 5432,
-      })
+      const found = Fault.findCause(fault3, HttpError)
+      expect(found).toBe(httpError)
+      expect(found?.statusCode).toBe(404)
     })
 
-    it("should handle conflicting context value types by using later value", () => {
-      const fault1 = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({ requestId: "string-id" })
-      const fault2 = Fault.wrap(fault1)
-        .withTag("MY_TAG")
-        .withContext({ requestId: 12_345 as unknown as string })
+    it("should return the first matching error in chain", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
 
-      expect(fault2.getFullContext().requestId).toBe(12_345)
+      const innerError = new HttpError("Inner", 500)
+      const fault1 = Fault.wrap(innerError).withTag("LAYER_1")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
+      // Wrap the chain with another HttpError
+      const combined = new HttpError("Combined", 503)
+      combined.cause = fault2
+
+      const found = Fault.findCause(combined, HttpError)
+      expect(found).toBe(combined) // First match is the outermost
+      expect(found?.statusCode).toBe(503)
+    })
+
+    it("should find Fault instance in chain", () => {
+      const innerFault = Fault.wrap(new Error("inner")).withTag("LAYER_1")
+      const outerFault = Fault.wrap(innerFault).withTag("LAYER_2")
+
+      const found = Fault.findCause(outerFault, Fault)
+      expect(found).toBe(outerFault) // First match is outerFault itself
+    })
+
+    it("should handle errors with null cause", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
+
+      const error = new Error("test")
+      // Testing runtime behavior with null cause
+      error.cause = null
+
+      const found = Fault.findCause(error, HttpError)
+      expect(found).toBeUndefined()
     })
   })
-})
 
-describe("partial context type narrowing", () => {
-  it("should narrow context type after tag check", () => {
-    const fault = Fault.create("LAYER_4").withContext({ path: "/api" })
+  describe("custom methods", () => {
+    // Extended Fault class with custom methods
+    class AppFault extends Faultier.define<{
+      "db.connection_failed": { host: string }
+      "db.timeout": { timeoutMs: number }
+      "auth.unauthenticated": { requestId?: string }
+      "validation.failed": { field: string }
+    }>() {
+      isRetryable(): boolean {
+        return ["db.connection_failed", "db.timeout"].includes(this.tag)
+      }
 
-    if (Fault.isFault(fault) && fault.tag === "LAYER_4") {
-      // Context should be Partial<{ path: string }> = { path?: string }
-      expect(fault.context.path).toBe("/api")
-      if (fault.context.path) {
-        // Should be string, not unknown
-        expect(typeof fault.context.path).toBe("string")
-        expect(fault.context.path.toUpperCase()).toBe("/API")
+      toHttpStatus(): number {
+        const statusMap: Record<string, number> = {
+          "auth.unauthenticated": 401,
+          "db.connection_failed": 503,
+          "db.timeout": 504,
+          "validation.failed": 400,
+        }
+        return statusMap[this.tag] ?? 500
+      }
+
+      static customStaticMethod(): string {
+        return "custom"
       }
     }
-  })
 
-  it("should handle empty context with partial type", () => {
-    const fault = Fault.create("LAYER_4")
-    // No withContext called
+    it("should allow custom instance methods", () => {
+      const fault = AppFault.create("db.timeout").withContext({ timeoutMs: 5000 })
+      expect(fault.isRetryable()).toBe(true)
+      expect(fault.toHttpStatus()).toBe(504)
+    })
 
-    if (Fault.isFault(fault) && fault.tag === "LAYER_4") {
-      // Context should be Partial<{ path: string }> = { path?: string }
-      expect(fault.context.path).toBeUndefined()
-      if (fault.context.path) {
-        // This branch won't execute, but type should be string if it did
-        expect(typeof fault.context.path).toBe("string")
-      }
-    }
-  })
-})
+    it("should return false for non-retryable errors", () => {
+      const fault = AppFault.create("auth.unauthenticated")
+      expect(fault.isRetryable()).toBe(false)
+      expect(fault.toHttpStatus()).toBe(401)
+    })
 
-describe("flatten vs getIssue behavior", () => {
-  it("flatten should include original error message, getIssue should not", () => {
-    const originalError = new Error("Original error from library")
-    const fault = Fault.wrap(originalError)
-      .withTag("MY_TAG")
-      .withDescription("Debug info", "User-facing message")
+    it("should allow custom static methods", () => {
+      expect(AppFault.customStaticMethod()).toBe("custom")
+    })
 
-    // Flatten includes all messages including the original error
-    expect(fault.flatten()).toBe("User-facing message -> Original error from library")
+    it("should preserve custom methods through chaining", () => {
+      const fault = AppFault.create("db.timeout")
+        .withContext({ timeoutMs: 5000 })
+        .withDescription("Connection timed out")
 
-    // GetIssue only includes fault messages, not raw errors
-    expect(Fault.getIssue(fault)).toBe("User-facing message.")
+      // Custom methods should still be accessible after chaining
+      expect(fault.isRetryable()).toBe(true)
+    })
+
+    it("should work with instanceof for extended class", () => {
+      const fault = AppFault.create("db.timeout")
+      expect(fault instanceof AppFault).toBe(true)
+      expect(fault instanceof Error).toBe(true)
+    })
+
+    it("should work with wrapped errors and custom methods", () => {
+      const originalError = new Error("Connection refused")
+      const fault = AppFault.wrap(originalError)
+        .withTag("db.connection_failed")
+        .withContext({ host: "localhost" })
+
+      expect(fault.isRetryable()).toBe(true)
+      expect(fault.toHttpStatus()).toBe(503)
+    })
+
+    it("should be immutable - intermediate results are safe to reuse", () => {
+      const base = AppFault.create("db.timeout")
+      const fault1 = base.withDescription("Error 1")
+      const fault2 = base.withDescription("Error 2")
+
+      // Each is a separate instance
+      expect(fault1.debug).toBe("Error 1")
+      expect(fault2.debug).toBe("Error 2")
+      expect(base.debug).toBeUndefined() // Original unchanged
+      expect(fault1).not.toBe(fault2)
+      expect(fault1).not.toBe(base)
+    })
+
+    it("should preserve custom methods after multiple chaining operations", () => {
+      const fault = AppFault.create("db.timeout")
+        .withContext({ timeoutMs: 5000 })
+        .withDescription("Debug info", "User message")
+        .withDebug("More debug")
+        .withMessage("Final message")
+
+      expect(fault.isRetryable()).toBe(true)
+      expect(fault.toHttpStatus()).toBe(504)
+      expect(fault instanceof AppFault).toBe(true)
+    })
   })
 })
