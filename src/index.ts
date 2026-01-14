@@ -1,9 +1,14 @@
-export { default as Fault } from "./lib"
+import Faultier from "./lib"
+
+export { define, IS_FAULT, UNKNOWN } from "./lib"
 export type {
-  ContextForTag,
+  ChainFormattingOptions,
+  FaultContext,
   FaultJSON,
-  FaultRegistry,
-  FaultTag,
   SerializableError,
   SerializableFault,
+  Tagged,
+  TagsOf,
 } from "./lib/types"
+
+export default Faultier

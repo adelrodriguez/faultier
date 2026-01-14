@@ -26,7 +26,7 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
   - [Type Safety](#type-safety)
   - [Error Chaining](#error-chaining)
   - [Handling Faults](#handling-faults)
-  - [Extending Error Classes](#extending-error-classes)
+  - [Custom Methods](#custom-methods)
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
 - [Acknowledgments](#acknowledgments)
@@ -41,6 +41,8 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 - **Dual messages** - Separate debug messages for logs from user-facing messages
 - **Error chaining** - Wrap and re-throw errors while preserving the full chain
 - **Serializable** - Convert faults to JSON and reconstruct them
+- **Instanceof support** - Use `instanceof` checks with your custom Fault class
+- **Extensible** - Add custom methods to your Fault class
 - **No dependencies** - Zero runtime dependencies
 
 ## Installation
@@ -64,7 +66,19 @@ bun add faultier
 ### Quick Start
 
 ```ts
-import Fault from "faultier"
+import Faultier from "faultier"
+
+// Define your error registry
+type AppErrors = {
+  DATABASE_ERROR: { query: string; host?: string }
+  AUTH_ERROR: { userId: string; reason: string }
+  NOT_FOUND: { resource: string; id: string }
+  VALIDATION_ERROR: { field: string; message: string }
+  GENERIC_ERROR: never // No context allowed
+}
+
+// Create your typed Fault class
+export class Fault extends Faultier.define<AppErrors>() {}
 
 // Wrap an existing error and add classification
 try {
@@ -87,18 +101,22 @@ throw Fault.wrap(err).withTag("PAYMENT_ERROR").withDescription(
 
 ### Type Safety
 
-Define your error types using [module augmentation](https://www.typescriptlang.org/docs/handbook/declaration-merging.html#module-augmentation). This tells TypeScript about your custom error tags and their expected context shapes:
+Define your error registry as a TypeScript type, then create your Fault class:
 
 ```ts
-declare module "faultier" {
-  interface FaultRegistry {
-    DATABASE_ERROR: { query: string; host?: string }
-    AUTH_ERROR: { userId: string; reason: string }
-    NOT_FOUND: { resource: string; id: string }
-    VALIDATION_ERROR: { field: string; message: string }
-    GENERIC_ERROR: never // No context allowed - withContext will error
-  }
+import Faultier from "faultier"
+
+// Define your error registry
+type AppErrors = {
+  DATABASE_ERROR: { query: string; host?: string }
+  AUTH_ERROR: { userId: string; reason: string }
+  NOT_FOUND: { resource: string; id: string }
+  VALIDATION_ERROR: { field: string; message: string }
+  GENERIC_ERROR: never // No context allowed - withContext will error
 }
+
+// Create your typed Fault class
+export class Fault extends Faultier.define<AppErrors>() {}
 ```
 
 Now TypeScript enforces correct tag/context combinations:
@@ -112,6 +130,37 @@ Fault.create("DATABASE_ERROR").withContext({ userId: "123" }) // Type error: mis
 Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" }) // OK
 
 Fault.create("GENERIC_ERROR").withContext({ anything: "value" }) // Type error: withContext returns never
+```
+
+#### Clean return types for tagged faults
+
+When you want to annotate function return types (or public API surfaces), use the helper type:
+`Tagged<typeof Fault, "TAG">`.
+
+```ts
+import Faultier, { type Tagged, type Tags } from "faultier"
+
+type AppErrors = {
+  DATABASE_ERROR: { query: string; host?: string }
+  GENERIC_ERROR: never
+}
+
+export class Fault extends Faultier.define<AppErrors>() {}
+
+export function runQuery(): Tagged<typeof Fault, "DATABASE_ERROR"> {
+  // Note: context is always typed as Partial<...> because it may not be set yet
+  return Fault.create("DATABASE_ERROR").withContext({ query: "SELECT 1" })
+}
+
+// You can also extract the full tag union for a given Fault class:
+export type FaultTag = Tags<typeof Fault>
+```
+
+When reading context, use optional chaining (or checks) since keys may be absent:
+
+```ts
+const fault = Fault.create("DATABASE_ERROR")
+fault.context.query?.toUpperCase()
 ```
 
 For larger applications with many error types, you can organize them into groups:
@@ -136,12 +185,14 @@ type ValidationErrors = {
 }
 
 // Combine all error types in your registry
-declare module "faultier" {
-  interface FaultRegistry extends DatabaseErrors, AuthErrors, ValidationErrors {
-    // Add any standalone errors here
+type AppErrors = DatabaseErrors &
+  AuthErrors &
+  ValidationErrors & {
     GENERIC_ERROR: never
   }
-}
+
+// Create your typed Fault class
+export class Fault extends Faultier.define<AppErrors>() {}
 ```
 
 ### Error Chaining
@@ -217,14 +268,80 @@ const result = Fault.handle(error, {
     return { status: 404, resource: fault.context.resource }
   },
   AUTH_ERROR: (fault) => {
-    return { status: 401 }
+    return { status: 401, reason: fault.context.reason }
   },
   // ... all registered tags
 })
 
 if (Fault.isUnknown(result)) {
-  // Not a fault
+  // Error is not a Fault
+  throw error
 }
+
+return result // { status: 404, resource: "user" }
+```
+
+### Custom Methods
+
+You can extend your Fault class with custom methods:
+
+```ts
+import Faultier from "faultier"
+
+type AppErrors = {
+  "db.connection_failed": { host: string }
+  "db.timeout": { timeoutMs: number }
+  "auth.unauthenticated": { requestId?: string }
+  "validation.failed": { field: string }
+}
+
+export class Fault extends Faultier.define<AppErrors>() {
+  // Add custom instance methods
+  isRetryable(): boolean {
+    return ["db.connection_failed", "db.timeout"].includes(this.tag)
+  }
+
+  toHttpStatus(): number {
+    const statusMap: Record<string, number> = {
+      "auth.unauthenticated": 401,
+      "validation.failed": 400,
+      "db.connection_failed": 503,
+      "db.timeout": 504,
+    }
+    return statusMap[this.tag] ?? 500
+  }
+
+  // Add custom static methods
+  static isRetryableError(error: unknown): boolean {
+    if (!Fault.isFault(error)) return false
+    return error.isRetryable()
+  }
+}
+
+// Usage
+const fault = Fault.create("db.timeout").withContext({ timeoutMs: 5000 })
+if (fault.isRetryable()) {
+  // Retry logic
+}
+
+// instanceof works!
+if (error instanceof Fault) {
+  console.log(error.tag)
+  console.log(error.isRetryable())
+}
+```
+
+**Note:** Chaining methods (`withTag`, `withContext`, `withDescription`, etc.) are immutable - they return new instances. This means you can safely reuse intermediate results:
+
+```ts
+const base = Fault.create("db.timeout")
+const fault1 = base.withDescription("Error 1")
+const fault2 = base.withDescription("Error 2")
+
+// Each is a separate instance - base is unchanged
+expect(fault1.debug).toBe("Error 1")
+expect(fault2.debug).toBe("Error 2")
+expect(base.debug).toBeUndefined()
 ```
 
 ### Working with Custom Error Classes
@@ -233,7 +350,10 @@ You can wrap custom Error classes and search for them in the error chain:
 
 ```ts
 class HttpError extends Error {
-  constructor(message: string, public statusCode: number) {
+  constructor(
+    message: string,
+    public statusCode: number
+  ) {
     super(message)
   }
 }
@@ -252,7 +372,25 @@ if (httpError) {
 
 ## API Reference
 
-### Fault
+### Creating Your Fault Class
+
+#### `Faultier.define<TRegistry>()`
+
+Creates a typed Fault class based on your registry type.
+
+```ts
+import Faultier from "faultier"
+
+type MyRegistry = {
+  MY_ERROR: { code: number }
+}
+
+class Fault extends Faultier.define<MyRegistry>() {}
+```
+
+**Note:** Your extended class cannot have required constructor parameters. Use default values or optional parameters if needed.
+
+### Static Methods
 
 #### `Fault.wrap(error)`
 
@@ -274,46 +412,6 @@ Fault.create("VALIDATION_ERROR").withContext({
   message: "Invalid format",
 })
 ```
-
-### Instance Methods
-
-#### `fault.withTag(tag)`
-
-Sets the tag for a wrapped fault.
-
-#### `fault.withContext(context)`
-
-Sets the context for a tagged fault.
-
-#### `fault.withDescription(debug, message?)`
-
-Sets debug and optional user-facing messages.
-
-#### `fault.withDebug(debug)`
-
-Sets only the debug message (for developers/logs).
-
-#### `fault.withMessage(message)`
-
-Sets only the user-facing message (overrides the original error message).
-
-#### `fault.unwrap()`
-
-Returns the full error chain as an array.
-
-#### `fault.flatten(options?)`
-
-Flattens all messages into a single string.
-
-#### `fault.getTags()`
-
-Returns all tags from faults in the chain.
-
-#### `fault.getFullContext()`
-
-Returns merged context from all faults in the chain.
-
-### Static Methods
 
 #### `Fault.isFault(value)`
 
@@ -497,7 +595,10 @@ Searches the error chain for a cause matching the given Error class. Returns the
 
 ```ts
 class HttpError extends Error {
-  constructor(message: string, public statusCode: number) {
+  constructor(
+    message: string,
+    public statusCode: number
+  ) {
     super(message)
   }
 }
@@ -507,6 +608,44 @@ if (httpError) {
   console.log(httpError.statusCode) // Fully typed!
 }
 ```
+
+### Instance Methods
+
+#### `fault.withTag(tag)`
+
+Sets the tag for a wrapped fault. Returns a new instance (immutable).
+
+#### `fault.withContext(context)`
+
+Sets the context for a tagged fault. Returns a new instance (immutable).
+
+#### `fault.withDescription(debug, message?)`
+
+Sets debug and optional user-facing messages. Returns a new instance (immutable).
+
+#### `fault.withDebug(debug)`
+
+Sets only the debug message (for developers/logs). Returns a new instance (immutable).
+
+#### `fault.withMessage(message)`
+
+Sets only the user-facing message (overrides the original error message). Returns a new instance (immutable).
+
+#### `fault.unwrap()`
+
+Returns the full error chain as an array.
+
+#### `fault.flatten(options?)`
+
+Flattens all messages into a single string.
+
+#### `fault.getTags()`
+
+Returns all tags from faults in the chain.
+
+#### `fault.getFullContext()`
+
+Returns merged context from all faults in the chain.
 
 ## Contributing
 
