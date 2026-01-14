@@ -9,14 +9,11 @@ import type {
 } from "./types"
 import { HAS_PUNCTUATION } from "./utils"
 
-// Default formatter for flatten method
 const defaultTrimFormatter = (msg: string) => msg.trim()
 
-// Symbol to identify Fault instances
 export const IS_FAULT: unique symbol = Symbol("IS_FAULT")
 export const UNKNOWN: unique symbol = Symbol("UNKNOWN")
 
-// Type helper for objects with IS_FAULT symbol
 type WithIsFault = {
   readonly [IS_FAULT]: true
 }
@@ -36,7 +33,6 @@ export abstract class BaseFault extends Error {
     this.name = "Fault"
     this.cause = cause
     this.debug = debug
-    // Initialize the IS_FAULT symbol property
     Object.defineProperty(this, IS_FAULT, {
       configurable: false,
       enumerable: false,
@@ -118,8 +114,6 @@ export abstract class BaseFault extends Error {
 
     let current = this.cause
 
-    // Only add to the chain if the cause is a Fault, except possibly the last
-    // error.
     while (BaseFault.isFault(current)) {
       chain.push(current)
       current = current.cause
@@ -343,7 +337,6 @@ export abstract class BaseFault extends Error {
   static fromSerializable<T extends FaultTag = FaultTag>(
     data: SerializableFault | SerializableError
   ): TaggedFault<T> {
-    // Helper to reconstruct cause chain recursively
     const reconstructCause = (
       causeData: SerializableFault | SerializableError | undefined
     ): Error | undefined => {
@@ -351,24 +344,19 @@ export abstract class BaseFault extends Error {
         return
       }
 
-      // Check if it's a SerializableFault or SerializableError
       if ("tag" in causeData) {
-        // It's a SerializableFault - recursively reconstruct
         return Fault.fromSerializable(causeData)
       }
 
-      // It's a SerializableError - create plain Error
       const error = new Error(causeData.message)
       error.name = causeData.name
       return error
     }
 
-    // Data must be a SerializableFault (not SerializableError) for top level
     if (!("tag" in data)) {
       throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
     }
 
-    // Validate required fields for SerializableFault
     if (typeof data.name !== "string") {
       throw new Error("Invalid serialized fault: 'name' must be a string")
     }
@@ -384,7 +372,6 @@ export abstract class BaseFault extends Error {
 
     const cause = reconstructCause(data.cause)
 
-    // Create TaggedFault instance with the deserialized data
     const fault = new TaggedFault(null, data.tag as T, data.context as ContextForTag<T>)
     fault.name = data.name
     fault.message = data.message
@@ -675,7 +662,6 @@ class TaggedFault<T extends FaultTag> extends BaseFault {
   }
 
   withContext(context: ContextForTag<T>): ContextForTag<T> extends never ? never : TaggedFault<T> {
-    // Type assertion needed because TypeScript can't narrow the conditional return type
     // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return
     return new TaggedFault(this, this.tag, context) as any
   }

@@ -209,7 +209,7 @@ describe("extend", () => {
         .withDescription("Service failed", "Authentication service unavailable")
       httpFault.cause = fault1
 
-      // eslint-disable-next-line eslint-plugin-unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
+      // oxlint-disable-next-line unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
       const json = JSON.parse(JSON.stringify(httpFault))
 
       expect(json.message).toBe(

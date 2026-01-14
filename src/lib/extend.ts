@@ -3,7 +3,6 @@
 import type { ContextForTag, FaultTag, PartialContextForTag } from "./types"
 import { BaseFault, IS_FAULT } from "./index"
 
-// Helper type to ensure extended faults have BaseFault methods
 export type WithBaseFaultMethods = Pick<
   BaseFault,
   | "unwrap"
@@ -97,10 +96,8 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     ...args: ConstructorParameters<TErrorClass>
   ): ExtendedFaultBase<TErrorClass> & InstanceType<TErrorClass> & WithBaseFaultMethods
 } {
-  // Use a type alias to avoid TypeScript compiler crash with nested generic class extends
   type ErrorClassType = TErrorClass
 
-  // Create base extended fault class
   const ExtendedFaultBaseClass = class extends (ErrorClass as new (...args: any[]) => Error) {
     tag: FaultTag | "No fault tag set" = "No fault tag set"
     context: Record<string, unknown> = {}
@@ -109,7 +106,6 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     constructor(...args: ConstructorParameters<ErrorClassType>) {
       super(...args)
-      // Initialize the IS_FAULT symbol property
       Object.defineProperty(this, IS_FAULT, {
         configurable: false,
         enumerable: false,
@@ -154,17 +150,13 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     }
   }
 
-  // Type for the extended fault instance
   type ExtendedFaultInstance = InstanceType<typeof ExtendedFaultBaseClass>
 
-  // Create tagged fault class - extends the base class cast to Error
   const ExtendedTaggedFaultClass = class extends ExtendedFaultBaseClass {
     override tag: FaultTag | "No fault tag set" = "No fault tag set"
     override context: Record<string, unknown> = {}
 
     constructor(fault: ExtendedFaultInstance, tag: FaultTag, context?: ContextForTag<FaultTag>) {
-      // Create placeholder args - using undefined is safer than null for most constructors
-      // Note: Extended classes with strict constructor validation may need custom handling
       const args = Array.from({ length: ErrorClass.length }).fill(
         void 0
       ) as ConstructorParameters<ErrorClassType>
@@ -177,12 +169,10 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       this.cause = fault.cause
       this.debug = fault.debug
 
-      // Preserve original stack trace
       if (fault.stack) {
         this.stack = fault.stack
       }
 
-      // Copy all original error properties (skip symbol properties)
       for (const key of Object.keys(fault)) {
         if (
           key !== "tag" &&
@@ -205,7 +195,6 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       : ExtendedTaggedFault<TErrorClass, FaultTag> &
           InstanceType<TErrorClass> &
           WithBaseFaultMethods {
-      // Type assertion needed because TypeScript can't narrow the conditional return type
       return new ExtendedTaggedFaultClass(
         this,
         this.tag as FaultTag,
@@ -227,8 +216,6 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     }
   }
 
-  // Copy all BaseFault prototype methods to ExtendedFaultBaseClass
-  // ExtendedTaggedFaultClass will inherit them
   const descriptors = Object.getOwnPropertyDescriptors(BaseFault.prototype)
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (key !== "constructor" && !(key in ExtendedFaultBaseClass.prototype)) {

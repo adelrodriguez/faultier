@@ -14,11 +14,8 @@
  * }
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface FaultRegistry {
-  // Define tags as keys with their context types as values
-  // Use never for tags that don't require context
-}
+// oxlint-disable-next-line typescript/no-empty-object-type
+export interface FaultRegistry {}
 
 /**
  * Extracts tag keys from FaultRegistry.
