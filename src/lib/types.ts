@@ -14,7 +14,7 @@
  * }
  * ```
  */
-// biome-ignore lint/suspicious/noEmptyInterface: Module augmentation
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface FaultRegistry {
   // Define tags as keys with their context types as values
   // Use never for tags that don't require context
@@ -31,7 +31,7 @@ export type FaultTag = keyof FaultRegistry extends never ? string : keyof FaultR
  * Returns Record<string, unknown> for unknown tags.
  */
 export type ContextForTag<TTag extends string> = TTag extends keyof FaultRegistry
-  ? FaultRegistry[TTag] extends undefined | never
+  ? FaultRegistry[TTag] extends undefined
     ? never
     : FaultRegistry[TTag]
   : Record<string, unknown>
@@ -41,14 +41,10 @@ export type ContextForTag<TTag extends string> = TTag extends keyof FaultRegistr
  * Used when reading context (e.g., after isFault()) since context may not have been provided.
  */
 export type PartialContextForTag<TTag extends string> = TTag extends keyof FaultRegistry
-  ? FaultRegistry[TTag] extends undefined | never
+  ? FaultRegistry[TTag] extends undefined
     ? never
     : Partial<FaultRegistry[TTag]>
   : Record<string, unknown>
-
-export type WithoutWithTag<T> = Omit<T, "withTag">
-export type WithoutWithContext<T> = Omit<T, "withContext">
-export type WithoutClearContext<T> = Omit<T, "clearContext">
 
 /**
  * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.

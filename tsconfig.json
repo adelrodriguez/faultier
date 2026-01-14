@@ -1,5 +1,5 @@
 {
-  "extends": "adamantite/tsconfig",
+  "extends": "adamantite/typescript",
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",

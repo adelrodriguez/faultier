@@ -155,12 +155,12 @@ describe("extend", () => {
       const json = httpFault.toJSON()
 
       expect(json).toEqual({
+        cause: undefined,
+        context: { endpoint: "/api/users/123", method: "GET" },
+        debug: "Resource not found in database.",
+        message: "The requested resource was not found.",
         name: "HttpError",
         tag: "LAYER_3",
-        message: "The requested resource was not found.",
-        debug: "Resource not found in database.",
-        context: { endpoint: "/api/users/123", method: "GET" },
-        cause: undefined,
       })
     })
 
@@ -178,12 +178,12 @@ describe("extend", () => {
       const json = simpleFault.toJSON()
 
       expect(json).toEqual({
+        cause: undefined,
+        context: {},
+        debug: "",
+        message: "Something failed.",
         name: "SimpleError",
         tag: "No fault tag set",
-        message: "Something failed.",
-        debug: "",
-        context: {},
-        cause: undefined,
       })
     })
 
@@ -209,6 +209,7 @@ describe("extend", () => {
         .withDescription("Service failed", "Authentication service unavailable")
       httpFault.cause = fault1
 
+      // eslint-disable-next-line eslint-plugin-unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
       const json = JSON.parse(JSON.stringify(httpFault))
 
       expect(json.message).toBe(
@@ -305,7 +306,7 @@ describe("extend", () => {
       expect(chain[3]).toBe(rootError)
 
       // Verify IS_FAULT symbol works with extended faults
-      const faults = chain.filter(Fault.isFault)
+      const faults = chain.filter((e) => Fault.isFault(e))
       expect(faults).toHaveLength(3)
       expect(faults[0]).toBe(fault2)
       expect(faults[1]).toBe(networkFault)
@@ -327,16 +328,16 @@ describe("extend", () => {
       const HttpFault = extend(HttpError)
 
       const httpFault = HttpFault.create("Not found", 404).withTag("LAYER_1").withContext({
+        database: "users",
         host: "localhost",
         port: 5432,
-        database: "users",
         timeout: 30_000,
       })
 
       expect(httpFault.context).toEqual({
+        database: "users",
         host: "localhost",
         port: 5432,
-        database: "users",
         timeout: 30_000,
       })
     })
@@ -406,15 +407,15 @@ describe("extend", () => {
         host: "localhost",
       })
       const httpFault = HttpFault.create("Request failed", 500).withTag("LAYER_2").withContext({
-        service: "api",
         method: "GET",
+        service: "api",
       })
       httpFault.cause = fault1
 
       expect(httpFault.getFullContext()).toEqual({
         host: "localhost",
-        service: "api",
         method: "GET",
+        service: "api",
       })
     })
   })
@@ -435,15 +436,15 @@ describe("extend", () => {
 
       const validationFault = ValidationFault.create("Invalid input", "email")
         .withTag("LAYER_1")
-        .withContext({ host: "localhost", database: "users" })
+        .withContext({ database: "users", host: "localhost" })
         .withDescription("Email format is invalid", "Please enter a valid email address")
 
       expect(validationFault.tag).toBe("LAYER_1")
       expect(validationFault.debug).toBe("Email format is invalid")
       expect(validationFault.message).toBe("Please enter a valid email address")
       expect(validationFault.context).toEqual({
-        host: "localhost",
         database: "users",
+        host: "localhost",
       })
       expect(validationFault.field).toBe("email")
     })

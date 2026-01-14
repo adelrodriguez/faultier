@@ -65,25 +65,25 @@ bun add faultier
 ### Quick Start
 
 ```ts
-import Fault from "faultier";
+import Fault from "faultier"
 
 // Wrap an existing error and add classification
 try {
-  await database.query();
+  await database.query()
 } catch (err) {
   throw Fault.wrap(err) // Wrap any error as a Fault
     .withTag("DATABASE_ERROR") // Classify with a tag
-    .withContext({ query: "SELECT * FROM users" }); // Attach metadata
+    .withContext({ query: "SELECT * FROM users" }) // Attach metadata
 }
 
 // Or create a fault directly when you control the error
-throw Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" });
+throw Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" })
 
 // Separate debug info from user-facing messages
 throw Fault.wrap(err).withTag("PAYMENT_ERROR").withDescription(
   "Stripe API error 402: card_declined (insufficient_funds)", // Debug (for logs)
   "Payment failed. Please try a different card." // User-facing message
-);
+)
 ```
 
 ### Type Safety
@@ -93,11 +93,11 @@ Define your error types using [module augmentation](https://www.typescriptlang.o
 ```ts
 declare module "faultier" {
   interface FaultRegistry {
-    DATABASE_ERROR: { query: string; host?: string };
-    AUTH_ERROR: { userId: string; reason: string };
-    NOT_FOUND: { resource: string; id: string };
-    VALIDATION_ERROR: { field: string; message: string };
-    GENERIC_ERROR: never; // No context allowed - withContext will error
+    DATABASE_ERROR: { query: string; host?: string }
+    AUTH_ERROR: { userId: string; reason: string }
+    NOT_FOUND: { resource: string; id: string }
+    VALIDATION_ERROR: { field: string; message: string }
+    GENERIC_ERROR: never // No context allowed - withContext will error
   }
 }
 ```
@@ -106,13 +106,13 @@ Now TypeScript enforces correct tag/context combinations:
 
 ```ts
 // Type-safe: context must match the tag
-Fault.create("DATABASE_ERROR").withContext({ query: "SELECT *" }); // OK
+Fault.create("DATABASE_ERROR").withContext({ query: "SELECT *" }) // OK
 
-Fault.create("DATABASE_ERROR").withContext({ userId: "123" }); // Type error: missing 'query'
+Fault.create("DATABASE_ERROR").withContext({ userId: "123" }) // Type error: missing 'query'
 
-Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" }); // OK
+Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" }) // OK
 
-Fault.create("GENERIC_ERROR").withContext({ anything: "value" }); // Type error: withContext returns never
+Fault.create("GENERIC_ERROR").withContext({ anything: "value" }) // Type error: withContext returns never
 ```
 
 For larger applications with many error types, you can organize them into groups:
@@ -120,27 +120,27 @@ For larger applications with many error types, you can organize them into groups
 ```ts
 // Group related errors together
 type DatabaseErrors = {
-  DB_CONNECTION_ERROR: { host: string; port: number };
-  DB_QUERY_ERROR: { query: string; table: string };
-  DB_TIMEOUT_ERROR: { timeout: number };
-};
+  DB_CONNECTION_ERROR: { host: string; port: number }
+  DB_QUERY_ERROR: { query: string; table: string }
+  DB_TIMEOUT_ERROR: { timeout: number }
+}
 
 type AuthErrors = {
-  AUTH_INVALID_TOKEN: { token: string; reason: string };
-  AUTH_EXPIRED_SESSION: { sessionId: string };
-  AUTH_INSUFFICIENT_PERMISSIONS: { userId: string; required: string[] };
-};
+  AUTH_INVALID_TOKEN: { token: string; reason: string }
+  AUTH_EXPIRED_SESSION: { sessionId: string }
+  AUTH_INSUFFICIENT_PERMISSIONS: { userId: string; required: string[] }
+}
 
 type ValidationErrors = {
-  VALIDATION_FAILED: { field: string; message: string };
-  VALIDATION_SCHEMA_ERROR: { errors: string[] };
-};
+  VALIDATION_FAILED: { field: string; message: string }
+  VALIDATION_SCHEMA_ERROR: { errors: string[] }
+}
 
 // Combine all error types in your registry
 declare module "faultier" {
   interface FaultRegistry extends DatabaseErrors, AuthErrors, ValidationErrors {
     // Add any standalone errors here
-    GENERIC_ERROR: never;
+    GENERIC_ERROR: never
   }
 }
 ```
@@ -151,26 +151,24 @@ Faults preserve the full error chain:
 
 ```ts
 try {
-  await fetchUser();
+  await fetchUser()
 } catch (err) {
   throw Fault.wrap(err).withTag("SERVICE_ERROR").withDescription(
     "User service failed on primary endpoint", // Debug message
     "Unable to load user data" // User-facing message
-  );
+  )
 }
 ```
 
 Extract information from the chain:
 
 ```ts
-const fault = Fault.wrap(originalError)
-  .withTag("API_ERROR")
-  .withContext({ endpoint: "/users" });
+const fault = Fault.wrap(originalError).withTag("API_ERROR").withContext({ endpoint: "/users" })
 
-fault.unwrap(); // [fault, ...causes, originalError] - full chain as array
-fault.flatten(); // "API failed -> Service error -> Connection timeout" - messages joined
-fault.getTags(); // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"] - all tags in chain
-fault.getFullContext(); // { endpoint: "/users", host: "..." } - merged context from all faults
+fault.unwrap() // [fault, ...causes, originalError] - full chain as array
+fault.flatten() // "API failed -> Service error -> Connection timeout" - messages joined
+fault.getTags() // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"] - all tags in chain
+fault.getFullContext() // { endpoint: "/users", host: "..." } - merged context from all faults
 ```
 
 ### Handling Faults
@@ -181,9 +179,9 @@ Use `Fault.matchTag` when you only need to handle one specific fault type:
 
 ```ts
 const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
-  logger.error("DB error", fault.context.query);
-  return { status: 500 };
-});
+  logger.error("DB error", fault.context.query)
+  return { status: 500 }
+})
 
 if (Fault.isUnknown(result)) {
   // Not a fault or different tag
@@ -198,7 +196,7 @@ Use `Fault.matchTags` to handle several fault types:
 const result = Fault.matchTags(error, {
   NOT_FOUND: (fault) => ({ status: 404 }),
   AUTH_ERROR: (fault) => ({ status: 401 }),
-});
+})
 
 if (Fault.isUnknown(result)) {
   // Not a fault or unhandled tag
@@ -213,17 +211,17 @@ every possible fault type. It requires handlers for ALL registered tags:
 ```ts
 const result = Fault.handle(error, {
   DATABASE_ERROR: (fault) => {
-    logger.error("DB error", fault.context.query);
-    return { status: 500 };
+    logger.error("DB error", fault.context.query)
+    return { status: 500 }
   },
   NOT_FOUND: (fault) => {
-    return { status: 404, resource: fault.context.resource };
+    return { status: 404, resource: fault.context.resource }
   },
   AUTH_ERROR: (fault) => {
-    return { status: 401 };
+    return { status: 401 }
   },
   // ... all registered tags
-});
+})
 
 if (Fault.isUnknown(result)) {
   // Not a fault
@@ -235,23 +233,26 @@ if (Fault.isUnknown(result)) {
 Use `faultier/extend` to add Fault functionality to existing Error classes:
 
 ```ts
-import { extend } from "faultier/extend";
+import { extend } from "faultier/extend"
 
 class HttpError extends Error {
-  constructor(message: string, public statusCode: number) {
-    super(message);
+  constructor(
+    message: string,
+    public statusCode: number
+  ) {
+    super(message)
   }
 }
 
-const HttpFault = extend(HttpError);
+const HttpFault = extend(HttpError)
 
 const fault = HttpFault.create("Not found", 404)
   .withTag("HTTP_ERROR")
-  .withContext({ path: "/api/users" });
+  .withContext({ path: "/api/users" })
 
-console.log(fault.statusCode); // 404
-console.log(fault.tag); // "HTTP_ERROR"
-console.log(fault.flatten()); // Works like regular Fault
+console.log(fault.statusCode) // 404
+console.log(fault.tag) // "HTTP_ERROR"
+console.log(fault.flatten()) // Works like regular Fault
 ```
 
 ## API Reference
@@ -265,7 +266,7 @@ Wraps any error into a Fault instance.
 ```ts
 Fault.wrap(new Error("Something failed"))
   .withTag("INTERNAL_ERROR")
-  .withContext({ operation: "sync" });
+  .withContext({ operation: "sync" })
 ```
 
 #### `Fault.create(tag)`
@@ -276,7 +277,7 @@ Creates a new Fault with the specified tag.
 Fault.create("VALIDATION_ERROR").withContext({
   field: "email",
   message: "Invalid format",
-});
+})
 ```
 
 ### Instance Methods
@@ -325,11 +326,11 @@ Type guard to check if a value is a Fault.
 
 ```ts
 try {
-  await riskyOperation();
+  await riskyOperation()
 } catch (error) {
   if (Fault.isFault(error)) {
-    console.log(error.tag); // Type-safe access
-    console.log(error.context); // Type-safe access
+    console.log(error.tag) // Type-safe access
+    console.log(error.context) // Type-safe access
   }
 }
 ```
@@ -341,9 +342,9 @@ Converts a fault and its entire error chain to a plain object for serialization.
 ```ts
 const fault = Fault.create("API_ERROR")
   .withContext({ endpoint: "/users" })
-  .withDescription("Request failed");
+  .withDescription("Request failed")
 
-const serialized = Fault.toSerializable(fault);
+const serialized = Fault.toSerializable(fault)
 // {
 //   name: "Fault",
 //   tag: "API_ERROR",
@@ -353,7 +354,7 @@ const serialized = Fault.toSerializable(fault);
 // }
 
 // Send over network, store in database, etc.
-await redis.set("last-error", JSON.stringify(serialized));
+await redis.set("last-error", JSON.stringify(serialized))
 ```
 
 #### `Fault.fromSerializable(data)`
@@ -361,11 +362,11 @@ await redis.set("last-error", JSON.stringify(serialized));
 Reconstructs a Fault from serialized data, preserving the full error chain.
 
 ```ts
-const data = await redis.get("last-error");
-const fault = Fault.fromSerializable(JSON.parse(data));
+const data = await redis.get("last-error")
+const fault = Fault.fromSerializable(JSON.parse(data))
 
-console.log(fault.tag); // "API_ERROR"
-console.log(fault.unwrap()); // Full chain restored
+console.log(fault.tag) // "API_ERROR"
+console.log(fault.unwrap()) // Full chain restored
 ```
 
 #### `Fault.getIssue(fault, options?)`
@@ -375,12 +376,12 @@ Extracts and joins user-facing messages from all faults in the chain.
 ```ts
 const fault = Fault.wrap(dbError)
   .withTag("SERVICE_ERROR")
-  .withDescription("DB failed", "Service unavailable");
+  .withDescription("DB failed", "Service unavailable")
 
-Fault.getIssue(fault);
+Fault.getIssue(fault)
 // "Service unavailable. Database connection failed."
 
-Fault.getIssue(fault, { separator: " | " });
+Fault.getIssue(fault, { separator: " | " })
 // "Service unavailable. | Database connection failed."
 ```
 
@@ -391,12 +392,12 @@ Extracts and joins debug messages from all faults in the chain.
 ```ts
 const fault = Fault.wrap(dbError)
   .withTag("SERVICE_ERROR")
-  .withDescription("Connection to postgres:5432 timed out after 30s");
+  .withDescription("Connection to postgres:5432 timed out after 30s")
 
-Fault.getDebug(fault);
+Fault.getDebug(fault)
 // "Connection to postgres:5432 timed out after 30s."
 
-Fault.getDebug(fault, { separator: " -> " });
+Fault.getDebug(fault, { separator: " -> " })
 // "Connection to postgres:5432 timed out after 30s. -> Original DB error."
 ```
 
@@ -406,9 +407,9 @@ Matches a fault against a single tag. Runs the callback only if the error is a f
 
 ```ts
 const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
-  logger.error("DB error", { query: fault.context.query });
-  return { status: 500 };
-});
+  logger.error("DB error", { query: fault.context.query })
+  return { status: 500 }
+})
 
 if (Fault.isUnknown(result)) {
   // Not a fault or different tag
@@ -422,13 +423,13 @@ Matches a fault against multiple tags. Runs the matching handler if the error is
 ```ts
 const result = Fault.matchTags(error, {
   NOT_FOUND: (fault) => {
-    return { status: 404, resource: fault.context.resource };
+    return { status: 404, resource: fault.context.resource }
   },
   DB_ERROR: (fault) => {
-    logger.error("DB error", { query: fault.context.query });
-    return { status: 500 };
+    logger.error("DB error", { query: fault.context.query })
+    return { status: 500 }
   },
-});
+})
 
 if (Fault.isUnknown(result)) {
   // Not a fault or unhandled tag
@@ -442,24 +443,24 @@ Exhaustively dispatches a fault to handlers for all registered tags. Use this in
 ```ts
 const result = Fault.handle(error, {
   DATABASE_ERROR: (fault) => {
-    logger.error("DB error", { query: fault.context.query });
-    return { status: 500, message: "Database error" };
+    logger.error("DB error", { query: fault.context.query })
+    return { status: 500, message: "Database error" }
   },
   NOT_FOUND: (fault) => {
-    return { status: 404, resource: fault.context.resource };
+    return { status: 404, resource: fault.context.resource }
   },
   AUTH_ERROR: (fault) => {
-    return { status: 401, reason: fault.context.reason };
+    return { status: 401, reason: fault.context.reason }
   },
   // ... all registered tags
-});
+})
 
 if (Fault.isUnknown(result)) {
   // Error is not a Fault
-  throw error;
+  throw error
 }
 
-return result; // { status: 404, resource: "user" }
+return result // { status: 404, resource: "user" }
 ```
 
 #### `Fault.isUnknown(value)`
@@ -469,11 +470,11 @@ Checks if a match result is UNKNOWN (not a fault or no handler matched). Use thi
 ```ts
 const result = Fault.matchTags(error, {
   NOT_FOUND: (fault) => ({ status: 404 }),
-});
+})
 
 if (Fault.isUnknown(result)) {
   // Not a fault or unhandled tag
-  throw error;
+  throw error
 }
 
 // result is typed as { status: number } here
@@ -485,13 +486,13 @@ Asserts that an error is a Fault, re-throwing if it's not.
 
 ```ts
 try {
-  await riskyOperation();
+  await riskyOperation()
 } catch (error) {
-  Fault.assert(error); // Throws if not a Fault
+  Fault.assert(error) // Throws if not a Fault
 
   // TypeScript now knows error is a Fault
-  console.log(error.tag);
-  console.log(error.context);
+  console.log(error.tag)
+  console.log(error.context)
 }
 ```
 

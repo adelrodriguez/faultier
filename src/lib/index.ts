@@ -9,6 +9,9 @@ import type {
 } from "./types"
 import { HAS_PUNCTUATION } from "./utils"
 
+// Default formatter for flatten method
+const defaultTrimFormatter = (msg: string) => msg.trim()
+
 // Symbol to identify Fault instances
 export const IS_FAULT: unique symbol = Symbol("IS_FAULT")
 export const UNKNOWN: unique symbol = Symbol("UNKNOWN")
@@ -35,10 +38,10 @@ export abstract class BaseFault extends Error {
     this.debug = debug
     // Initialize the IS_FAULT symbol property
     Object.defineProperty(this, IS_FAULT, {
+      configurable: false,
+      enumerable: false,
       value: true,
       writable: false,
-      enumerable: false,
-      configurable: false,
     })
   }
 
@@ -149,8 +152,7 @@ export abstract class BaseFault extends Error {
    * ```
    */
   flatten(options?: ChainFormattingOptions): string {
-    const defaultFormatter = (msg: string) => msg.trim()
-    const { separator = " -> ", formatter = defaultFormatter } = options ?? {}
+    const { separator = " -> ", formatter = defaultTrimFormatter } = options ?? {}
 
     const chain = this.unwrap()
     const messages: string[] = []
@@ -181,7 +183,7 @@ export abstract class BaseFault extends Error {
    */
   getTags(): FaultTag[] {
     const chain = this.unwrap()
-    return chain.filter(BaseFault.isFault).map((fault) => fault.tag as FaultTag)
+    return chain.filter((e) => BaseFault.isFault(e)).map((fault) => fault.tag as FaultTag)
   }
 
   /**
@@ -204,28 +206,25 @@ export abstract class BaseFault extends Error {
    */
   getFullContext(): Record<string, unknown> {
     const chain = this.unwrap()
-    const faults = chain.filter(BaseFault.isFault)
+    const faults = chain.filter((e) => BaseFault.isFault(e))
     const merged: Record<string, unknown> = {}
 
-    for (const fault of faults.reverse()) {
+    for (const fault of faults.toReversed()) {
       Object.assign(merged, fault.context)
     }
 
     return merged
   }
 
-  /**
-   * @internal
-   * Serializes a single fault for JSON.stringify(). Not intended for direct use.
-   */
+  /** @internal */
   toJSON(): FaultJSON {
     return {
+      cause: this.cause?.message,
+      context: this.context,
+      debug: BaseFault.getDebug(this, { separator: " → " }),
+      message: BaseFault.getIssue(this, { separator: " → " }),
       name: this.name,
       tag: this.tag,
-      message: BaseFault.getIssue(this, { separator: " → " }),
-      debug: BaseFault.getDebug(this, { separator: " → " }),
-      context: this.context,
-      cause: this.cause?.message,
     }
   }
 
@@ -253,7 +252,7 @@ export abstract class BaseFault extends Error {
       return false
     }
 
-    return IS_FAULT in value && (value as WithIsFault)[IS_FAULT] === true
+    return IS_FAULT in value && (value as WithIsFault)[IS_FAULT]
   }
 
   /**
@@ -304,11 +303,11 @@ export abstract class BaseFault extends Error {
    */
   static toSerializable(fault: BaseFault): SerializableFault {
     const serialized: SerializableFault = {
-      name: fault.name,
-      tag: fault.tag,
-      message: fault.message,
       context: fault.context as Record<string, unknown>,
       debug: fault.debug,
+      message: fault.message,
+      name: fault.name,
+      tag: fault.tag,
     }
 
     if (fault.cause) {
@@ -316,8 +315,8 @@ export abstract class BaseFault extends Error {
         serialized.cause = Fault.toSerializable(fault.cause)
       } else {
         serialized.cause = {
-          name: fault.cause.name,
           message: fault.cause.message,
+          name: fault.cause.name,
         } satisfies SerializableError
       }
     }
@@ -364,7 +363,7 @@ export abstract class BaseFault extends Error {
       return error
     }
 
-    // data must be a SerializableFault (not SerializableError) for top level
+    // Data must be a SerializableFault (not SerializableError) for top level
     if (!("tag" in data)) {
       throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
     }
@@ -407,11 +406,11 @@ export abstract class BaseFault extends Error {
         const trimmed = msg.trim()
         return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
       },
-    } = options || {}
+    } = options ?? {}
 
     return fault
       .unwrap()
-      .filter(BaseFault.isFault)
+      .filter((e) => BaseFault.isFault(e))
       .map((err) => formatter(err.message))
       .join(separator)
   }
@@ -439,11 +438,11 @@ export abstract class BaseFault extends Error {
         const trimmed = msg.trim()
         return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
       },
-    } = options || {}
+    } = options ?? {}
 
     return fault
       .unwrap()
-      .filter(BaseFault.isFault)
+      .filter((e) => BaseFault.isFault(e))
       .map((err) => formatter(err.debug ?? ""))
       .filter((msg) => msg.trim() !== "" && msg !== ".")
       .join(separator)
@@ -484,8 +483,8 @@ export abstract class BaseFault extends Error {
    */
   static handle<
     H extends {
-      [T in FaultTag]: // biome-ignore lint/suspicious/noExplicitAny: generic handler return type
-      (fault: TaggedFault<T>) => any
+      // oxlint-disable-next-line typescript/no-explicit-any
+      [T in FaultTag]: (fault: TaggedFault<T>) => any
     },
   >(
     error: unknown,
@@ -502,7 +501,7 @@ export abstract class BaseFault extends Error {
     const handler = handlers[error.tag]
 
     if (handler) {
-      // biome-ignore lint/suspicious/noExplicitAny: We know this is safe at runtime because handler matches error.tag
+      // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return, typescript/no-unsafe-argument
       return handler(error as any)
     }
 
@@ -586,8 +585,8 @@ export abstract class BaseFault extends Error {
     const handler = handlers[error.tag as keyof THandlers]
 
     if (handler) {
-      // biome-ignore lint/suspicious/noExplicitAny: Type-safe at runtime, TypeScript can't narrow union types here
-      return (handler as any)(error as any) as any
+      // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return, typescript/no-unsafe-call
+      return (handler as any)(error as any)
     }
 
     return UNKNOWN
@@ -661,7 +660,7 @@ class TaggedFault<T extends FaultTag> extends BaseFault {
 
   withContext(context: ContextForTag<T>): ContextForTag<T> extends never ? never : TaggedFault<T> {
     // Type assertion needed because TypeScript can't narrow the conditional return type
-    // biome-ignore lint/suspicious/noExplicitAny: Conditional return type requires assertion
+    // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return
     return new TaggedFault(this, this.tag, context) as any
   }
 

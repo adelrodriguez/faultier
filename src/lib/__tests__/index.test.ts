@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
+import type { FaultTag, SerializableFault } from "../types"
 import Fault, { IS_FAULT, UNKNOWN } from "../index"
-import type { FaultTag } from "../types"
 
 declare module "../types" {
   interface FaultRegistry {
@@ -44,16 +44,16 @@ describe("Fault", () => {
       const fault = Fault.wrap(err)
         .withTag("MY_TAG")
         .withDescription("Something went really wrong")
-        .withContext({ requestId: "123", errorCode: 100 })
+        .withContext({ errorCode: 100, requestId: "123" })
 
       expect(JSON.stringify(fault)).toEqual(
         JSON.stringify({
+          cause: "Something happened",
+          context: { errorCode: 100, requestId: "123" },
+          debug: "Something went really wrong.",
+          message: "Something happened.",
           name: "Fault",
           tag: "MY_TAG",
-          message: "Something happened.",
-          debug: "Something went really wrong.",
-          context: { requestId: "123", errorCode: 100 },
-          cause: "Something happened",
         })
       )
     })
@@ -67,6 +67,7 @@ describe("Fault", () => {
         .withTag("LAYER_2")
         .withDescription("Service failed", "Authentication service unavailable")
 
+      // eslint-disable-next-line eslint-plugin-unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
       const json = JSON.parse(JSON.stringify(fault2))
 
       expect(json.message).toBe(
@@ -81,13 +82,13 @@ describe("Fault", () => {
       const fault = Fault.wrap(new Error("something happened"))
         .withTag("MY_TAG")
         .withDescription("Something went really wrong")
-        .withContext({ requestId: "123", errorCode: 100 })
+        .withContext({ errorCode: 100, requestId: "123" })
 
       expect(fault.name).toBe("Fault")
       expect(fault.tag).toBe("MY_TAG")
       expect(fault.message).toBe("something happened")
       expect(fault.debug).toBe("Something went really wrong")
-      expect(fault.context).toEqual({ requestId: "123", errorCode: 100 })
+      expect(fault.context).toEqual({ errorCode: 100, requestId: "123" })
     })
 
     describe("withTag", () => {
@@ -195,7 +196,7 @@ describe("Fault", () => {
         const fault = Fault.wrap(new Error("Original error"))
           .withTag("MY_TAG")
           .withDescription("Debug message", "User message")
-          .withContext({ requestId: "123", errorCode: 100 })
+          .withContext({ errorCode: 100, requestId: "123" })
 
         const cleared = fault.clearContext()
 
@@ -207,7 +208,7 @@ describe("Fault", () => {
       it("should allow re-applying context after clearing", () => {
         const fault = Fault.wrap(new Error("Original error"))
           .withTag("MY_TAG")
-          .withContext({ requestId: "123", errorCode: 100 })
+          .withContext({ errorCode: 100, requestId: "123" })
 
         const cleared = fault.clearContext()
         const recontexted = cleared.withContext({
@@ -236,7 +237,7 @@ describe("Fault", () => {
 
       expect(Fault.isFault(new Date())).toBe(false)
       expect(Fault.isFault(null)).toBe(false)
-      expect(Fault.isFault(undefined)).toBe(false)
+      expect(Fault.isFault(null)).toBe(false)
       expect(Fault.isFault("not an error")).toBe(false)
       expect(Fault.isFault(123)).toBe(false)
       expect(Fault.isFault(true)).toBe(false)
@@ -255,8 +256,8 @@ describe("Fault", () => {
     it("should return true for plain object with IS_FAULT symbol", () => {
       const fakeFault = {
         [IS_FAULT]: true,
-        tag: "MY_TAG",
         context: {},
+        tag: "MY_TAG",
       }
 
       expect(Fault.isFault(fakeFault)).toBe(true)
@@ -265,8 +266,8 @@ describe("Fault", () => {
     it("should return false if IS_FAULT symbol is present but not true", () => {
       const fakeFault = {
         [IS_FAULT]: false,
-        tag: "MY_TAG",
         context: {},
+        tag: "MY_TAG",
       }
 
       expect(Fault.isFault(fakeFault)).toBe(false)
@@ -276,11 +277,11 @@ describe("Fault", () => {
   describe("isUnknown", () => {
     it("should return true for UNKNOWN symbol", () => {
       const result = Fault.handle(new Error("test"), {
-        MY_TAG: () => "handled",
         LAYER_1: () => "handled",
         LAYER_2: () => "handled",
         LAYER_3: () => "handled",
         LAYER_4: () => "handled",
+        MY_TAG: () => "handled",
         NO_CONTEXT_TAG: () => "handled",
       })
 
@@ -300,7 +301,7 @@ describe("Fault", () => {
       expect(Fault.isUnknown("string")).toBe(false)
       expect(Fault.isUnknown(123)).toBe(false)
       expect(Fault.isUnknown(null)).toBe(false)
-      expect(Fault.isUnknown(undefined)).toBe(false)
+      expect(Fault.isUnknown(null)).toBe(false)
       expect(Fault.isUnknown({})).toBe(false)
       expect(Fault.isUnknown([])).toBe(false)
       expect(Fault.isUnknown(true)).toBe(false)
@@ -325,23 +326,29 @@ describe("Fault", () => {
     it("should not throw when given a Fault instance", () => {
       const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
 
-      expect(() => Fault.assert(fault)).not.toThrow()
+      expect(() => {
+        Fault.assert(fault)
+      }).not.toThrow()
     })
 
     it("should throw the original error when given a non-fault", () => {
       const plainError = new Error("Not a fault")
 
-      expect(() => Fault.assert(plainError)).toThrow(plainError)
+      expect(() => {
+        Fault.assert(plainError)
+      }).toThrow(plainError)
     })
 
     it("should throw non-Error values", () => {
-      expect(() => Fault.assert("not an error")).toThrow("not an error")
+      expect(() => {
+        Fault.assert("not an error")
+      }).toThrow("not an error")
       expect(() => {
         try {
           Fault.assert(null)
-        } catch (e) {
-          expect(e).toBe(null)
-          throw e
+        } catch (error) {
+          expect(error).toBe(null)
+          throw error
         }
       }).toThrow()
     })
@@ -352,11 +359,11 @@ describe("Fault", () => {
       const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
 
       const result = Fault.handle(fault, {
-        MY_TAG: () => "handled",
         LAYER_1: () => "not handled",
         LAYER_2: () => "not handled",
         LAYER_3: () => "not handled",
         LAYER_4: () => "not handled",
+        MY_TAG: () => "handled",
         NO_CONTEXT_TAG: () => "not handled",
       })
 
@@ -367,11 +374,11 @@ describe("Fault", () => {
       const plainError = new Error("Not a fault")
 
       const result = Fault.handle(plainError, {
-        MY_TAG: () => "handled",
         LAYER_1: () => "handled",
         LAYER_2: () => "handled",
         LAYER_3: () => "handled",
         LAYER_4: () => "handled",
+        MY_TAG: () => "handled",
         NO_CONTEXT_TAG: () => "handled",
       })
 
@@ -396,25 +403,14 @@ describe("Fault", () => {
 
     it("should only invoke the matching handler", () => {
       const fault = Fault.wrap(new Error("test")).withTag("LAYER_1")
-      const handler1 = () => "handler1"
-      const handler2 = () => "handler2"
-      const handler3 = () => "handler3"
-      const handler4 = () => "handler4"
-      const handler5 = () => "handler5"
-
-      const spy1 = handler1
-      const spy2 = handler2
-      const spy3 = handler3
-      const spy4 = handler4
-      const spy5 = handler5
 
       const result = Fault.handle(fault, {
-        MY_TAG: spy1,
-        LAYER_1: spy2,
-        LAYER_2: spy3,
-        LAYER_3: spy4,
+        LAYER_1: () => "handler2",
+        LAYER_2: () => "handler3",
+        LAYER_3: () => "handler4",
         LAYER_4: () => "not used",
-        NO_CONTEXT_TAG: spy5,
+        MY_TAG: () => "handler1",
+        NO_CONTEXT_TAG: () => "handler5",
       })
 
       expect(result).toBe("handler2")
@@ -452,7 +448,7 @@ describe("Fault", () => {
     it("should provide correctly typed fault in callback", () => {
       const fault = Fault.wrap(new Error("test"))
         .withTag("MY_TAG")
-        .withContext({ requestId: "123", errorCode: 100 })
+        .withContext({ errorCode: 100, requestId: "123" })
 
       const result = Fault.matchTag(fault, "MY_TAG", (f) => {
         // TypeScript should know f.context has requestId and errorCode
@@ -523,13 +519,13 @@ describe("Fault", () => {
 
       const handler = (error: unknown) =>
         Fault.matchTags(error, {
-          MY_TAG: (f) => {
-            expect(f.tag).toBe("MY_TAG")
-            return { status: 404 }
-          },
           LAYER_1: (f) => {
             expect(f.tag).toBe("LAYER_1")
             return { status: 500 }
+          },
+          MY_TAG: (f) => {
+            expect(f.tag).toBe("MY_TAG")
+            return { status: 404 }
           },
         })
 
@@ -543,7 +539,7 @@ describe("Fault", () => {
     it("should provide type-safe handler arguments with context", () => {
       const fault = Fault.wrap(new Error("test"))
         .withTag("MY_TAG")
-        .withContext({ requestId: "123", errorCode: 100 })
+        .withContext({ errorCode: 100, requestId: "123" })
 
       const result = Fault.matchTags(fault, {
         MY_TAG: (f) => {
@@ -563,8 +559,8 @@ describe("Fault", () => {
 
       const handler = (error: unknown) =>
         Fault.matchTags(error, {
-          MY_TAG: () => "string result",
           LAYER_1: () => 42,
+          MY_TAG: () => "string result",
         })
 
       const result1 = handler(fault1)
@@ -584,13 +580,13 @@ describe("Fault", () => {
 
       const handler = (error: unknown) =>
         Fault.matchTags(error, {
-          MY_TAG: () => 1,
           LAYER_1: () => 2,
           LAYER_2: () => 3,
           LAYER_3: () => 4,
+          MY_TAG: () => 1,
         })
 
-      const results = faults.map(handler)
+      const results = faults.map((f) => handler(f))
 
       expect(results).toEqual([1, 2, 3, 4])
     })
@@ -624,7 +620,7 @@ describe("Fault", () => {
       expect(chain[2]).toBe(fault1)
       expect(chain[3]).toBe(dbError)
 
-      const filtered = chain.filter(Fault.isFault)
+      const filtered = chain.filter((e) => Fault.isFault(e))
 
       expect(filtered).toHaveLength(3)
       expect(filtered[0]?.tag).toBe("LAYER_3")
@@ -639,7 +635,7 @@ describe("Fault", () => {
       const fault3 = Fault.wrap(fault2).withTag("LAYER_3")
 
       const chain = fault3.unwrap()
-      const tags = chain.filter(Fault.isFault).map((f) => f.tag)
+      const tags = chain.filter((e) => Fault.isFault(e)).map((f) => f.tag)
 
       expect(tags).toEqual(["LAYER_3", "LAYER_2", "LAYER_1"])
     })
@@ -653,7 +649,7 @@ describe("Fault", () => {
       const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
 
       const chain = fault3.unwrap()
-      const faults = chain.filter(Fault.isFault)
+      const faults = chain.filter((e) => Fault.isFault(e))
       const mergedContext: Record<string, unknown> = {}
       for (const fault of faults) {
         for (const [key, value] of Object.entries(fault.context ?? {})) {
@@ -663,9 +659,9 @@ describe("Fault", () => {
 
       expect(mergedContext).toEqual({
         endpoint: "/login",
-        service: "auth",
         host: "localhost",
         port: 5432,
+        service: "auth",
       })
     })
 
@@ -676,8 +672,7 @@ describe("Fault", () => {
       const fault3 = Fault.wrap(fault2).withTag("LAYER_3")
 
       const chain = fault3.unwrap()
-      // biome-ignore lint: Tuple type from unwrap() doesn't support .at() method, and TS target may not support it
-      const root = chain[chain.length - 1]
+      const root = chain.at(-1)
 
       expect(root).toBe(rootError)
       expect(root?.message).toBe("Root cause")
@@ -696,17 +691,17 @@ describe("Fault", () => {
       const fullContext = fault3.getFullContext()
 
       expect(fullContext).toEqual({
+        endpoint: "/login",
         host: "localhost",
         port: 5432,
         service: "auth",
-        endpoint: "/login",
       })
     })
 
     it("should override duplicate keys from root to current", () => {
       const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
-        requestId: "abc",
         errorCode: 100,
+        requestId: "abc",
         userId: "user123",
       })
       const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({
@@ -717,12 +712,12 @@ describe("Fault", () => {
 
       const fullContext = fault2.getFullContext()
 
-      // errorCode and requestId from fault2 should override fault1
+      // ErrorCode and requestId from fault2 should override fault1
       expect(fullContext).toEqual({
         errorCode: 200,
         requestId: "def",
-        userId: "user123",
         sessionId: "session456",
+        userId: "user123",
       })
     })
 
@@ -867,8 +862,8 @@ describe("Fault", () => {
         .withDescription("Service failed", "Service unavailable")
 
       const flattened = fault2.flatten({
-        separator: " | ",
         formatter: (msg) => msg.toUpperCase(),
+        separator: " | ",
       })
 
       expect(flattened).toBe("SERVICE UNAVAILABLE | FAILED TO CONNECT | DATABASE ERROR")
@@ -899,44 +894,44 @@ describe("Fault", () => {
         const fault = Fault.create("LAYER_1")
           .withDescription("Failed to connect", "Database unavailable")
           .withContext({
+            database: "postgres",
             host: "localhost",
             port: 5432,
-            database: "postgres",
-            timeout: 5000,
             retries: 3,
+            timeout: 5000,
           })
 
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
-          name: "Fault",
-          tag: "LAYER_1",
-          message: "Database unavailable",
-          debug: "Failed to connect",
           context: {
+            database: "postgres",
             host: "localhost",
             port: 5432,
-            database: "postgres",
-            timeout: 5000,
             retries: 3,
+            timeout: 5000,
           },
+          debug: "Failed to connect",
+          message: "Database unavailable",
+          name: "Fault",
+          tag: "LAYER_1",
         })
       })
 
       it("should serialize a fault without debug message", () => {
         const fault = Fault.create("LAYER_2").withContext({
-          service: "database",
           method: "query",
+          service: "database",
           statusCode: 500,
         })
 
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          context: { method: "query", service: "database", statusCode: 500 },
+          message: "",
           name: "Fault",
           tag: "LAYER_2",
-          message: "",
-          context: { service: "database", method: "query", statusCode: 500 },
         })
         expect(serialized.debug).toBeUndefined()
       })
@@ -945,11 +940,11 @@ describe("Fault", () => {
         const rootError = new Error("Connection timeout")
         const fault1 = Fault.wrap(rootError)
           .withTag("LAYER_1")
-          .withContext({ host: "localhost", port: 5432, database: "postgres" })
+          .withContext({ database: "postgres", host: "localhost", port: 5432 })
 
         const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({
-          service: "database",
           method: "query",
+          service: "database",
           statusCode: 500,
         })
 
@@ -957,39 +952,39 @@ describe("Fault", () => {
           .withTag("LAYER_3")
           .withContext({
             endpoint: "/api/users",
+            headers: { "Content-Type": "application/json" },
             method: "GET",
             statusCode: 503,
-            headers: { "Content-Type": "application/json" },
           })
 
         const serialized = Fault.toSerializable(fault3)
 
         expect(serialized).toEqual({
-          name: "Fault",
-          tag: "LAYER_3",
-          message: "Connection timeout",
-          context: {
-            endpoint: "/api/users",
-            method: "GET",
-            statusCode: 503,
-            headers: { "Content-Type": "application/json" },
-          },
           cause: {
-            name: "Fault",
-            tag: "LAYER_2",
-            message: "Connection timeout",
-            context: { service: "database", method: "query", statusCode: 500 },
             cause: {
+              cause: {
+                message: "Connection timeout",
+                name: "Error",
+              },
+              context: { database: "postgres", host: "localhost", port: 5432 },
+              message: "Connection timeout",
               name: "Fault",
               tag: "LAYER_1",
-              message: "Connection timeout",
-              context: { host: "localhost", port: 5432, database: "postgres" },
-              cause: {
-                name: "Error",
-                message: "Connection timeout",
-              },
             },
+            context: { method: "query", service: "database", statusCode: 500 },
+            message: "Connection timeout",
+            name: "Fault",
+            tag: "LAYER_2",
           },
+          context: {
+            endpoint: "/api/users",
+            headers: { "Content-Type": "application/json" },
+            method: "GET",
+            statusCode: 503,
+          },
+          message: "Connection timeout",
+          name: "Fault",
+          tag: "LAYER_3",
         })
       })
 
@@ -1000,15 +995,15 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          cause: {
+            message: "Network failure",
+            name: "Error",
+          },
+          context: {},
+          debug: "Connection failed",
+          message: "Network failure",
           name: "Fault",
           tag: "LAYER_1",
-          message: "Network failure",
-          debug: "Connection failed",
-          context: {},
-          cause: {
-            name: "Error",
-            message: "Network failure",
-          },
         })
       })
 
@@ -1020,11 +1015,11 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          context: { service: "database" },
+          debug: "Invalid input",
+          message: "",
           name: "Fault",
           tag: "LAYER_2",
-          message: "",
-          debug: "Invalid input",
-          context: { service: "database" },
         })
         expect(serialized.cause).toBeUndefined()
       })
@@ -1108,8 +1103,9 @@ describe("Fault", () => {
     })
 
     it("should handle empty message strings", () => {
-      // biome-ignore lint/suspicious/useErrorMessage: we want to test the empty string case
-      const fault = Fault.wrap(new Error("")).withTag("LAYER_1")
+      const emptyError = new Error("placeholder")
+      emptyError.message = ""
+      const fault = Fault.wrap(emptyError).withTag("LAYER_1")
 
       expect(Fault.getIssue(fault)).toBe(".")
     })
@@ -1280,21 +1276,21 @@ describe("Fault", () => {
         .withTag("MY_TAG")
         .withDescription(myErr.message, "Something went really wrong")
         .withContext({
-          requestId: "req-123",
           errorCode: 500,
-          userId: "user-456",
+          requestId: "req-123",
           sessionId: "session-789",
           timestamp: 1_234_567_890,
+          userId: "user-456",
         })
 
       expect(fault.tag).toBe("MY_TAG")
       expect(fault.debug).toBe(myErr.message)
       expect(fault.context).toEqual({
-        requestId: "req-123",
         errorCode: 500,
-        userId: "user-456",
+        requestId: "req-123",
         sessionId: "session-789",
         timestamp: 1_234_567_890,
+        userId: "user-456",
       })
     })
 
@@ -1348,7 +1344,8 @@ describe("Fault", () => {
     })
 
     it("should wrap undefined", () => {
-      const fault = Fault.wrap(undefined)
+      const undefinedValue: unknown = void 0
+      const fault = Fault.wrap(undefinedValue)
 
       expect(fault.cause).toBeInstanceOf(Error)
       expect(fault.cause?.message).toBe("undefined")
@@ -1365,11 +1362,11 @@ describe("Fault", () => {
   describe("fromSerializable", () => {
     it("should deserialize a single fault", () => {
       const serialized = {
+        context: { host: "localhost", port: 5432 },
+        debug: "Failed to connect",
+        message: "Database unavailable",
         name: "Fault",
         tag: "LAYER_1" as const,
-        message: "Database unavailable",
-        debug: "Failed to connect",
-        context: { host: "localhost", port: 5432 },
       }
 
       const fault = Fault.fromSerializable(serialized)
@@ -1384,10 +1381,10 @@ describe("Fault", () => {
 
     it("should deserialize a fault without debug message", () => {
       const serialized = {
+        context: { service: "auth" },
+        message: "Unauthorized",
         name: "Fault",
         tag: "LAYER_2" as const,
-        message: "Unauthorized",
-        context: { service: "auth" },
       }
 
       const fault = Fault.fromSerializable(serialized)
@@ -1398,26 +1395,26 @@ describe("Fault", () => {
 
     it("should deserialize a fault chain", () => {
       const serialized = {
-        name: "Fault",
-        tag: "LAYER_3" as const,
-        message: "Connection timeout",
-        context: { endpoint: "/api/users" },
         cause: {
-          name: "Fault",
-          tag: "LAYER_2" as const,
-          message: "Connection timeout",
-          context: { service: "database" },
           cause: {
+            cause: {
+              message: "Connection timeout",
+              name: "Error",
+            },
+            context: { host: "localhost", port: 5432 },
+            message: "Connection timeout",
             name: "Fault",
             tag: "LAYER_1" as const,
-            message: "Connection timeout",
-            context: { host: "localhost", port: 5432 },
-            cause: {
-              name: "Error",
-              message: "Connection timeout",
-            },
           },
+          context: { service: "database" },
+          message: "Connection timeout",
+          name: "Fault",
+          tag: "LAYER_2" as const,
         },
+        context: { endpoint: "/api/users" },
+        message: "Connection timeout",
+        name: "Fault",
+        tag: "LAYER_3" as const,
       }
 
       const fault = Fault.fromSerializable(serialized)
@@ -1433,15 +1430,15 @@ describe("Fault", () => {
 
     it("should deserialize a fault ending in plain Error", () => {
       const serialized = {
+        cause: {
+          message: "Network failure",
+          name: "Error",
+        },
+        context: {},
+        debug: "Connection failed",
+        message: "Network failure",
         name: "Fault",
         tag: "NETWORK_ERROR" as const,
-        message: "Network failure",
-        debug: "Connection failed",
-        context: {},
-        cause: {
-          name: "Error",
-          message: "Network failure",
-        },
       }
 
       const fault = Fault.fromSerializable(serialized)
@@ -1455,8 +1452,8 @@ describe("Fault", () => {
 
     it("should throw when deserializing plain Error as Fault", () => {
       const serialized = {
-        name: "Error",
         message: "Something went wrong",
+        name: "Error",
       }
 
       expect(() => Fault.fromSerializable(serialized)).toThrow(
@@ -1473,7 +1470,7 @@ describe("Fault", () => {
 
       const serialized = Fault.toSerializable(original)
       const json = JSON.stringify(serialized)
-      const parsed = JSON.parse(json)
+      const parsed = JSON.parse(json) as SerializableFault
       const restored = Fault.fromSerializable(parsed)
 
       expect(restored.tag).toBe(original.tag)
@@ -1495,7 +1492,7 @@ describe("Fault", () => {
 
       const serialized = Fault.toSerializable(fault3)
       const json = JSON.stringify(serialized)
-      const parsed = JSON.parse(json)
+      const parsed = JSON.parse(json) as SerializableFault
       const restored = Fault.fromSerializable(parsed)
 
       const originalChain = fault3.unwrap()
@@ -1503,7 +1500,7 @@ describe("Fault", () => {
 
       expect(restoredChain).toHaveLength(originalChain.length)
 
-      for (let i = 0; i < originalChain.length; i++) {
+      for (let i = 0; i < originalChain.length; i += 1) {
         const orig = originalChain[i]
         const rest = restoredChain[i]
 
@@ -1525,7 +1522,7 @@ describe("Fault", () => {
 
       const serialized = Fault.toSerializable(original)
       const json = JSON.stringify(serialized)
-      const parsed = JSON.parse(json)
+      const parsed = JSON.parse(json) as SerializableFault
       const restored = Fault.fromSerializable(parsed)
 
       expect(restored.context).toEqual({})
@@ -1545,7 +1542,7 @@ describe("Fault", () => {
 
       const serialized = Fault.toSerializable(fault2)
       const json = JSON.stringify(serialized)
-      const parsed = JSON.parse(json)
+      const parsed = JSON.parse(json) as SerializableFault
       const restored = Fault.fromSerializable(parsed)
 
       expect(restored.getTags()).toEqual(["LAYER_2", "LAYER_1"])
@@ -1586,7 +1583,7 @@ describe("Fault", () => {
     it("should have typed context when withContext is called", () => {
       const fault = Fault.wrap(new Error("test"))
         .withTag("MY_TAG")
-        .withContext({ requestId: "123", errorCode: 500 })
+        .withContext({ errorCode: 500, requestId: "123" })
 
       // Direct access works - no narrowing needed
       expect(fault.context.requestId).toBe("123")
@@ -1615,9 +1612,9 @@ describe("Fault", () => {
       const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/api" })
 
       expect(fault3.getFullContext()).toEqual({
+        endpoint: "/api",
         host: "localhost",
         port: 5432,
-        endpoint: "/api",
       })
     })
   })

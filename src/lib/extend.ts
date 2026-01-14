@@ -1,8 +1,7 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: Used for generic constructors
-// biome-ignore-all lint/nursery/noShadow: Allow shadowing of args variable
+// oxlint-disable typescript/no-explicit-any
 
-import { BaseFault, IS_FAULT } from "./index"
 import type { ContextForTag, FaultTag, PartialContextForTag } from "./types"
+import { BaseFault, IS_FAULT } from "./index"
 
 // Helper type to ensure extended faults have BaseFault methods
 export type WithBaseFaultMethods = Pick<
@@ -23,9 +22,7 @@ export type WithBaseFaultMethods = Pick<
  * Both `withContext()` and `clearContext()` are available on all tagged faults.
  */
 export interface ExtendedTaggedFault<
-  TErrorClass extends new (
-    ...args: any[]
-  ) => Error,
+  TErrorClass extends new (...args: any[]) => Error,
   T extends FaultTag,
 > {
   tag: T
@@ -114,10 +111,10 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
       super(...args)
       // Initialize the IS_FAULT symbol property
       Object.defineProperty(this, IS_FAULT, {
+        configurable: false,
+        enumerable: false,
         value: true,
         writable: false,
-        enumerable: false,
-        configurable: false,
       })
     }
 
@@ -167,9 +164,8 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
 
     constructor(fault: ExtendedFaultInstance, tag: FaultTag, context?: ContextForTag<FaultTag>) {
       // Get constructor args from fault to call parent constructor
-      const args = Array.from(
-        { length: ErrorClass.length },
-        () => undefined
+      const args = Array.from({ length: ErrorClass.length }).fill(
+        null
       ) as ConstructorParameters<ErrorClassType>
       super(...args)
 

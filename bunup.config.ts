@@ -1,6 +1,7 @@
 import { defineConfig } from "bunup"
 
 export default defineConfig({
+  clean: true,
   dts: {
     splitting: true,
   },
@@ -9,5 +10,4 @@ export default defineConfig({
   outDir: "dist",
   sourcemap: true,
   target: "node",
-  clean: true,
 })
