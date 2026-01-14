@@ -8,6 +8,8 @@
     "jsx": "react-jsx",
     "allowJs": true,
     "moduleResolution": "bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
   "include": ["src/**/*.ts"],

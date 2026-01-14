@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
-import type { SerializableFault } from "../types"
-import Faultier, { IS_FAULT, UNKNOWN } from "../index"
+import type { SerializableFault } from "#lib/types.ts"
+import Faultier, { IS_FAULT, UNKNOWN } from "#lib/index.ts"
 
 // Define test registry
 type TestRegistry = {

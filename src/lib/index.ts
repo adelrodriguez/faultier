@@ -4,8 +4,8 @@ import type {
   TagBrand,
   SerializableError,
   SerializableFault,
-} from "./types"
-import { HAS_PUNCTUATION } from "./utils"
+} from "#lib/types.ts"
+import { HAS_PUNCTUATION } from "#lib/utils.ts"
 
 const defaultTrimFormatter = (msg: string) => msg.trim()
 
