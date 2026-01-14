@@ -40,7 +40,6 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 - **Typed context** - Associate structured metadata with each error type
 - **Dual messages** - Separate debug messages for logs from user-facing messages
 - **Error chaining** - Wrap and re-throw errors while preserving the full chain
-- **Extensible** - Extend existing Error classes with Fault functionality
 - **Serializable** - Convert faults to JSON and reconstruct them
 - **No dependencies** - Zero runtime dependencies
 
@@ -228,31 +227,27 @@ if (Fault.isUnknown(result)) {
 }
 ```
 
-### Extending Error Classes
+### Working with Custom Error Classes
 
-Use `faultier/extend` to add Fault functionality to existing Error classes:
+You can wrap custom Error classes and search for them in the error chain:
 
 ```ts
-import { extend } from "faultier/extend"
-
 class HttpError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number
-  ) {
+  constructor(message: string, public statusCode: number) {
     super(message)
   }
 }
 
-const HttpFault = extend(HttpError)
-
-const fault = HttpFault.create("Not found", 404)
+// Wrap your custom error
+throw Fault.wrap(new HttpError("Not found", 404))
   .withTag("HTTP_ERROR")
   .withContext({ path: "/api/users" })
 
-console.log(fault.statusCode) // 404
-console.log(fault.tag) // "HTTP_ERROR"
-console.log(fault.flatten()) // Works like regular Fault
+// Later, find the original error in the chain
+const httpError = Fault.findCause(error, HttpError)
+if (httpError) {
+  console.log(httpError.statusCode) // 404 - Fully typed!
+}
 ```
 
 ## API Reference
@@ -493,6 +488,23 @@ try {
   // TypeScript now knows error is a Fault
   console.log(error.tag)
   console.log(error.context)
+}
+```
+
+#### `Fault.findCause(error, ErrorClass)`
+
+Searches the error chain for a cause matching the given Error class. Returns the first matching error, or undefined if not found.
+
+```ts
+class HttpError extends Error {
+  constructor(message: string, public statusCode: number) {
+    super(message)
+  }
+}
+
+const httpError = Fault.findCause(error, HttpError)
+if (httpError) {
+  console.log(httpError.statusCode) // Fully typed!
 }
 ```
 

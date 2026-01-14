@@ -476,6 +476,39 @@ export abstract class BaseFault extends Error {
   }
 
   /**
+   * Searches the error chain for a cause matching the given Error class.
+   * Returns the first matching error, or undefined if not found.
+   *
+   * @param error - The error to search (typically a Fault)
+   * @param ErrorClass - The Error class constructor to match against
+   * @returns The first matching error in the chain, or undefined
+   *
+   * @example
+   * ```ts
+   * class HttpError extends Error {
+   *   constructor(message: string, public statusCode: number) {
+   *     super(message)
+   *   }
+   * }
+   *
+   * const httpError = Fault.findCause(error, HttpError)
+   * if (httpError) {
+   *   console.log(httpError.statusCode) // Fully typed!
+   * }
+   * ```
+   */
+  static findCause<T extends Error>(
+    error: unknown,
+    // oxlint-disable-next-line typescript/no-explicit-any
+    ErrorClass: new (...args: any[]) => T
+  ): T | undefined {
+    if (!BaseFault.isFault(error)) {
+      return undefined
+    }
+    return error.unwrap().find((e): e is T => e instanceof ErrorClass)
+  }
+
+  /**
    * Exhaustively dispatches a fault to handlers for all registered tags.
    * Use this in global error handlers where you need to handle every possible fault type.
    * For partial matching, use `matchTag` or `matchTags` instead.

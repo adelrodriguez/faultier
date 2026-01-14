@@ -354,6 +354,169 @@ describe("Fault", () => {
     })
   })
 
+  describe("findCause", () => {
+    it("should find a cause matching the error class", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+          this.name = "HttpError"
+        }
+      }
+
+      const httpError = new HttpError("Not found", 404)
+      const fault = Fault.wrap(httpError).withTag("LAYER_1")
+
+      const found = Fault.findCause(fault, HttpError)
+
+      expect(found).toBe(httpError)
+      expect(found?.statusCode).toBe(404)
+      expect(found?.message).toBe("Not found")
+    })
+
+    it("should return undefined if no match found", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
+
+      const plainError = new Error("Something went wrong")
+      const fault = Fault.wrap(plainError).withTag("LAYER_1")
+
+      const found = Fault.findCause(fault, HttpError)
+
+      expect(found).toBeUndefined()
+    })
+
+    it("should return undefined for non-Fault errors", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
+
+      const plainError = new Error("Not a fault")
+
+      const found = Fault.findCause(plainError, HttpError)
+
+      expect(found).toBeUndefined()
+    })
+
+    it("should find deeply nested causes", () => {
+      class DatabaseError extends Error {
+        constructor(
+          message: string,
+          public query: string
+        ) {
+          super(message)
+          this.name = "DatabaseError"
+        }
+      }
+
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+          this.name = "HttpError"
+        }
+      }
+
+      const dbError = new DatabaseError("Query failed", "SELECT * FROM users")
+      const httpError = new HttpError("Request failed", 500)
+      // Create chain: fault2 -> fault1 -> dbError
+      const fault1 = Fault.wrap(dbError).withTag("LAYER_1")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
+
+      const foundDb = Fault.findCause(fault2, DatabaseError)
+
+      expect(foundDb).toBe(dbError)
+      expect(foundDb?.query).toBe("SELECT * FROM users")
+
+      // Test finding httpError in a separate chain
+      const fault3 = Fault.wrap(httpError).withTag("LAYER_3")
+      const foundHttp = Fault.findCause(fault3, HttpError)
+
+      expect(foundHttp).toBe(httpError)
+      expect(foundHttp?.statusCode).toBe(500)
+    })
+
+    it("should return the first match when multiple exist", () => {
+      class CustomError extends Error {
+        constructor(
+          message: string,
+          public code: number
+        ) {
+          super(message)
+          this.name = "CustomError"
+        }
+      }
+
+      const error1 = new CustomError("First", 1)
+      const error2 = new CustomError("Second", 2)
+      // Create chain: fault2 -> fault1 -> error1
+      // fault1 wraps error1, fault2 wraps fault1
+      const fault1 = Fault.wrap(error1).withTag("LAYER_1")
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2")
+
+      const found = Fault.findCause(fault2, CustomError)
+
+      // Should find error1 (which is in the chain)
+      expect(found).toBe(error1)
+      expect(found?.code).toBe(1)
+
+      // Test with error2 as the direct cause
+      const fault3 = Fault.wrap(error2).withTag("LAYER_3")
+      const found2 = Fault.findCause(fault3, CustomError)
+
+      // Should find error2 (which fault3 wraps)
+      expect(found2).toBe(error2)
+      expect(found2?.code).toBe(2)
+    })
+
+    it("should work with built-in error types", () => {
+      const typeError = new TypeError("Invalid type")
+      const fault = Fault.wrap(typeError).withTag("LAYER_1")
+
+      const found = Fault.findCause(fault, TypeError)
+
+      expect(found).toBe(typeError)
+      expect(found?.message).toBe("Invalid type")
+    })
+
+    it("should preserve type information", () => {
+      class HttpError extends Error {
+        constructor(
+          message: string,
+          public statusCode: number
+        ) {
+          super(message)
+        }
+      }
+
+      const httpError = new HttpError("Not found", 404)
+      const fault = Fault.wrap(httpError).withTag("LAYER_1")
+
+      const found = Fault.findCause(fault, HttpError)
+
+      if (found) {
+        // TypeScript should know found is HttpError with statusCode
+        expect(typeof found.statusCode).toBe("number")
+        expect(found.statusCode).toBe(404)
+      }
+    })
+  })
+
   describe("handle", () => {
     it("should return handler result when error is a Fault with matching handler", () => {
       const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
