@@ -368,6 +368,20 @@ export abstract class BaseFault extends Error {
       throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
     }
 
+    // Validate required fields for SerializableFault
+    if (typeof data.name !== "string") {
+      throw new Error("Invalid serialized fault: 'name' must be a string")
+    }
+    if (typeof data.message !== "string") {
+      throw new Error("Invalid serialized fault: 'message' must be a string")
+    }
+    if (typeof data.tag !== "string") {
+      throw new Error("Invalid serialized fault: 'tag' must be a string")
+    }
+    if (data.context !== undefined && (typeof data.context !== "object" || data.context === null)) {
+      throw new Error("Invalid serialized fault: 'context' must be an object or undefined")
+    }
+
     const cause = reconstructCause(data.cause)
 
     // Create TaggedFault instance with the deserialized data
@@ -404,6 +418,7 @@ export abstract class BaseFault extends Error {
       separator = " ",
       formatter = (msg: string) => {
         const trimmed = msg.trim()
+        if (!trimmed) return "" // Skip empty messages
         return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
       },
     } = options ?? {}
@@ -412,6 +427,7 @@ export abstract class BaseFault extends Error {
       .unwrap()
       .filter((e) => BaseFault.isFault(e))
       .map((err) => formatter(err.message))
+      .filter((msg) => msg !== "") // Filter out empty formatted messages
       .join(separator)
   }
 
