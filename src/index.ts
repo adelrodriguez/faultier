@@ -1,6 +1,6 @@
-import Faultier from "./lib"
+import Faultier from "#lib/index.ts"
 
-export { define, IS_FAULT, UNKNOWN } from "./lib"
+export { define, IS_FAULT, UNKNOWN } from "#lib/index.ts"
 export type {
   ChainFormattingOptions,
   FaultContext,
@@ -9,6 +9,6 @@ export type {
   SerializableFault,
   Tagged,
   TagsOf,
-} from "./lib/types"
+} from "#lib/types.ts"
 
 export default Faultier

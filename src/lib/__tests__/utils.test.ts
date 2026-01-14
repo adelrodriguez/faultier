@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { HAS_PUNCTUATION } from "../utils"
+import { HAS_PUNCTUATION } from "#lib/utils.ts"
 
 describe("utils", () => {
   describe("HAS_PUNCTUATION", () => {

@@ -4,6 +4,10 @@
 
 - Always use the `changeset-writer` agent when you need to create or update changeset entries based on git changes.
 
+## Validation
+
+- Always run `bun run format`, `bun run check`, `bun run typecheck`, and `bun test` after code changes.
+
 ## Bun
 
 Default to using Bun instead of Node.js.
