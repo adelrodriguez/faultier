@@ -7,7 +7,7 @@ export type {
   FaultJSON,
   SerializableError,
   SerializableFault,
-  Tagged,
+  TaggedFault,
   TagsOf,
 } from "#lib/types.ts"
 

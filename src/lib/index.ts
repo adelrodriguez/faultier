@@ -29,11 +29,23 @@ type WithIsFault = {
  * export const Fault = defineFault<MyRegistry>()
  *
  * // Now fully typed:
- * Fault.create("auth.unauthenticated").withContext({ requestId: "123" })
+ * Fault.create("auth.unauthenticated", { requestId: "123" })
  * ```
  */
-export function define<TRegistry extends Record<string, Record<string, unknown>>>() {
+export function define<TRegistry extends Record<string, Record<string, unknown> | undefined>>() {
   type Tag = keyof TRegistry & string
+
+  type RegistryContext<TTag extends Tag> = TRegistry[TTag]
+
+  type ContextForTag<TTag extends Tag> = [RegistryContext<TTag>] extends [never]
+    ? undefined
+    : RegistryContext<TTag>
+
+  type TagContextArgs<TTag extends Tag> = [RegistryContext<TTag>] extends [never]
+    ? []
+    : undefined extends RegistryContext<TTag>
+      ? [context?: Exclude<RegistryContext<TTag>, undefined>]
+      : [context: RegistryContext<TTag>]
 
   type HandlerReturnUnion<THandlers> = {
     [K in keyof THandlers]-?: THandlers[K] extends (
@@ -47,7 +59,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
   // Internal data structure - loosely typed to avoid casting in method bodies
   interface FaultData {
     tag: string
-    context: Record<string, unknown>
+    context?: Record<string, unknown>
     debug?: string
   }
 
@@ -62,7 +74,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
 
     // Internal state - mutations happen here without type gymnastics
     protected _data: FaultData = {
-      context: {},
+      context: undefined,
       tag: "No fault tag set",
     }
 
@@ -71,7 +83,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       return this._data.tag as Tag | "No fault tag set"
     }
 
-    get context(): Record<string, unknown> {
+    get context(): Record<string, unknown> | undefined {
       return this._data.context
     }
 
@@ -98,10 +110,11 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     protected _clone(): this {
       const proto = Object.getPrototypeOf(this)
+      const context = this._data.context
       // Object.create accepts null, but TypeScript needs help with the type
       // oxlint-disable-next-line typescript/no-unsafe-argument
       const clone = Object.create(proto ?? null) as unknown as this
-      clone._data = { ...this._data, context: { ...this._data.context } }
+      clone._data = { ...this._data, context: context ? { ...context } : undefined }
       clone.name = this.name
       clone.message = this.message
       clone.stack = this.stack
@@ -116,22 +129,13 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
-     * Sets the tag for this fault.
+     * Sets the tag for this fault and optional context.
      */
-    withTag<T extends Tag>(tag: T): this {
+    withTag<TTag extends Tag>(tag: TTag, ...args: TagContextArgs<TTag>): Retagged<this, TTag> {
       const clone = this._clone()
       clone._data.tag = tag
-      clone._data.context = {}
-      return clone
-    }
-
-    /**
-     * Sets the context for this fault.
-     */
-    withContext(context: Record<string, unknown>): this {
-      const clone = this._clone()
-      clone._data.context = context
-      return clone
+      clone._data.context = args[0]
+      return clone as unknown as Retagged<this, TTag>
     }
 
     /**
@@ -230,7 +234,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       const merged: Record<string, unknown> = {}
 
       for (const fault of faults.toReversed()) {
-        Object.assign(merged, fault.context)
+        Object.assign(merged, fault.context ?? {})
       }
 
       return merged
@@ -240,9 +244,10 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Converts this fault to a JSON-serializable object.
      */
     toJSON(): FaultJSON {
+      const context = this.context
       return {
         cause: this.cause?.message,
-        context: this.context,
+        ...(context === undefined ? {} : { context }),
         debug: FaultBase.getDebug(this, { separator: " → " }),
         message: FaultBase.getIssue(this, { separator: " → " }),
         name: this.name,
@@ -257,13 +262,15 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Preserves the tag type through method chaining.
      * Uses polymorphic `this` so extended classes return their own type with custom methods.
      */
-    static create<T extends Tag, This extends typeof FaultBase>(
+    static create<TTag extends Tag, This extends typeof FaultBase>(
       this: This,
-      tag: T
-    ): Tagged<InstanceType<This>, T> {
+      tag: TTag,
+      ...args: TagContextArgs<TTag>
+    ): Tagged<InstanceType<This>, TTag> {
       const instance = new this()
       instance._data.tag = tag
-      return instance as unknown as Tagged<InstanceType<This>, T>
+      instance._data.context = args[0]
+      return instance as unknown as Tagged<InstanceType<This>, TTag>
     }
 
     /**
@@ -393,13 +400,13 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Serializes a fault and its entire error chain into a plain object.
      */
     static toSerializable(fault: FaultBase): SerializableFault {
+      const context = fault.context
       const serialized: SerializableFault = {
-        // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-        context: fault.context as Record<string, unknown>,
         debug: fault.debug,
         message: fault.message,
         name: fault.name,
         tag: fault.tag,
+        ...(context === undefined ? {} : { context }),
       }
 
       if (fault.cause) {
@@ -464,7 +471,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       const instance = new this(data.message, { cause })
       instance._data.tag = data.tag
       // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-      instance._data.context = (data.context ?? {}) as Record<string, unknown>
+      instance._data.context = data.context as Record<string, unknown> | undefined
       instance._data.debug = data.debug
 
       return instance as InstanceType<This>
@@ -515,8 +522,12 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
   type Tagged<TBase, TTag extends Tag> = TBase &
     TagBrand<TTag> & {
       readonly tag: TTag
-      readonly context: Partial<TRegistry[TTag]>
+      readonly context: ContextForTag<TTag>
     }
+
+  type Untagged<TBase> = TBase extends Tagged<infer Base, Tag> ? Base : TBase
+
+  type Retagged<TBase, TTag extends Tag> = Tagged<Untagged<TBase>, TTag>
 
   return FaultBase
 }

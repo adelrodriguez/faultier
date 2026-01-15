@@ -71,7 +71,7 @@ import Faultier from "faultier"
 // Define your error registry
 type AppErrors = {
   DATABASE_ERROR: { query: string; host?: string }
-  AUTH_ERROR: { userId: string; reason: string }
+  AUTH_ERROR?: { userId: string; reason: string }
   NOT_FOUND: { resource: string; id: string }
   VALIDATION_ERROR: { field: string; message: string }
   GENERIC_ERROR: never // No context allowed
@@ -85,12 +85,11 @@ try {
   await database.query()
 } catch (err) {
   throw Fault.wrap(err) // Wrap any error as a Fault
-    .withTag("DATABASE_ERROR") // Classify with a tag
-    .withContext({ query: "SELECT * FROM users" }) // Attach metadata
+    .withTag("DATABASE_ERROR", { query: "SELECT * FROM users" }) // Classify with tag + context
 }
 
 // Or create a fault directly when you control the error
-throw Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" })
+throw Fault.create("NOT_FOUND", { resource: "user", id: "123" })
 
 // Separate debug info from user-facing messages
 throw Fault.wrap(err).withTag("PAYMENT_ERROR").withDescription(
@@ -109,10 +108,10 @@ import Faultier from "faultier"
 // Define your error registry
 type AppErrors = {
   DATABASE_ERROR: { query: string; host?: string }
-  AUTH_ERROR: { userId: string; reason: string }
+  AUTH_ERROR?: { userId: string; reason: string }
   NOT_FOUND: { resource: string; id: string }
   VALIDATION_ERROR: { field: string; message: string }
-  GENERIC_ERROR: never // No context allowed - withContext will error
+  GENERIC_ERROR: never // No context allowed
 }
 
 // Create your typed Fault class
@@ -123,22 +122,23 @@ Now TypeScript enforces correct tag/context combinations:
 
 ```ts
 // Type-safe: context must match the tag
-Fault.create("DATABASE_ERROR").withContext({ query: "SELECT *" }) // OK
+Fault.create("DATABASE_ERROR", { query: "SELECT *" }) // OK
 
-Fault.create("DATABASE_ERROR").withContext({ userId: "123" }) // Type error: missing 'query'
+Fault.create("DATABASE_ERROR", { userId: "123" }) // Type error: missing 'query'
 
-Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" }) // OK
+Fault.create("NOT_FOUND", { resource: "user", id: "123" }) // OK
 
-Fault.create("GENERIC_ERROR").withContext({ anything: "value" }) // Type error: withContext returns never
+Fault.create("GENERIC_ERROR") // OK
+Fault.create("GENERIC_ERROR", { anything: "value" }) // Type error: context not allowed
 ```
 
 #### Clean return types for tagged faults
 
 When you want to annotate function return types (or public API surfaces), use the helper type:
-`Tagged<typeof Fault, "TAG">`.
+`TaggedFault<typeof Fault, "TAG">`.
 
 ```ts
-import Faultier, { type Tagged, type Tags } from "faultier"
+import Faultier, { type TaggedFault as TaggedFaultType, type TagsOf } from "faultier"
 
 type AppErrors = {
   DATABASE_ERROR: { query: string; host?: string }
@@ -147,20 +147,22 @@ type AppErrors = {
 
 export class Fault extends Faultier.define<AppErrors>() {}
 
-export function runQuery(): Tagged<typeof Fault, "DATABASE_ERROR"> {
-  // Note: context is always typed as Partial<...> because it may not be set yet
-  return Fault.create("DATABASE_ERROR").withContext({ query: "SELECT 1" })
+type TaggedFault<TTag extends TagsOf<typeof Fault>> = TaggedFaultType<typeof Fault, TTag>
+
+export function runQuery(): TaggedFault<"DATABASE_ERROR"> {
+  // Note: optional tags yield `context | undefined`
+  return Fault.create("DATABASE_ERROR", { query: "SELECT 1" })
 }
 
 // You can also extract the full tag union for a given Fault class:
-export type FaultTag = Tags<typeof Fault>
+export type FaultTag = TagsOf<typeof Fault>
 ```
 
-When reading context, use optional chaining (or checks) since keys may be absent:
+When reading context for optional tags (marked with `?`), use optional chaining (or checks):
 
 ```ts
-const fault = Fault.create("DATABASE_ERROR")
-fault.context.query?.toUpperCase()
+const fault = Fault.wrap(new Error("oops")).withTag("AUTH_ERROR")
+fault.context?.reason?.toUpperCase()
 ```
 
 For larger applications with many error types, you can organize them into groups:
@@ -213,7 +215,7 @@ try {
 Extract information from the chain:
 
 ```ts
-const fault = Fault.wrap(originalError).withTag("API_ERROR").withContext({ endpoint: "/users" })
+const fault = Fault.wrap(originalError).withTag("API_ERROR", { endpoint: "/users" })
 
 fault.unwrap() // [fault, ...causes, originalError] - full chain as array
 fault.flatten() // "API failed -> Service error -> Connection timeout" - messages joined
@@ -319,7 +321,7 @@ export class Fault extends Faultier.define<AppErrors>() {
 }
 
 // Usage
-const fault = Fault.create("db.timeout").withContext({ timeoutMs: 5000 })
+const fault = Fault.create("db.timeout", { timeoutMs: 5000 })
 if (fault.isRetryable()) {
   // Retry logic
 }
@@ -331,7 +333,7 @@ if (error instanceof Fault) {
 }
 ```
 
-**Note:** Chaining methods (`withTag`, `withContext`, `withDescription`, etc.) are immutable - they return new instances. This means you can safely reuse intermediate results:
+**Note:** Chaining methods (`withTag`, `withDescription`, `withDebug`, etc.) are immutable - they return new instances. This means you can safely reuse intermediate results:
 
 ```ts
 const base = Fault.create("db.timeout")
@@ -359,9 +361,7 @@ class HttpError extends Error {
 }
 
 // Wrap your custom error
-throw Fault.wrap(new HttpError("Not found", 404))
-  .withTag("HTTP_ERROR")
-  .withContext({ path: "/api/users" })
+throw Fault.wrap(new HttpError("Not found", 404)).withTag("HTTP_ERROR", { path: "/api/users" })
 
 // Later, find the original error in the chain
 const httpError = Fault.findCause(error, HttpError)
@@ -397,17 +397,15 @@ class Fault extends Faultier.define<MyRegistry>() {}
 Wraps any error into a Fault instance.
 
 ```ts
-Fault.wrap(new Error("Something failed"))
-  .withTag("INTERNAL_ERROR")
-  .withContext({ operation: "sync" })
+Fault.wrap(new Error("Something failed")).withTag("INTERNAL_ERROR", { operation: "sync" })
 ```
 
-#### `Fault.create(tag)`
+#### `Fault.create(tag, context?)`
 
-Creates a new Fault with the specified tag.
+Creates a new Fault with the specified tag and optional context.
 
 ```ts
-Fault.create("VALIDATION_ERROR").withContext({
+Fault.create("VALIDATION_ERROR", {
   field: "email",
   message: "Invalid format",
 })
@@ -433,9 +431,7 @@ try {
 Converts a fault and its entire error chain to a plain object for serialization.
 
 ```ts
-const fault = Fault.create("API_ERROR")
-  .withContext({ endpoint: "/users" })
-  .withDescription("Request failed")
+const fault = Fault.create("API_ERROR", { endpoint: "/users" }).withDescription("Request failed")
 
 const serialized = Fault.toSerializable(fault)
 // {
@@ -611,13 +607,9 @@ if (httpError) {
 
 ### Instance Methods
 
-#### `fault.withTag(tag)`
+#### `fault.withTag(tag, context?)`
 
-Sets the tag for a wrapped fault. Returns a new instance (immutable).
-
-#### `fault.withContext(context)`
-
-Sets the context for a tagged fault. Returns a new instance (immutable).
+Sets the tag for a wrapped fault and optional context. Returns a new instance (immutable).
 
 #### `fault.withDescription(debug, message?)`
 

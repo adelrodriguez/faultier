@@ -1,30 +1,30 @@
-import { describe, expect, it } from "bun:test"
-import type { SerializableFault } from "#lib/types.ts"
+import { describe, expect, expectTypeOf, it } from "bun:test"
+import type { SerializableFault, TaggedFault as TaggedFaultType, TagsOf } from "#lib/types.ts"
 import Faultier, { IS_FAULT, UNKNOWN } from "#lib/index.ts"
 
 // Define test registry
 type TestRegistry = {
-  MY_TAG: {
+  MY_TAG?: {
     requestId?: string
     errorCode?: number
     userId?: string
     sessionId?: string
     timestamp: number
   }
-  LAYER_1: {
+  LAYER_1?: {
     host?: string
     port?: number
     database?: string
     timeout?: number
     retries?: number
   }
-  LAYER_2: {
+  LAYER_2?: {
     service?: string
     method?: string
     statusCode?: number
     timeout?: number
   }
-  LAYER_3: {
+  LAYER_3?: {
     endpoint?: string
     method?: string
     statusCode?: number
@@ -48,19 +48,37 @@ class Fault extends Faultier.define<TestRegistry>() {
   }
 }
 
+type TaggedFault<TTag extends TagsOf<typeof Fault>> = TaggedFaultType<typeof Fault, TTag>
+
 describe("Fault", () => {
+  describe("type helpers", () => {
+    it("should create union-friendly TaggedFault helpers", () => {
+      const fault =
+        Math.random() > 0.5
+          ? Fault.wrap(new Error("test")).withTag("LAYER_1", { host: "localhost" })
+          : Fault.wrap(new Error("test")).withTag("LAYER_2", { service: "database" })
+
+      expectTypeOf(fault).toExtend<TaggedFault<"LAYER_1"> | TaggedFault<"LAYER_2">>()
+    })
+
+    it("should align with withTag return types", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("LAYER_1", { host: "localhost" })
+
+      expectTypeOf(fault).toExtend<TaggedFault<"LAYER_1">>()
+    })
+  })
+
   describe("toJSON", () => {
     it("should use getIssue and getDebug helpers for message and debug", () => {
       const err = new Error("Something happened")
       const fault = Fault.wrap(err)
-        .withTag("MY_TAG")
+        .withTag("MY_TAG", { errorCode: 100, requestId: "123", timestamp: 1 })
         .withDescription("Something went really wrong")
-        .withContext({ errorCode: 100, requestId: "123" })
 
       expect(JSON.stringify(fault)).toEqual(
         JSON.stringify({
           cause: "Something happened",
-          context: { errorCode: 100, requestId: "123" },
+          context: { errorCode: 100, requestId: "123", timestamp: 1 },
           debug: "Something went really wrong.",
           message: "Something happened.",
           name: "Fault",
@@ -91,15 +109,14 @@ describe("Fault", () => {
   describe("modifiers", () => {
     it("should apply the modifiers to the fault", () => {
       const fault = Fault.wrap(new Error("something happened"))
-        .withTag("MY_TAG")
+        .withTag("MY_TAG", { errorCode: 100, requestId: "123", timestamp: 1 })
         .withDescription("Something went really wrong")
-        .withContext({ errorCode: 100, requestId: "123" })
 
       expect(fault.name).toBe("Fault")
       expect(fault.tag).toBe("MY_TAG")
       expect(fault.message).toBe("something happened")
       expect(fault.debug).toBe("Something went really wrong")
-      expect(fault.context).toEqual({ errorCode: 100, requestId: "123" })
+      expect(fault.context).toEqual({ errorCode: 100, requestId: "123", timestamp: 1 })
     })
 
     describe("withTag", () => {
@@ -145,13 +162,12 @@ describe("Fault", () => {
 
       it("should allow chaining", () => {
         const fault = Fault.wrap(new Error("test"))
-          .withTag("MY_TAG")
+          .withTag("MY_TAG", { requestId: "123", timestamp: 1 })
           .withDebug("Debug message")
-          .withContext({ requestId: "123" })
 
         expect(fault.debug).toBe("Debug message")
         expect(fault.tag).toBe("MY_TAG")
-        expect(fault.context).toEqual({ requestId: "123" })
+        expect(fault.context).toEqual({ requestId: "123", timestamp: 1 })
       })
     })
 
@@ -174,26 +190,32 @@ describe("Fault", () => {
 
       it("should allow chaining", () => {
         const fault = Fault.wrap(new Error("test"))
-          .withTag("MY_TAG")
+          .withTag("MY_TAG", { requestId: "123", timestamp: 1 })
           .withMessage("User message")
-          .withContext({ requestId: "123" })
 
         expect(fault.message).toBe("User message")
         expect(fault.tag).toBe("MY_TAG")
-        expect(fault.context).toEqual({ requestId: "123" })
+        expect(fault.context).toEqual({ requestId: "123", timestamp: 1 })
       })
     })
 
-    describe("withContext", () => {
-      it("should default to empty object", () => {
-        const fault = Fault.wrap(new Error("test"))
+    describe("withTag context", () => {
+      it("should default context to undefined", () => {
+        const fault = Fault.wrap(new Error("test")).withTag("MY_TAG")
 
-        expect(fault.context).toEqual({})
+        expect(fault.context).toBeUndefined()
       })
 
-      it("should set context", () => {
-        const fault = Fault.create("MY_TAG").withContext({ errorCode: 100, requestId: "123" })
-        expect(fault.context).toEqual({ errorCode: 100, requestId: "123" })
+      it("should set context when provided", () => {
+        const fault = Fault.create("MY_TAG", { errorCode: 100, requestId: "123", timestamp: 1 })
+
+        expect(fault.context).toEqual({ errorCode: 100, requestId: "123", timestamp: 1 })
+      })
+
+      it("should keep context undefined for no-context tags", () => {
+        const fault = Fault.create("NO_CONTEXT_TAG")
+
+        expect(fault.context).toBeUndefined()
       })
     })
   })
@@ -412,33 +434,33 @@ describe("Fault", () => {
     })
 
     it("should provide correctly typed fault in callback", () => {
-      const fault = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({ errorCode: 100, requestId: "123" })
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG", {
+        errorCode: 100,
+        requestId: "123",
+        timestamp: 1,
+      })
 
       const result = Fault.matchTag(fault, "MY_TAG", (f) => {
-        expect(f.context.requestId).toBe("123")
-        expect(f.context.errorCode).toBe(100)
-        return f.context.requestId
+        expect(f.context?.requestId).toBe("123")
+        expect(f.context?.errorCode).toBe(100)
+        return f.context?.requestId
       })
 
       expect(result).toBe("123")
     })
 
     it("should work with faults created via Fault.create", () => {
-      const fault = Fault.create("MY_TAG").withContext({ requestId: "123" })
+      const fault = Fault.create("MY_TAG", { requestId: "123", timestamp: 1 })
 
-      const result = Fault.matchTag(fault, "MY_TAG", (f) => f.context.requestId)
+      const result = Fault.matchTag(fault, "MY_TAG", (f) => f.context?.requestId)
 
       expect(result).toBe("123")
     })
 
     it("should work with faults created via Fault.wrap", () => {
-      const fault = Fault.wrap(new Error("original"))
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost" })
+      const fault = Fault.wrap(new Error("original")).withTag("LAYER_1", { host: "localhost" })
 
-      const result = Fault.matchTag(fault, "LAYER_1", (f) => f.context.host)
+      const result = Fault.matchTag(fault, "LAYER_1", (f) => f.context?.host)
 
       expect(result).toBe("localhost")
     })
@@ -502,15 +524,17 @@ describe("Fault", () => {
     })
 
     it("should provide type-safe handler arguments with context", () => {
-      const fault = Fault.wrap(new Error("test"))
-        .withTag("MY_TAG")
-        .withContext({ errorCode: 100, requestId: "123" })
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG", {
+        errorCode: 100,
+        requestId: "123",
+        timestamp: 1,
+      })
 
       const result = Fault.matchTags(fault, {
         MY_TAG: (f) => {
-          expect(f.context.requestId).toBe("123")
-          expect(f.context.errorCode).toBe(100)
-          return f.context.requestId
+          expect(f.context?.requestId).toBe("123")
+          expect(f.context?.errorCode).toBe(100)
+          return f.context?.requestId
         },
       })
 
@@ -571,11 +595,9 @@ describe("Fault", () => {
 
     it("should traverse multi-level fault chains", () => {
       const dbError = new Error("Database timeout")
-      const fault1 = Fault.wrap(dbError)
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost", port: 5432 })
-      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
-      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
+      const fault1 = Fault.wrap(dbError).withTag("LAYER_1", { host: "localhost", port: 5432 })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2", { service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3", { endpoint: "/login" })
 
       const chain = fault3.unwrap()
       expect(chain).toHaveLength(4)
@@ -606,11 +628,9 @@ describe("Fault", () => {
 
     it("should merge contexts from all faults in chain", () => {
       const dbError = new Error("Database timeout")
-      const fault1 = Fault.wrap(dbError)
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost", port: 5432 })
-      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
-      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
+      const fault1 = Fault.wrap(dbError).withTag("LAYER_1", { host: "localhost", port: 5432 })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2", { service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3", { endpoint: "/login" })
 
       const chain = fault3.unwrap()
       const faults = chain.filter((e) => Fault.isFault(e))
@@ -646,11 +666,9 @@ describe("Fault", () => {
   describe("getFullContext", () => {
     it("should merge context from all faults in chain", () => {
       const dbError = new Error("Database timeout")
-      const fault1 = Fault.wrap(dbError)
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost", port: 5432 })
-      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "auth" })
-      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/login" })
+      const fault1 = Fault.wrap(dbError).withTag("LAYER_1", { host: "localhost", port: 5432 })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2", { service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3", { endpoint: "/login" })
 
       const fullContext = fault3.getFullContext()
 
@@ -663,15 +681,17 @@ describe("Fault", () => {
     })
 
     it("should override duplicate keys from root to current", () => {
-      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG", {
         errorCode: 100,
         requestId: "abc",
+        timestamp: 1,
         userId: "user123",
       })
-      const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG", {
         errorCode: 200,
         requestId: "def",
         sessionId: "session456",
+        timestamp: 2,
       })
 
       const fullContext = fault2.getFullContext()
@@ -680,36 +700,41 @@ describe("Fault", () => {
         errorCode: 200,
         requestId: "def",
         sessionId: "session456",
+        timestamp: 2,
         userId: "user123",
       })
     })
 
     it("should work with single fault", () => {
-      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG", {
         requestId: "value",
+        timestamp: 1,
       })
 
-      expect(fault.getFullContext()).toEqual({ requestId: "value" })
+      expect(fault.getFullContext()).toEqual({ requestId: "value", timestamp: 1 })
     })
 
     it("should work with registry-typed faults", () => {
-      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG").withContext({
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG", {
         errorCode: 100,
+        timestamp: 1,
       })
-      const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG", {
         errorCode: 200,
+        timestamp: 2,
       })
 
       expect(fault2.getFullContext()).toEqual({
         errorCode: 200,
+        timestamp: 2,
       })
     })
 
     it("should handle empty contexts", () => {
       const fault1 = Fault.wrap(new Error("test"))
-      const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withContext({ requestId: "value" })
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG", { requestId: "value", timestamp: 1 })
 
-      expect(fault2.getFullContext()).toEqual({ requestId: "value" })
+      expect(fault2.getFullContext()).toEqual({ requestId: "value", timestamp: 1 })
     })
   })
 
@@ -849,15 +874,13 @@ describe("Fault", () => {
   describe("serialization", () => {
     describe("toSerializable", () => {
       it("should serialize a single fault", () => {
-        const fault = Fault.create("LAYER_1")
-          .withDescription("Failed to connect", "Database unavailable")
-          .withContext({
-            database: "postgres",
-            host: "localhost",
-            port: 5432,
-            retries: 3,
-            timeout: 5000,
-          })
+        const fault = Fault.create("LAYER_1", {
+          database: "postgres",
+          host: "localhost",
+          port: 5432,
+          retries: 3,
+          timeout: 5000,
+        }).withDescription("Failed to connect", "Database unavailable")
 
         const serialized = Fault.toSerializable(fault)
 
@@ -877,7 +900,7 @@ describe("Fault", () => {
       })
 
       it("should serialize a fault without debug message", () => {
-        const fault = Fault.create("LAYER_2").withContext({
+        const fault = Fault.create("LAYER_2", {
           method: "query",
           service: "database",
           statusCode: 500,
@@ -896,24 +919,24 @@ describe("Fault", () => {
 
       it("should serialize a fault chain", () => {
         const rootError = new Error("Connection timeout")
-        const fault1 = Fault.wrap(rootError)
-          .withTag("LAYER_1")
-          .withContext({ database: "postgres", host: "localhost", port: 5432 })
+        const fault1 = Fault.wrap(rootError).withTag("LAYER_1", {
+          database: "postgres",
+          host: "localhost",
+          port: 5432,
+        })
 
-        const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({
+        const fault2 = Fault.wrap(fault1).withTag("LAYER_2", {
           method: "query",
           service: "database",
           statusCode: 500,
         })
 
-        const fault3 = Fault.wrap(fault2)
-          .withTag("LAYER_3")
-          .withContext({
-            endpoint: "/api/users",
-            headers: { "Content-Type": "application/json" },
-            method: "GET",
-            statusCode: 503,
-          })
+        const fault3 = Fault.wrap(fault2).withTag("LAYER_3", {
+          endpoint: "/api/users",
+          headers: { "Content-Type": "application/json" },
+          method: "GET",
+          statusCode: 503,
+        })
 
         const serialized = Fault.toSerializable(fault3)
 
@@ -957,7 +980,6 @@ describe("Fault", () => {
             message: "Network failure",
             name: "Error",
           },
-          context: {},
           debug: "Connection failed",
           message: "Network failure",
           name: "Fault",
@@ -966,9 +988,9 @@ describe("Fault", () => {
       })
 
       it("should serialize a fault without cause", () => {
-        const fault = Fault.create("LAYER_2")
-          .withDescription("Invalid input")
-          .withContext({ service: "database" })
+        const fault = Fault.create("LAYER_2", { service: "database" }).withDescription(
+          "Invalid input"
+        )
 
         const serialized = Fault.toSerializable(fault)
 
@@ -987,7 +1009,7 @@ describe("Fault", () => {
 
         const serialized = Fault.toSerializable(fault)
 
-        expect(serialized.context).toEqual({})
+        expect(serialized.context).toBeUndefined()
       })
     })
   })
@@ -1224,15 +1246,14 @@ describe("Fault", () => {
       const myErr = new Error("Something happened")
 
       const fault = Fault.wrap(myErr)
-        .withTag("MY_TAG")
-        .withDescription(myErr.message, "Something went really wrong")
-        .withContext({
+        .withTag("MY_TAG", {
           errorCode: 500,
           requestId: "req-123",
           sessionId: "session-789",
           timestamp: 1_234_567_890,
           userId: "user-456",
         })
+        .withDescription(myErr.message, "Something went really wrong")
 
       expect(fault.tag).toBe("MY_TAG")
       expect(fault.debug).toBe(myErr.message)
@@ -1277,7 +1298,7 @@ describe("Fault", () => {
 
       expect(fault.tag).toBe("No fault tag set")
       expect(fault.debug).toBe("Debug message")
-      expect(fault.context).toEqual({})
+      expect(fault.context).toBeUndefined()
     })
 
     it("should wrap a string", () => {
@@ -1441,15 +1462,16 @@ describe("Fault", () => {
     it("should handle undefined context gracefully", () => {
       const data = { message: "test", name: "Fault", tag: "MY_TAG" }
       const fault = Fault.fromSerializable(data as unknown as SerializableFault)
-      expect(fault.context).toEqual({})
+      expect(fault.context).toBeUndefined()
     })
   })
 
   describe("round-trip serialization", () => {
     it("should preserve single fault data through round trip", () => {
-      const original = Fault.create("LAYER_1")
-        .withDescription("Connection failed", "Database unavailable")
-        .withContext({ host: "localhost", port: 5432 })
+      const original = Fault.create("LAYER_1", { host: "localhost", port: 5432 }).withDescription(
+        "Connection failed",
+        "Database unavailable"
+      )
 
       const serialized = Fault.toSerializable(original)
       const json = JSON.stringify(serialized)
@@ -1465,13 +1487,11 @@ describe("Fault", () => {
 
     it("should preserve fault chain through round trip", () => {
       const rootError = new Error("Network timeout")
-      const fault1 = Fault.wrap(rootError)
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost", port: 5432 })
+      const fault1 = Fault.wrap(rootError).withTag("LAYER_1", { host: "localhost", port: 5432 })
 
-      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withContext({ service: "database" })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2", { service: "database" })
 
-      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withContext({ endpoint: "/api/users" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3", { endpoint: "/api/users" })
 
       const serialized = Fault.toSerializable(fault3)
       const json = JSON.stringify(serialized)
@@ -1508,19 +1528,17 @@ describe("Fault", () => {
       const parsed = JSON.parse(json) as SerializableFault
       const restored = Fault.fromSerializable(parsed)
 
-      expect(restored.context).toEqual({})
+      expect(restored.context).toBeUndefined()
     })
 
     it("should preserve tags and contexts in chain", () => {
       const root = new Error("Root cause")
       const fault1 = Fault.wrap(root)
-        .withTag("LAYER_1")
-        .withContext({ host: "localhost", port: 5432 })
+        .withTag("LAYER_1", { host: "localhost", port: 5432 })
         .withDescription("Layer 1 debug")
 
       const fault2 = Fault.wrap(fault1)
-        .withTag("LAYER_2")
-        .withContext({ service: "database" })
+        .withTag("LAYER_2", { service: "database" })
         .withDescription("Layer 2 debug", "Layer 2 message")
 
       const serialized = Fault.toSerializable(fault2)
@@ -1664,7 +1682,7 @@ describe("Fault", () => {
     class AppFault extends Faultier.define<{
       "db.connection_failed": { host: string }
       "db.timeout": { timeoutMs: number }
-      "auth.unauthenticated": { requestId?: string }
+      "auth.unauthenticated"?: { requestId?: string }
       "validation.failed": { field: string }
     }>() {
       isRetryable(): boolean {
@@ -1687,7 +1705,7 @@ describe("Fault", () => {
     }
 
     it("should allow custom instance methods", () => {
-      const fault = AppFault.create("db.timeout").withContext({ timeoutMs: 5000 })
+      const fault = AppFault.create("db.timeout", { timeoutMs: 5000 })
       expect(fault.isRetryable()).toBe(true)
       expect(fault.toHttpStatus()).toBe(504)
     })
@@ -1703,32 +1721,32 @@ describe("Fault", () => {
     })
 
     it("should preserve custom methods through chaining", () => {
-      const fault = AppFault.create("db.timeout")
-        .withContext({ timeoutMs: 5000 })
-        .withDescription("Connection timed out")
+      const fault = AppFault.create("db.timeout", { timeoutMs: 5000 }).withDescription(
+        "Connection timed out"
+      )
 
       // Custom methods should still be accessible after chaining
       expect(fault.isRetryable()).toBe(true)
     })
 
     it("should work with instanceof for extended class", () => {
-      const fault = AppFault.create("db.timeout")
+      const fault = AppFault.create("db.timeout", { timeoutMs: 5000 })
       expect(fault instanceof AppFault).toBe(true)
       expect(fault instanceof Error).toBe(true)
     })
 
     it("should work with wrapped errors and custom methods", () => {
       const originalError = new Error("Connection refused")
-      const fault = AppFault.wrap(originalError)
-        .withTag("db.connection_failed")
-        .withContext({ host: "localhost" })
+      const fault = AppFault.wrap(originalError).withTag("db.connection_failed", {
+        host: "localhost",
+      })
 
       expect(fault.isRetryable()).toBe(true)
       expect(fault.toHttpStatus()).toBe(503)
     })
 
     it("should be immutable - intermediate results are safe to reuse", () => {
-      const base = AppFault.create("db.timeout")
+      const base = AppFault.create("db.timeout", { timeoutMs: 5000 })
       const fault1 = base.withDescription("Error 1")
       const fault2 = base.withDescription("Error 2")
 
@@ -1741,8 +1759,7 @@ describe("Fault", () => {
     })
 
     it("should preserve custom methods after multiple chaining operations", () => {
-      const fault = AppFault.create("db.timeout")
-        .withContext({ timeoutMs: 5000 })
+      const fault = AppFault.create("db.timeout", { timeoutMs: 5000 })
         .withDescription("Debug info", "User message")
         .withDebug("More debug")
         .withMessage("Final message")

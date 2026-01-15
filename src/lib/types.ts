@@ -4,7 +4,7 @@
  * Design goals:
  * - Keep the public surface **small and readable**.
  * - Preserve **subclass methods** by composing types with `InstanceType<typeof Fault>`.
- * - Provide an ergonomic return-type helper: `Faultier.Tagged<typeof Fault, "tag">`.
+ * - Provide an ergonomic return-type helper: `Faultier.TaggedFault<typeof Fault, "tag">`.
  */
 
 // Phantom brand symbol for preserving tag type through method chains
@@ -40,11 +40,20 @@ export type TagsOf<TFaultClass extends AnyConstructor> = keyof RegistryOf<TFault
 
 /**
  * Extracts the context type for a tag from a Fault class created by `define()`.
+ * - Optional tags (`TAG?: { ... }`) yield `T | undefined`
+ * - `never` tags yield `undefined`
  */
+type RegistryContext<
+  TFaultClass extends AnyConstructor,
+  TTag extends TagsOf<TFaultClass>,
+> = RegistryOf<TFaultClass>[TTag]
+
+type NormalizedContext<T> = [T] extends [never] ? undefined : T
+
 export type FaultContext<
   TFaultClass extends AnyConstructor,
   TTag extends TagsOf<TFaultClass>,
-> = Partial<RegistryOf<TFaultClass>[TTag]>
+> = NormalizedContext<RegistryContext<TFaultClass, TTag>>
 
 /**
  * A Fault instance with a specific tag and tag-specific context type.
@@ -55,12 +64,12 @@ export type FaultContext<
  * type MyRegistry = { "db.error": { query: string } }
  * class Fault extends Faultier.define<MyRegistry>() {}
  *
- * function dbOperation(): Faultier.Tagged<typeof Fault, "db.error"> {
- *   return Fault.create("db.error").withContext({ query: "SELECT *" })
+ * function dbOperation(): Faultier.TaggedFault<typeof Fault, "db.error"> {
+ *   return Fault.create("db.error", { query: "SELECT *" })
  * }
  * ```
  */
-export type Tagged<
+type TaggedBase<
   TFaultClass extends AnyConstructor,
   TTag extends TagsOf<TFaultClass>,
 > = InstanceType<TFaultClass> &
@@ -68,6 +77,11 @@ export type Tagged<
     readonly tag: TTag
     readonly context: FaultContext<TFaultClass, TTag>
   }
+
+export type TaggedFault<
+  TFaultClass extends AnyConstructor,
+  TTag extends TagsOf<TFaultClass>,
+> = TaggedBase<TFaultClass, TTag>
 
 /**
  * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.
@@ -79,17 +93,22 @@ export type ChainFormattingOptions = {
   formatter?: (message: string) => string
 }
 
+type ContextField<TContext> = [TContext] extends [never]
+  ? { context?: undefined }
+  : undefined extends TContext
+    ? { context?: Exclude<TContext, undefined> }
+    : { context: TContext }
+
 export type FaultJSON<
   TTag extends string = string,
-  TContext extends Record<string, unknown> = Record<string, unknown>,
+  TContext extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
 > = {
   name: string
   tag: TTag
   message: string
   debug?: string
-  context: TContext
   cause?: string
-}
+} & ContextField<TContext>
 
 /**
  * Serialized representation of a plain Error (non-Fault).
@@ -103,11 +122,11 @@ export interface SerializableError {
  * Serialized representation of a Fault with full error chain support.
  * Unlike FaultJSON, this preserves the entire cause chain as nested objects.
  */
-export interface SerializableFault {
+export type SerializableFault = {
   name: string
   tag: string
   message: string
   debug?: string
-  context: Record<string, unknown>
+  context?: Record<string, unknown>
   cause?: SerializableFault | SerializableError
 }
