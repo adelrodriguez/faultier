@@ -52,11 +52,17 @@ Remove `extend` functionality and add `findCause` helper method
 
 - **Removed types**: `WithBaseFaultMethods`, `ExtendedTaggedFault`, `ExtendedFaultBase` are no longer exported.
 - **Removed `Faultier.Tagged` export**: `Faultier.Tagged` is no longer exported. Replace it with `TaggedFault<typeof Fault, TTag>`.
+- **Removed `TagBrand` export**: `TagBrand` is no longer exported. Use the `__tagged` marker and `Untagged` type instead.
 - **Context handling updated**: `withContext` is removed; pass context when calling `withTag(tag, context)` or `create(tag, context)` for non-optional tags. Use optional tags with `?`, tags with `never` disallow context, and `context` now defaults to `undefined` so `toJSON`/`toSerializable` omit it when undefined.
+- **`withTag` can only be called once**: Calling `withTag` again throws; use a single tag per fault and include all needed context in that call.
+- **Fault name now includes the tag**: The `name` property is now formatted like `Fault[MY_TAG]`, including in serialized output, instead of always being `Fault`.
+- **Fault modifiers now mutate in place**: Methods like `withTag` and `withDescription` mutate the fault instance rather than returning a new immutable copy.
+- **Detail API renamed**: `withDescription`, `withDebug`, `getDebug`, and the `debug` field are removed. Use `withDetail` for developer details, `getDetail` to read the chain, `detail` on instances, and the `detail` JSON field. If you relied on `withDescription` to set a user message, use `withMessage` alongside `withDetail`.
 
 **New Features**
 
 - **`Fault.findCause(error, ErrorClass)`**: Searches the error chain for a cause matching the given Error class. Returns the first matching error with full type inference, or `undefined` if not found.
+- **Serializable marker flag**: Serialized faults now include `_isFault: true` to make it easy to detect fault payloads.
 
   ```ts
   class HttpError extends Error {

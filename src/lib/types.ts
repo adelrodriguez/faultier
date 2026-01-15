@@ -7,16 +7,8 @@
  * - Provide an ergonomic return-type helper: `Faultier.TaggedFault<typeof Fault, "tag">`.
  */
 
-// Phantom brand symbol for preserving tag type through method chains
-declare const TagBrand: unique symbol
-
-/**
- * Internal brand used by tagged faults.
- * Exported as a type (not a value) so consumers never interact with the symbol directly.
- */
-export type TagBrand<TTag extends string> = {
-  readonly [TagBrand]: TTag
-}
+type TaggedMarker = { readonly __tagged: true }
+export type Untagged<T> = T extends TaggedMarker ? never : T
 
 type AnyConstructor = abstract new (
   // oxlint-disable-next-line typescript/no-explicit-any
@@ -43,17 +35,16 @@ export type TagsOf<TFaultClass extends AnyConstructor> = keyof RegistryOf<TFault
  * - Optional tags (`TAG?: { ... }`) yield `T | undefined`
  * - `never` tags yield `undefined`
  */
-type RegistryContext<
-  TFaultClass extends AnyConstructor,
-  TTag extends TagsOf<TFaultClass>,
-> = RegistryOf<TFaultClass>[TTag]
+type NormalizeContext<T> = [T] extends [never] ? undefined : T
 
-type NormalizedContext<T> = [T] extends [never] ? undefined : T
+export type ContextMap<TRegistry> = {
+  [K in keyof TRegistry]: NormalizeContext<TRegistry[K]>
+}
 
 export type FaultContext<
   TFaultClass extends AnyConstructor,
   TTag extends TagsOf<TFaultClass>,
-> = NormalizedContext<RegistryContext<TFaultClass, TTag>>
+> = ContextMap<RegistryOf<TFaultClass>>[TTag]
 
 /**
  * A Fault instance with a specific tag and tag-specific context type.
@@ -69,22 +60,19 @@ export type FaultContext<
  * }
  * ```
  */
-type TaggedBase<
-  TFaultClass extends AnyConstructor,
-  TTag extends TagsOf<TFaultClass>,
-> = InstanceType<TFaultClass> &
-  TagBrand<TTag> & {
+export type TaggedBase<TBase, TTag extends string, TContext> = TBase &
+  TaggedMarker & {
     readonly tag: TTag
-    readonly context: FaultContext<TFaultClass, TTag>
+    readonly context: TContext
   }
 
 export type TaggedFault<
   TFaultClass extends AnyConstructor,
   TTag extends TagsOf<TFaultClass>,
-> = TaggedBase<TFaultClass, TTag>
+> = TaggedBase<InstanceType<TFaultClass>, TTag, FaultContext<TFaultClass, TTag>>
 
 /**
- * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.
+ * Options for formatting fault chain messages in methods like getIssue, getDetail, and flatten.
  */
 export type ChainFormattingOptions = {
   /** Separator used to join messages from the fault chain */
@@ -93,12 +81,6 @@ export type ChainFormattingOptions = {
   formatter?: (message: string) => string
 }
 
-type ContextField<TContext> = [TContext] extends [never]
-  ? { context?: undefined }
-  : undefined extends TContext
-    ? { context?: Exclude<TContext, undefined> }
-    : { context: TContext }
-
 export type FaultJSON<
   TTag extends string = string,
   TContext extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
@@ -106,9 +88,13 @@ export type FaultJSON<
   name: string
   tag: TTag
   message: string
-  debug?: string
+  detail?: string
   cause?: string
-} & ContextField<TContext>
+} & ([TContext] extends [never]
+  ? { context?: undefined }
+  : undefined extends TContext
+    ? { context?: Exclude<TContext, undefined> }
+    : { context: TContext })
 
 /**
  * Serialized representation of a plain Error (non-Fault).
@@ -123,10 +109,11 @@ export interface SerializableError {
  * Unlike FaultJSON, this preserves the entire cause chain as nested objects.
  */
 export type SerializableFault = {
+  _isFault: true
   name: string
   tag: string
   message: string
-  debug?: string
+  detail?: string
   context?: Record<string, unknown>
   cause?: SerializableFault | SerializableError
 }

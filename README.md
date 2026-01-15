@@ -38,7 +38,7 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 
 - **Type-safe tags** - Define error tags and get autocomplete and type checking
 - **Typed context** - Associate structured metadata with each error type
-- **Dual messages** - Separate debug messages for logs from user-facing messages
+- **Dual messages** - Separate detail messages for logs from user-facing messages
 - **Error chaining** - Wrap and re-throw errors while preserving the full chain
 - **Serializable** - Convert faults to JSON and reconstruct them
 - **Instanceof support** - Use `instanceof` checks with your custom Fault class
@@ -91,11 +91,11 @@ try {
 // Or create a fault directly when you control the error
 throw Fault.create("NOT_FOUND", { resource: "user", id: "123" })
 
-// Separate debug info from user-facing messages
-throw Fault.wrap(err).withTag("PAYMENT_ERROR").withDescription(
-  "Stripe API error 402: card_declined (insufficient_funds)", // Debug (for logs)
-  "Payment failed. Please try a different card." // User-facing message
-)
+// Separate detail info from user-facing messages
+throw Fault.wrap(err)
+  .withTag("PAYMENT_ERROR")
+  .withDetail("Stripe API error 402: card_declined (insufficient_funds)") // Detail (for logs)
+  .withMessage("Payment failed. Please try a different card.") // User-facing message
 ```
 
 ### Type Safety
@@ -138,7 +138,7 @@ When you want to annotate function return types (or public API surfaces), use th
 `TaggedFault<typeof Fault, "TAG">`.
 
 ```ts
-import Faultier, { type TaggedFault as TaggedFaultType, type TagsOf } from "faultier"
+import Faultier, { type TagsOf } from "faultier"
 
 type AppErrors = {
   DATABASE_ERROR: { query: string; host?: string }
@@ -147,7 +147,7 @@ type AppErrors = {
 
 export class Fault extends Faultier.define<AppErrors>() {}
 
-type TaggedFault<TTag extends TagsOf<typeof Fault>> = TaggedFaultType<typeof Fault, TTag>
+type TaggedFault<TTag extends TagsOf<typeof Fault>> = Faultier.TaggedFault<typeof Fault, TTag>
 
 export function runQuery(): TaggedFault<"DATABASE_ERROR"> {
   // Note: optional tags yield `context | undefined`
@@ -205,10 +205,10 @@ Faults preserve the full error chain:
 try {
   await fetchUser()
 } catch (err) {
-  throw Fault.wrap(err).withTag("SERVICE_ERROR").withDescription(
-    "User service failed on primary endpoint", // Debug message
-    "Unable to load user data" // User-facing message
-  )
+  throw Fault.wrap(err)
+    .withTag("SERVICE_ERROR")
+    .withDetail("User service failed on primary endpoint") // Detail message
+    .withMessage("Unable to load user data") // User-facing message
 }
 ```
 
@@ -333,17 +333,16 @@ if (error instanceof Fault) {
 }
 ```
 
-**Note:** Chaining methods (`withTag`, `withDescription`, `withDebug`, etc.) are immutable - they return new instances. This means you can safely reuse intermediate results:
+**Note:** Chaining methods (`withTag`, `withDetail`, `withMessage`, etc.) mutate the same instance and return `this`.
 
 ```ts
 const base = Fault.create("db.timeout")
-const fault1 = base.withDescription("Error 1")
-const fault2 = base.withDescription("Error 2")
+const fault1 = base.withDetail("Error 1")
+const fault2 = base.withDetail("Error 2")
 
-// Each is a separate instance - base is unchanged
-expect(fault1.debug).toBe("Error 1")
-expect(fault2.debug).toBe("Error 2")
-expect(base.debug).toBeUndefined()
+expect(fault1).toBe(base)
+expect(fault2).toBe(base)
+expect(base.detail).toBe("Error 2")
 ```
 
 ### Working with Custom Error Classes
@@ -431,7 +430,7 @@ try {
 Converts a fault and its entire error chain to a plain object for serialization.
 
 ```ts
-const fault = Fault.create("API_ERROR", { endpoint: "/users" }).withDescription("Request failed")
+const fault = Fault.create("API_ERROR", { endpoint: "/users" }).withDetail("Request failed")
 
 const serialized = Fault.toSerializable(fault)
 // {
@@ -465,7 +464,8 @@ Extracts and joins user-facing messages from all faults in the chain.
 ```ts
 const fault = Fault.wrap(dbError)
   .withTag("SERVICE_ERROR")
-  .withDescription("DB failed", "Service unavailable")
+  .withDetail("DB failed")
+  .withMessage("Service unavailable")
 
 Fault.getIssue(fault)
 // "Service unavailable. Database connection failed."
@@ -474,19 +474,19 @@ Fault.getIssue(fault, { separator: " | " })
 // "Service unavailable. | Database connection failed."
 ```
 
-#### `Fault.getDebug(fault, options?)`
+#### `Fault.getDetail(fault, options?)`
 
-Extracts and joins debug messages from all faults in the chain.
+Extracts and joins detail messages from all faults in the chain.
 
 ```ts
 const fault = Fault.wrap(dbError)
   .withTag("SERVICE_ERROR")
-  .withDescription("Connection to postgres:5432 timed out after 30s")
+  .withDetail("Connection to postgres:5432 timed out after 30s")
 
-Fault.getDebug(fault)
+Fault.getDetail(fault)
 // "Connection to postgres:5432 timed out after 30s."
 
-Fault.getDebug(fault, { separator: " -> " })
+Fault.getDetail(fault, { separator: " -> " })
 // "Connection to postgres:5432 timed out after 30s. -> Original DB error."
 ```
 
@@ -609,19 +609,15 @@ if (httpError) {
 
 #### `fault.withTag(tag, context?)`
 
-Sets the tag for a wrapped fault and optional context. Returns a new instance (immutable).
+Sets the tag for a wrapped fault and optional context. Overloads enforce required context for required tags, optional context for `?` tags, and no context for `never` tags. Mutates and returns the same instance. Retagging is not allowed.
 
-#### `fault.withDescription(debug, message?)`
+#### `fault.withDetail(detail)`
 
-Sets debug and optional user-facing messages. Returns a new instance (immutable).
-
-#### `fault.withDebug(debug)`
-
-Sets only the debug message (for developers/logs). Returns a new instance (immutable).
+Sets only the detail message (for developers/logs). Mutates and returns the same instance.
 
 #### `fault.withMessage(message)`
 
-Sets only the user-facing message (overrides the original error message). Returns a new instance (immutable).
+Sets only the user-facing message (overrides the original error message). Mutates and returns the same instance.
 
 #### `fault.unwrap()`
 
