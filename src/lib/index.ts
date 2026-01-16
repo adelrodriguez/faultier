@@ -1,13 +1,11 @@
 import type {
   ChainFormattingOptions,
-  ContextForTag,
   FaultJSON,
-  FaultTag,
-  PartialContextForTag,
+  TagBrand,
   SerializableError,
   SerializableFault,
-} from "./types"
-import { HAS_PUNCTUATION } from "./utils"
+} from "#lib/types.ts"
+import { HAS_PUNCTUATION } from "#lib/utils.ts"
 
 const defaultTrimFormatter = (msg: string) => msg.trim()
 
@@ -18,655 +16,511 @@ type WithIsFault = {
   readonly [IS_FAULT]: true
 }
 
-export abstract class BaseFault extends Error {
-  abstract tag: FaultTag | "No fault tag set"
-  abstract context: ContextForTag<FaultTag> | Record<string, unknown>
+/**
+ * Creates a typed Fault class based on the provided registry type.
+ *
+ * @example
+ * ```ts
+ * type MyRegistry = {
+ *   "auth.unauthenticated": { requestId?: string }
+ *   "db.connection_failed": { host: string; port: number }
+ * }
+ *
+ * export const Fault = defineFault<MyRegistry>()
+ *
+ * // Now fully typed:
+ * Fault.create("auth.unauthenticated").withContext({ requestId: "123" })
+ * ```
+ */
+export function define<TRegistry extends Record<string, Record<string, unknown>>>() {
+  type Tag = keyof TRegistry & string
 
-  declare name: string
-  declare message: string
-  declare cause?: Error
-
-  debug?: string
-
-  constructor(cause?: Error, debug?: string, message?: string) {
-    super(message ?? cause?.message)
-    this.name = "Fault"
-    this.cause = cause
-    this.debug = debug
-    Object.defineProperty(this, IS_FAULT, {
-      configurable: false,
-      enumerable: false,
-      value: true,
-      writable: false,
-    })
-  }
-
-  /**
-   * Sets debug and/or user-facing messages for this fault.
-   *
-   * @param debug - Internal debug message (for developers/logs)
-   * @param message - Optional user-facing message (overrides the original error message)
-   * @returns This fault instance for method chaining
-   *
-   * @example
-   * ```ts
-   * fault.withDescription(
-   *   "Failed to connect to PostgreSQL on port 5432",
-   *   "Database is temporarily unavailable"
-   * )
-   * ```
-   */
-  withDescription(debug: string, message?: string): this {
-    this.debug = debug
-
-    if (message !== undefined) {
-      this.message = message
-    }
-
-    return this
-  }
-
-  /**
-   * Sets only the debug message for this fault.
-   *
-   * @param debug - Internal debug message (for developers/logs)
-   * @returns This fault instance for method chaining
-   *
-   * @example
-   * ```ts
-   * fault.withDebug("Failed to connect to PostgreSQL on port 5432")
-   * ```
-   */
-  withDebug(debug: string): this {
-    this.debug = debug
-    return this
-  }
-
-  /**
-   * Sets only the user-facing message for this fault.
-   *
-   * @param message - User-facing message (overrides the original error message)
-   * @returns This fault instance for method chaining
-   *
-   * @example
-   * ```ts
-   * fault.withMessage("Database is temporarily unavailable")
-   * ```
-   */
-  withMessage(message: string): this {
-    this.message = message
-    return this
-  }
-
-  /**
-   * Gets the full error chain from this fault, including all causes.
-   *
-   * @returns Array starting with this fault, followed by all causes in order
-   *
-   * @example
-   * ```ts
-   * const chain = fault.unwrap()
-   * // [fault3, fault2, fault1, originalError]
-   * ```
-   */
-  unwrap(): [...TaggedFault<FaultTag>[], Error] {
-    const chain: [...TaggedFault<FaultTag>[], Error] = [this]
-
-    let current = this.cause
-
-    while (BaseFault.isFault(current)) {
-      chain.push(current)
-      current = current.cause
-    }
-
-    if (current) {
-      chain.push(current)
-    }
-
-    return chain
-  }
-
-  /**
-   * Flattens all messages from the fault chain into a single string.
-   * Duplicate consecutive messages are automatically skipped.
-   *
-   * @param options - Formatting options (separator and formatter)
-   * @returns Flattened string of all messages in the chain
-   *
-   * @example
-   * ```ts
-   * fault.flatten()
-   * // "API failed -> Service unavailable -> Database timeout"
-   *
-   * fault.flatten({ separator: " | " })
-   * // "API failed | Service unavailable | Database timeout"
-   *
-   * fault.flatten({ formatter: msg => msg.toUpperCase() })
-   * // "API FAILED -> SERVICE UNAVAILABLE -> DATABASE TIMEOUT"
-   * ```
-   */
-  flatten(options?: ChainFormattingOptions): string {
-    const { separator = " -> ", formatter = defaultTrimFormatter } = options ?? {}
-
-    const chain = this.unwrap()
-    const messages: string[] = []
-    let lastMessage: string | undefined
-
-    for (const err of chain) {
-      const formatted = formatter(err.message)
-      if (formatted !== lastMessage) {
-        messages.push(formatted)
-        lastMessage = formatted
-      }
-    }
-
-    return messages.join(separator)
-  }
-
-  /**
-   * Gets all tags from faults in the error chain.
-   * Only includes tags from Fault instances, not raw Error objects.
-   *
-   * @returns Array of tags from current fault down to root cause
-   *
-   * @example
-   * ```ts
-   * fault.getTags()
-   * // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"]
-   * ```
-   */
-  getTags(): FaultTag[] {
-    const chain = this.unwrap()
-    return chain.filter((e) => BaseFault.isFault(e)).map((fault) => fault.tag as FaultTag)
-  }
-
-  /**
-   * Gets the merged context from all faults in the error chain.
-   * Contexts are merged from root cause to current fault, with later
-   * faults overriding earlier ones for duplicate keys.
-   *
-   * @returns Merged context object from the entire chain
-   *
-   * @example
-   * ```ts
-   * fault.getFullContext()
-   * // {
-   * //   host: "localhost",
-   * //   port: 5432,
-   * //   query: "SELECT...",
-   * //   userId: "123"
-   * // }
-   * ```
-   */
-  getFullContext(): Record<string, unknown> {
-    const chain = this.unwrap()
-    const faults = chain.filter((e) => BaseFault.isFault(e))
-    const merged: Record<string, unknown> = {}
-
-    for (const fault of faults.toReversed()) {
-      Object.assign(merged, fault.context)
-    }
-
-    return merged
-  }
-
-  /** @internal */
-  toJSON(): FaultJSON {
-    return {
-      cause: this.cause?.message,
-      context: this.context,
-      debug: BaseFault.getDebug(this, { separator: " → " }),
-      message: BaseFault.getIssue(this, { separator: " → " }),
-      name: this.name,
-      tag: this.tag,
-    }
-  }
-
-  /**
-   * Checks if a value is a Fault with strict type checking.
-   * @param value - The value to check
-   * @returns True if the value is a Fault, false otherwise
-   *
-   * @example
-   * ```ts
-   * const fault = Fault.wrap(new Error("Something went wrong"))
-   * if (Fault.isFault(fault)) {
-   *   console.log(fault.tag)
-   * }
-   * ```
-   */
-  static isFault(value: unknown): value is {
-    [K in FaultTag]: TaggedFault<K>
-  }[FaultTag] {
-    if (value instanceof BaseFault) {
-      return true
-    }
-
-    if (typeof value !== "object" || value === null) {
-      return false
-    }
-
-    return IS_FAULT in value && (value as WithIsFault)[IS_FAULT]
-  }
-
-  /**
-   * Checks if a match result is UNKNOWN (not a fault or no handler matched).
-   * Use this to check the result of matchTag, matchTags, or handle.
-   *
-   * @param value - The result from matchTag, matchTags, or handle
-   * @returns True if the value is UNKNOWN
-   *
-   * @example
-   * ```ts
-   * const result = Fault.matchTags(error, {
-   *   NOT_FOUND: (fault) => ({ status: 404 }),
-   * });
-   *
-   * if (Fault.isUnknown(result)) {
-   *   // Not a fault or unhandled tag
-   * }
-   * ```
-   */
-  static isUnknown(value: unknown): value is typeof UNKNOWN {
-    return value === UNKNOWN
-  }
-
-  /**
-   * Serializes a fault and its entire error chain into a plain object.
-   * Unlike toJSON(), this preserves the full cause chain as nested objects.
-   *
-   * @param fault - The fault to serialize
-   * @returns Serialized fault with nested cause chain
-   *
-   * @example
-   * ```ts
-   * const serialized = BaseFault.toSerializable(fault)
-   * // {
-   * //   name: "Fault",
-   * //   tag: "API_ERROR",
-   * //   message: "API request failed",
-   * //   context: { endpoint: "/users" },
-   * //   cause: {
-   * //     name: "Fault",
-   * //     tag: "NETWORK_ERROR",
-   * //     message: "Connection timeout",
-   * //     context: { host: "api.example.com" }
-   * //   }
-   * // }
-   * ```
-   */
-  static toSerializable(fault: BaseFault): SerializableFault {
-    const serialized: SerializableFault = {
-      context: fault.context as Record<string, unknown>,
-      debug: fault.debug,
-      message: fault.message,
-      name: fault.name,
-      tag: fault.tag,
-    }
-
-    if (fault.cause) {
-      if (BaseFault.isFault(fault.cause)) {
-        serialized.cause = Fault.toSerializable(fault.cause)
-      } else {
-        serialized.cause = {
-          message: fault.cause.message,
-          name: fault.cause.name,
-        } satisfies SerializableError
-      }
-    }
-
-    return serialized
-  }
-
-  /**
-   * Deserializes a fault from a serialized representation, reconstructing
-   * the entire error chain.
-   *
-   * @param data - Serialized fault data
-   * @returns Reconstructed Fault instance with full chain
-   *
-   * @example
-   * ```ts
-   * const serialized = BaseFault.toSerializable(originalFault)
-   * const restored = Fault.fromSerializable(serialized)
-   *
-   * console.log(restored.tag) // Same as original
-   * console.log(restored.unwrap().length) // Same chain length
-   * ```
-   */
-  static fromSerializable<T extends FaultTag = FaultTag>(
-    data: SerializableFault | SerializableError
-  ): TaggedFault<T> {
-    const reconstructCause = (
-      causeData: SerializableFault | SerializableError | undefined
-    ): Error | undefined => {
-      if (!causeData) {
-        return
-      }
-
-      if ("tag" in causeData) {
-        return Fault.fromSerializable(causeData)
-      }
-
-      const error = new Error(causeData.message)
-      error.name = causeData.name
-      return error
-    }
-
-    if (!("tag" in data)) {
-      throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
-    }
-
-    if (typeof data.name !== "string") {
-      throw new Error("Invalid serialized fault: 'name' must be a string")
-    }
-    if (typeof data.message !== "string") {
-      throw new Error("Invalid serialized fault: 'message' must be a string")
-    }
-    if (typeof data.tag !== "string") {
-      throw new Error("Invalid serialized fault: 'tag' must be a string")
-    }
-    if (data.context !== undefined && (typeof data.context !== "object" || data.context === null)) {
-      throw new Error("Invalid serialized fault: 'context' must be an object or undefined")
-    }
-
-    const cause = reconstructCause(data.cause)
-
-    const fault = new TaggedFault(null, data.tag as T, data.context as ContextForTag<T>)
-    fault.name = data.name
-    fault.message = data.message
-    fault.cause = cause
-    fault.debug = data.debug
-
-    return fault
-  }
-
-  /**
-   * Extracts all user-facing messages from the fault chain.
-   *
-   * @param fault - The fault to extract messages from
-   * @param options - Formatting options (separator and formatter)
-   * @returns Formatted messages joined by separator
-   *
-   * @example
-   * ```ts
-   * BaseFault.getIssue(fault)
-   * // "Service unavailable. Database connection failed."
-   *
-   * BaseFault.getIssue(fault, { separator: " | " })
-   * // "Service unavailable. | Database connection failed."
-   *
-   * BaseFault.getIssue(fault, { formatter: msg => msg.toUpperCase() })
-   * // "SERVICE UNAVAILABLE DATABASE CONNECTION FAILED"
-   * ```
-   */
-  static getIssue(fault: BaseFault, options?: Partial<ChainFormattingOptions>): string {
-    const {
-      separator = " ",
-      formatter = (msg: string) => {
-        const trimmed = msg.trim()
-        if (!trimmed) return "" // Skip empty messages
-        return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
-      },
-    } = options ?? {}
-
-    return fault
-      .unwrap()
-      .filter((e) => BaseFault.isFault(e))
-      .map((err) => formatter(err.message))
-      .filter((msg) => msg !== "") // Filter out empty formatted messages
-      .join(separator)
-  }
-
-  /**
-   * Extracts all debug messages from the fault chain.
-   *
-   * @param fault - The fault to extract debug messages from
-   * @param options - Formatting options (separator and formatter)
-   * @returns Formatted debug messages joined by separator
-   *
-   * @example
-   * ```ts
-   * BaseFault.getDebug(fault)
-   * // "Service failed after 3 retries. DB timeout on port 5432."
-   *
-   * BaseFault.getDebug(fault, { separator: " -> " })
-   * // "Service failed after 3 retries. -> DB timeout on port 5432."
-   * ```
-   */
-  static getDebug(fault: BaseFault, options?: Partial<ChainFormattingOptions>): string {
-    const {
-      separator = " ",
-      formatter = (msg: string) => {
-        const trimmed = msg.trim()
-        return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
-      },
-    } = options ?? {}
-
-    return fault
-      .unwrap()
-      .filter((e) => BaseFault.isFault(e))
-      .map((err) => formatter(err.debug ?? ""))
-      .filter((msg) => msg.trim() !== "" && msg !== ".")
-      .join(separator)
-  }
-
-  /**
-   * Asserts that the given error is a Fault instance.
-   * If the error is not a Fault, it is re-thrown.
-   *
-   * @param error - The error to check
-   * @throws The original error if it is not a Fault instance
-   *
-   * @example
-   * ```ts
-   * try {
-   *   doSomething()
-   * } catch (error) {
-   *   Fault.assert(error)
-   *   // error is now typed as BaseFault
-   *   console.log(error.tag)
-   * }
-   * ```
-   */
-  static assert(error: unknown): asserts error is BaseFault {
-    if (!BaseFault.isFault(error)) {
-      throw error
-    }
-  }
-
-  /**
-   * Exhaustively dispatches a fault to handlers for all registered tags.
-   * Use this in global error handlers where you need to handle every possible fault type.
-   * For partial matching, use `matchTag` or `matchTags` instead.
-   *
-   * @param error - The value that may be a fault (or any error-like value)
-   * @param handlers - Handlers for ALL tags in FaultRegistry
-   * @returns The result of the handler if a matching handler exists for the fault's tag, or UNKNOWN if error is not a fault or there is no handler for its tag
-   */
-  static handle<
-    H extends {
+  type HandlerReturnUnion<THandlers> = {
+    [K in keyof THandlers]-?: THandlers[K] extends (
       // oxlint-disable-next-line typescript/no-explicit-any
-      [T in FaultTag]: (fault: TaggedFault<T>) => any
-    },
-  >(
-    error: unknown,
-    handlers: H
-  ): // Extract the return type of the handlers
-    | {
-        [K in FaultTag]: ReturnType<H[K]>
-      }[FaultTag]
-    | typeof UNKNOWN {
-    if (!BaseFault.isFault(error)) {
+      ...args: any[]
+    ) => infer R
+      ? R
+      : never
+  }[keyof THandlers]
+
+  // Internal data structure - loosely typed to avoid casting in method bodies
+  interface FaultData {
+    tag: string
+    context: Record<string, unknown>
+    debug?: string
+  }
+
+  class FaultBase extends Error {
+    /**
+     * Type-only hook so public helpers like `Faultier.Tags<typeof Fault>` can extract
+     * the registry type from a Fault class returned by `define()`.
+     *
+     * This is not emitted at runtime.
+     */
+    declare static readonly __faultierRegistry?: TRegistry
+
+    // Internal state - mutations happen here without type gymnastics
+    protected _data: FaultData = {
+      context: {},
+      tag: "No fault tag set",
+    }
+
+    // Public getters - properly typed, single cast location
+    get tag(): Tag | "No fault tag set" {
+      return this._data.tag as Tag | "No fault tag set"
+    }
+
+    get context(): Record<string, unknown> {
+      return this._data.context
+    }
+
+    get debug(): string | undefined {
+      return this._data.debug
+    }
+
+    declare cause?: Error
+
+    constructor(message?: string, options?: ErrorOptions) {
+      super(message, options)
+      this.name = "Fault"
+      Object.defineProperty(this, IS_FAULT, {
+        configurable: false,
+        enumerable: false,
+        value: true,
+        writable: false,
+      })
+    }
+
+    /**
+     * Creates an immutable clone with the same prototype chain.
+     * This preserves custom methods from extended classes.
+     */
+    protected _clone(): this {
+      const proto = Object.getPrototypeOf(this)
+      // Object.create accepts null, but TypeScript needs help with the type
+      // oxlint-disable-next-line typescript/no-unsafe-argument
+      const clone = Object.create(proto ?? null) as unknown as this
+      clone._data = { ...this._data, context: { ...this._data.context } }
+      clone.name = this.name
+      clone.message = this.message
+      clone.stack = this.stack
+      clone.cause = this.cause
+      Object.defineProperty(clone, IS_FAULT, {
+        configurable: false,
+        enumerable: false,
+        value: true,
+        writable: false,
+      })
+      return clone
+    }
+
+    /**
+     * Sets the tag for this fault.
+     */
+    withTag<T extends Tag>(tag: T): this {
+      const clone = this._clone()
+      clone._data.tag = tag
+      clone._data.context = {}
+      return clone
+    }
+
+    /**
+     * Sets the context for this fault.
+     */
+    withContext(context: Record<string, unknown>): this {
+      const clone = this._clone()
+      clone._data.context = context
+      return clone
+    }
+
+    /**
+     * Sets debug and/or user-facing messages for this fault.
+     */
+    withDescription(debug: string, message?: string): this {
+      const clone = this._clone()
+      clone._data.debug = debug
+      if (message !== undefined) {
+        clone.message = message
+      }
+      return clone
+    }
+
+    /**
+     * Sets only the debug message for this fault.
+     */
+    withDebug(debug: string): this {
+      const clone = this._clone()
+      clone._data.debug = debug
+      return clone
+    }
+
+    /**
+     * Sets only the user-facing message for this fault.
+     */
+    withMessage(message: string): this {
+      const clone = this._clone()
+      clone.message = message
+      return clone
+    }
+
+    /**
+     * Gets the full error chain from this fault, including all causes.
+     */
+    unwrap(): Error[] {
+      const chain: Error[] = [this]
+
+      let current = this.cause
+
+      while (current) {
+        if (IS_FAULT in current) {
+          chain.push(current)
+          current = (current as unknown as FaultBase).cause
+        } else {
+          break
+        }
+      }
+
+      if (current) {
+        chain.push(current)
+      }
+
+      return chain
+    }
+
+    /**
+     * Flattens all messages from the fault chain into a single string.
+     * Duplicate consecutive messages are automatically skipped.
+     */
+    flatten(options?: ChainFormattingOptions): string {
+      const { separator = " -> ", formatter = defaultTrimFormatter } = options ?? {}
+
+      const chain = this.unwrap()
+      const messages: string[] = []
+      let lastMessage: string | undefined
+
+      for (const err of chain) {
+        const formatted = formatter(err.message)
+        if (formatted !== lastMessage) {
+          messages.push(formatted)
+          lastMessage = formatted
+        }
+      }
+
+      return messages.join(separator)
+    }
+
+    /**
+     * Gets all tags from faults in the error chain.
+     * Only includes tags from Fault instances, not raw Error objects.
+     */
+    getTags(): string[] {
+      const chain = this.unwrap()
+      return chain.filter((e): e is FaultBase => IS_FAULT in e).map((fault) => fault.tag)
+    }
+
+    /**
+     * Gets the merged context from all faults in the error chain.
+     * Contexts are merged from root cause to current fault, with later
+     * faults overriding earlier ones for duplicate keys.
+     */
+    getFullContext(): Record<string, unknown> {
+      const chain = this.unwrap()
+      const faults = chain.filter((e): e is FaultBase => IS_FAULT in e)
+      const merged: Record<string, unknown> = {}
+
+      for (const fault of faults.toReversed()) {
+        Object.assign(merged, fault.context)
+      }
+
+      return merged
+    }
+
+    /**
+     * Converts this fault to a JSON-serializable object.
+     */
+    toJSON(): FaultJSON {
+      return {
+        cause: this.cause?.message,
+        context: this.context,
+        debug: FaultBase.getDebug(this, { separator: " → " }),
+        message: FaultBase.getIssue(this, { separator: " → " }),
+        name: this.name,
+        tag: this.tag,
+      }
+    }
+
+    // --- Static methods ---
+
+    /**
+     * Creates a new Fault with the specified tag.
+     * Preserves the tag type through method chaining.
+     * Uses polymorphic `this` so extended classes return their own type with custom methods.
+     */
+    static create<T extends Tag, This extends typeof FaultBase>(
+      this: This,
+      tag: T
+    ): Tagged<InstanceType<This>, T> {
+      const instance = new this()
+      instance._data.tag = tag
+      return instance as unknown as Tagged<InstanceType<This>, T>
+    }
+
+    /**
+     * Wraps an unknown error into a Fault instance.
+     * Uses polymorphic `this` so extended classes return their own type.
+     */
+    static wrap<This extends typeof FaultBase>(this: This, error: unknown): InstanceType<This> {
+      const cause = error instanceof Error ? error : new Error(String(error))
+      const instance = new this(cause.message, { cause })
+      return instance as InstanceType<This>
+    }
+
+    /**
+     * Checks if a value is a Fault instance.
+     */
+    static isFault(value: unknown): value is FaultBase {
+      if (typeof value !== "object" || value === null) {
+        return false
+      }
+      return IS_FAULT in value && (value as WithIsFault)[IS_FAULT]
+    }
+
+    /**
+     * Checks if a match result is UNKNOWN (not a fault or no handler matched).
+     */
+    static isUnknown(value: unknown): value is typeof UNKNOWN {
+      return value === UNKNOWN
+    }
+
+    /**
+     * Asserts that the given error is a Fault instance.
+     */
+    static assert(error: unknown): asserts error is FaultBase {
+      if (!FaultBase.isFault(error)) {
+        throw error
+      }
+    }
+
+    /**
+     * Searches the error chain for a cause matching the given Error class.
+     * Returns the first matching error, or undefined if not found.
+     */
+    static findCause<T extends Error>(
+      error: unknown,
+      // oxlint-disable-next-line typescript/no-explicit-any
+      ErrorClass: new (...args: any[]) => T
+    ): T | undefined {
+      if (!(error instanceof Error)) {
+        return undefined
+      }
+
+      let current: Error | undefined = error
+      while (current) {
+        if (current instanceof ErrorClass) {
+          return current
+        }
+        current = current.cause instanceof Error ? current.cause : undefined
+      }
+      return undefined
+    }
+
+    /**
+     * Matches a fault against a single tag.
+     */
+    static matchTag<TTag extends Tag, TResult>(
+      error: unknown,
+      tag: TTag,
+      callback: (fault: Tagged<FaultBase, TTag>) => TResult
+    ): TResult | typeof UNKNOWN {
+      if (!FaultBase.isFault(error)) {
+        return UNKNOWN
+      }
+
+      if (error.tag === tag) {
+        return callback(error as unknown as Tagged<FaultBase, TTag>)
+      }
+
       return UNKNOWN
     }
 
-    const handler = handlers[error.tag]
+    /**
+     * Matches a fault against multiple tags.
+     */
+    static matchTags<
+      THandlers extends {
+        [K in Tag]?: (fault: Tagged<FaultBase, K>) => unknown
+      },
+    >(error: unknown, handlers: THandlers): HandlerReturnUnion<THandlers> | typeof UNKNOWN {
+      if (!FaultBase.isFault(error)) {
+        return UNKNOWN
+      }
 
-    if (handler) {
-      // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return, typescript/no-unsafe-argument
-      return handler(error as any)
-    }
+      const handler = handlers[error.tag as keyof THandlers]
 
-    return UNKNOWN
-  }
+      if (handler) {
+        // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return, typescript/no-unsafe-call
+        return (handler as any)(error)
+      }
 
-  /**
-   * Matches a fault against a single tag.
-   * Runs the callback only if the error is a fault with the specified tag.
-   *
-   * @param error - The value that may be a fault
-   * @param tag - The tag to match against
-   * @param callback - Handler to run if the tag matches
-   * @returns The callback result, or UNKNOWN if not matched
-   *
-   * @example
-   * ```ts
-   * const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
-   *   logger.error("DB error", fault.context.query);
-   *   return { status: 500 };
-   * });
-   *
-   * if (Fault.isUnknown(result)) {
-   *   // Not a fault or different tag
-   * }
-   * ```
-   */
-  static matchTag<TTag extends FaultTag, TResult>(
-    error: unknown,
-    tag: TTag,
-    callback: (fault: TaggedFault<TTag>) => TResult
-  ): TResult | typeof UNKNOWN {
-    if (!BaseFault.isFault(error)) {
       return UNKNOWN
     }
 
-    if (error.tag === tag) {
-      return callback(error as TaggedFault<TTag>)
-    }
+    /**
+     * Exhaustively dispatches a fault to handlers for all registered tags.
+     */
+    static handle<
+      H extends {
+        // oxlint-disable-next-line typescript/no-explicit-any
+        [T in Tag]: (fault: Tagged<FaultBase, T>) => any
+      },
+    >(error: unknown, handlers: H): HandlerReturnUnion<H> | typeof UNKNOWN {
+      if (!FaultBase.isFault(error)) {
+        return UNKNOWN
+      }
 
-    return UNKNOWN
-  }
+      const handler = handlers[error.tag as Tag]
 
-  /**
-   * Matches a fault against multiple tags.
-   * Runs the matching handler if the error is a fault with one of the specified tags.
-   * Unlike `handle`, only requires handlers for the tags you want to match.
-   *
-   * @param error - The value that may be a fault
-   * @param handlers - Handlers for the tags you want to match
-   * @returns The handler result, or UNKNOWN if not matched
-   *
-   * @example
-   * ```ts
-   * const result = Fault.matchTags(error, {
-   *   NOT_FOUND: (fault) => ({ status: 404 }),
-   *   DB_ERROR: (fault) => ({ status: 500 }),
-   * });
-   *
-   * if (Fault.isUnknown(result)) {
-   *   // Not a fault or unhandled tag
-   * }
-   * ```
-   */
-  static matchTags<
-    THandlers extends {
-      [K in keyof THandlers]: K extends FaultTag ? (fault: TaggedFault<K>) => unknown : never
-    },
-  >(
-    error: unknown,
-    handlers: THandlers
-  ):
-    | {
-        [K in keyof THandlers]: ReturnType<THandlers[K]>
-      }[keyof THandlers]
-    | typeof UNKNOWN {
-    if (!BaseFault.isFault(error)) {
+      if (handler) {
+        // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return, typescript/no-unsafe-argument
+        return handler(error as any)
+      }
+
       return UNKNOWN
     }
 
-    const handler = handlers[error.tag as keyof THandlers]
+    /**
+     * Serializes a fault and its entire error chain into a plain object.
+     */
+    static toSerializable(fault: FaultBase): SerializableFault {
+      const serialized: SerializableFault = {
+        // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
+        context: fault.context as Record<string, unknown>,
+        debug: fault.debug,
+        message: fault.message,
+        name: fault.name,
+        tag: fault.tag,
+      }
 
-    if (handler) {
-      // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return, typescript/no-unsafe-call
-      return (handler as any)(error as any)
+      if (fault.cause) {
+        if (FaultBase.isFault(fault.cause)) {
+          serialized.cause = FaultBase.toSerializable(fault.cause)
+        } else {
+          serialized.cause = {
+            message: fault.cause.message,
+            name: fault.cause.name,
+          } satisfies SerializableError
+        }
+      }
+
+      return serialized
     }
 
-    return UNKNOWN
+    /**
+     * Deserializes a fault from a serialized representation, reconstructing
+     * the entire error chain.
+     */
+    static fromSerializable<This extends typeof FaultBase>(
+      this: This,
+      data: SerializableFault | SerializableError
+    ): InstanceType<This> {
+      const reconstructCause = (
+        causeData: SerializableFault | SerializableError | undefined
+      ): Error | undefined => {
+        if (!causeData) {
+          return undefined
+        }
+
+        if ("tag" in causeData) {
+          return FaultBase.fromSerializable.call(this, causeData) as Error
+        }
+
+        const error = new Error(causeData.message)
+        error.name = causeData.name
+        return error
+      }
+
+      if (!("tag" in data)) {
+        throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
+      }
+
+      if (typeof data.name !== "string") {
+        throw new Error("Invalid serialized fault: 'name' must be a string")
+      }
+      if (typeof data.message !== "string") {
+        throw new Error("Invalid serialized fault: 'message' must be a string")
+      }
+      if (typeof data.tag !== "string") {
+        throw new Error("Invalid serialized fault: 'tag' must be a string")
+      }
+      if (
+        data.context !== undefined &&
+        (typeof data.context !== "object" || data.context === null)
+      ) {
+        throw new Error("Invalid serialized fault: 'context' must be an object or undefined")
+      }
+
+      const cause = reconstructCause(data.cause)
+      const instance = new this(data.message, { cause })
+      instance._data.tag = data.tag
+      // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
+      instance._data.context = (data.context ?? {}) as Record<string, unknown>
+      instance._data.debug = data.debug
+
+      return instance as InstanceType<This>
+    }
+
+    /**
+     * Extracts all user-facing messages from the fault chain.
+     */
+    static getIssue(fault: FaultBase, options?: Partial<ChainFormattingOptions>): string {
+      const {
+        separator = " ",
+        formatter = (msg: string) => {
+          const trimmed = msg.trim()
+          if (!trimmed) return ""
+          return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
+        },
+      } = options ?? {}
+
+      return fault
+        .unwrap()
+        .filter((e): e is FaultBase => FaultBase.isFault(e))
+        .map((err) => formatter(err.message))
+        .filter((msg) => msg !== "")
+        .join(separator)
+    }
+
+    /**
+     * Extracts all debug messages from the fault chain.
+     */
+    static getDebug(fault: FaultBase, options?: Partial<ChainFormattingOptions>): string {
+      const {
+        separator = " ",
+        formatter = (msg: string) => {
+          const trimmed = msg.trim()
+          return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
+        },
+      } = options ?? {}
+
+      return fault
+        .unwrap()
+        .filter((e): e is FaultBase => FaultBase.isFault(e))
+        .map((err) => formatter(err.debug ?? ""))
+        .filter((msg) => msg.trim() !== "" && msg !== ".")
+        .join(separator)
+    }
   }
+
+  type Tagged<TBase, TTag extends Tag> = TBase &
+    TagBrand<TTag> & {
+      readonly tag: TTag
+      readonly context: Partial<TRegistry[TTag]>
+    }
+
+  return FaultBase
 }
 
-export default class Fault extends BaseFault {
-  tag = "No fault tag set" as const
-  context: Record<string, unknown> = {}
-
-  private constructor(cause?: Error) {
-    super(cause)
-  }
-
-  withTag<T extends FaultTag>(tag: T): TaggedFault<T> {
-    return new TaggedFault(this, tag)
-  }
-
-  /**
-   * Wraps an unknown error into a Fault instance.
-   * Uses types from the global FaultRegistry (FaultRegistry.tags and FaultRegistry.context) by default.
-   *
-   * @param error - The error to wrap (Error object or any value)
-   * @returns A new Fault instance wrapping the error
-   *
-   * @example
-   * ```ts
-   * // Basic usage with FaultRegistry types
-   * try {
-   *   await database.query()
-   * } catch (err) {
-   *   throw Fault.wrap(err)
-   *     .withTag("DATABASE_ERROR")
-   *     .withDescription("Query failed")
-   *     .withContext({ query: "SELECT *" }) // Type-safe based on tag!
-   * }
-   * ```
-   */
-  static wrap(error: unknown): Fault {
-    const cause = error instanceof Error ? error : new Error(String(error))
-    return new Fault(cause)
-  }
-
-  /**
-   * Creates a Fault with the specified tag.
-   *
-   * @param tag - The fault tag
-   * @returns Fault instance (without withTag method)
-   *
-   * @example
-   * ```ts
-   * Fault.create("DATABASE_ERROR")
-   *   .withDescription("Connection failed")
-   *   .withContext({ query: "SELECT *" })
-   * ```
-   */
-  static create<T extends FaultTag>(tag: T): TaggedFault<T> {
-    return new TaggedFault(null, tag)
-  }
-}
-
-class TaggedFault<T extends FaultTag> extends BaseFault {
-  tag: T
-  context: PartialContextForTag<T>
-
-  constructor(fault: Fault | TaggedFault<T> | null, tag: T, context?: ContextForTag<T>) {
-    super(fault?.cause, fault?.debug, fault?.message)
-    this.tag = tag
-    this.context = (context ?? {}) as PartialContextForTag<T>
-  }
-
-  withContext(context: ContextForTag<T>): ContextForTag<T> extends never ? never : TaggedFault<T> {
-    // oxlint-disable-next-line typescript/no-explicit-any, typescript/no-unsafe-return
-    return new TaggedFault(this, this.tag, context) as any
-  }
-
-  clearContext(): TaggedFault<T> {
-    return new TaggedFault(this, this.tag)
-  }
-}
+// Default export for the Faultier namespace
+const Faultier = { IS_FAULT, UNKNOWN, define }
+export default Faultier

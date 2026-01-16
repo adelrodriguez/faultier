@@ -1,9 +1,14 @@
-export { default as Fault } from "./lib"
+import Faultier from "#lib/index.ts"
+
+export { define, IS_FAULT, UNKNOWN } from "#lib/index.ts"
 export type {
-  ContextForTag,
+  ChainFormattingOptions,
+  FaultContext,
   FaultJSON,
-  FaultRegistry,
-  FaultTag,
   SerializableError,
   SerializableFault,
-} from "./lib/types"
+  Tagged,
+  TagsOf,
+} from "#lib/types.ts"
+
+export default Faultier

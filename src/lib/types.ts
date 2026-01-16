@@ -1,47 +1,73 @@
 /**
- * Registry interface for module augmentation. Extend this interface in your
- * application to define fault tags and their associated context schemas.
+ * Type helpers for Faultier.
+ *
+ * Design goals:
+ * - Keep the public surface **small and readable**.
+ * - Preserve **subclass methods** by composing types with `InstanceType<typeof Fault>`.
+ * - Provide an ergonomic return-type helper: `Faultier.Tagged<typeof Fault, "tag">`.
+ */
+
+// Phantom brand symbol for preserving tag type through method chains
+declare const TagBrand: unique symbol
+
+/**
+ * Internal brand used by tagged faults.
+ * Exported as a type (not a value) so consumers never interact with the symbol directly.
+ */
+export type TagBrand<TTag extends string> = {
+  readonly [TagBrand]: TTag
+}
+
+type AnyConstructor = abstract new (
+  // oxlint-disable-next-line typescript/no-explicit-any
+  ...args: any[]
+  // oxlint-disable-next-line typescript/no-explicit-any
+) => any
+
+/**
+ * Extracts the registry type from a Fault class created by `define()`.
+ */
+type RegistryOf<TFaultClass extends AnyConstructor> = TFaultClass extends {
+  readonly __faultierRegistry?: infer R
+}
+  ? R
+  : never
+
+/**
+ * Extracts the tag union from a Fault class created by `define()`.
+ */
+export type TagsOf<TFaultClass extends AnyConstructor> = keyof RegistryOf<TFaultClass> & string
+
+/**
+ * Extracts the context type for a tag from a Fault class created by `define()`.
+ */
+export type FaultContext<
+  TFaultClass extends AnyConstructor,
+  TTag extends TagsOf<TFaultClass>,
+> = Partial<RegistryOf<TFaultClass>[TTag]>
+
+/**
+ * A Fault instance with a specific tag and tag-specific context type.
+ * Preserves subclass methods because it intersects with `InstanceType<TFaultClass>`.
  *
  * @example
  * ```ts
- * declare module "faultier" {
- *   interface FaultRegistry {
- *     DATABASE_ERROR: { query: string; host: string }
- *     AUTH_ERROR: { userId: string; reason: string }
- *     NOT_FOUND: { path: string }
- *     GENERIC_ERROR: never  // no context allowed - withContext will error
- *   }
+ * type MyRegistry = { "db.error": { query: string } }
+ * class Fault extends Faultier.define<MyRegistry>() {}
+ *
+ * function dbOperation(): Faultier.Tagged<typeof Fault, "db.error"> {
+ *   return Fault.create("db.error").withContext({ query: "SELECT *" })
  * }
  * ```
  */
-// oxlint-disable-next-line typescript/no-empty-object-type
-export interface FaultRegistry {}
-
-/**
- * Extracts tag keys from FaultRegistry.
- */
-export type FaultTag = keyof FaultRegistry extends never ? string : keyof FaultRegistry
-
-/**
- * Gets the context type for a specific tag.
- * Returns never for tags without context (undefined or never), preventing withContext from being called.
- * Returns Record<string, unknown> for unknown tags.
- */
-export type ContextForTag<TTag extends string> = TTag extends keyof FaultRegistry
-  ? FaultRegistry[TTag] extends undefined
-    ? never
-    : FaultRegistry[TTag]
-  : Record<string, unknown>
-
-/**
- * Gets the partial context type for a specific tag.
- * Used when reading context (e.g., after isFault()) since context may not have been provided.
- */
-export type PartialContextForTag<TTag extends string> = TTag extends keyof FaultRegistry
-  ? FaultRegistry[TTag] extends undefined
-    ? never
-    : Partial<FaultRegistry[TTag]>
-  : Record<string, unknown>
+export type Tagged<
+  TFaultClass extends AnyConstructor,
+  TTag extends TagsOf<TFaultClass>,
+> = InstanceType<TFaultClass> &
+  TagBrand<TTag> & {
+    readonly tag: TTag
+    readonly context: FaultContext<TFaultClass, TTag>
+  }
 
 /**
  * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.
@@ -55,7 +81,7 @@ export type ChainFormattingOptions = {
 
 export type FaultJSON<
   TTag extends string = string,
-  TContext extends ContextForTag<TTag> = ContextForTag<TTag>,
+  TContext extends Record<string, unknown> = Record<string, unknown>,
 > = {
   name: string
   tag: TTag
