@@ -448,6 +448,29 @@ describe("extend", () => {
       })
       expect(validationFault.field).toBe("email")
     })
+
+    it("should allow modifiers after withContext", () => {
+      class HttpError extends Error {
+        statusCode: number
+        constructor(message: string, statusCode: number) {
+          super(message)
+          this.statusCode = statusCode
+        }
+      }
+
+      const HttpFault = extend(HttpError)
+
+      const fault = HttpFault.create("Error", 500)
+        .withTag("LAYER_1")
+        .withContext({ host: "localhost" })
+        .withDebug("Debug after context")
+        .withMessage("Message after context")
+
+      expect(fault.debug).toBe("Debug after context")
+      expect(fault.message).toBe("Message after context")
+      expect(fault.context).toEqual({ host: "localhost" })
+      expect(fault.statusCode).toBe(500)
+    })
   })
 
   describe("stack trace preservation", () => {
@@ -571,6 +594,25 @@ describe("extend", () => {
       httpFault.cause = fault1
 
       expect(BaseFault.getIssue(httpFault)).toBe("Service unavailable. Connection timeout.")
+    })
+  })
+
+  describe("built-in error subclasses", () => {
+    it("should extend TypeError correctly", () => {
+      const TypeFault = extend(TypeError)
+      const fault = TypeFault.create("Invalid type").withTag("LAYER_1")
+
+      expect(fault instanceof TypeError).toBe(true)
+      expect(Fault.isFault(fault)).toBe(true)
+      expect(fault.name).toBe("TypeError")
+    })
+
+    it("should extend RangeError correctly", () => {
+      const RangeFault = extend(RangeError)
+      const fault = RangeFault.create("Out of range").withTag("LAYER_1")
+
+      expect(fault instanceof RangeError).toBe(true)
+      expect(Fault.isFault(fault)).toBe(true)
     })
   })
 })

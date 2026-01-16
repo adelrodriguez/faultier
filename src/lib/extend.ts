@@ -163,9 +163,10 @@ export function extend<TErrorClass extends new (...args: any[]) => Error>(
     override context: Record<string, unknown> = {}
 
     constructor(fault: ExtendedFaultInstance, tag: FaultTag, context?: ContextForTag<FaultTag>) {
-      // Get constructor args from fault to call parent constructor
+      // Create placeholder args - using undefined is safer than null for most constructors
+      // Note: Extended classes with strict constructor validation may need custom handling
       const args = Array.from({ length: ErrorClass.length }).fill(
-        null
+        void 0
       ) as ConstructorParameters<ErrorClassType>
       super(...args)
 

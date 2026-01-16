@@ -794,6 +794,13 @@ describe("Fault", () => {
       expect(tags).toEqual(["No fault tag set" as FaultTag])
       expect(fault.tag).toBe("No fault tag set")
     })
+
+    it("should include duplicate tags when they appear multiple times in chain", () => {
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG")
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG")
+
+      expect(fault2.getTags()).toEqual(["MY_TAG", "MY_TAG"])
+    })
   })
 
   describe("flatten", () => {
@@ -1107,7 +1114,7 @@ describe("Fault", () => {
       emptyError.message = ""
       const fault = Fault.wrap(emptyError).withTag("LAYER_1")
 
-      expect(Fault.getIssue(fault)).toBe(".")
+      expect(Fault.getIssue(fault)).toBe("")
     })
 
     it("should work with single fault without description", () => {
@@ -1359,6 +1366,18 @@ describe("Fault", () => {
     })
   })
 
+  describe("create", () => {
+    it("should create a fault with default values", () => {
+      const fault = Fault.create("MY_TAG")
+
+      expect(fault.tag).toBe("MY_TAG")
+      expect(fault.context).toEqual({})
+      expect(fault.cause).toBeUndefined()
+      expect(fault.debug).toBeUndefined()
+      expect(fault.message).toBe("")
+    })
+  })
+
   describe("fromSerializable", () => {
     it("should deserialize a single fault", () => {
       const serialized = {
@@ -1459,6 +1478,38 @@ describe("Fault", () => {
       expect(() => Fault.fromSerializable(serialized)).toThrow(
         "Cannot deserialize SerializableError as Fault"
       )
+    })
+
+    it("should throw when name is missing", () => {
+      const invalid = { context: {}, message: "test", tag: "MY_TAG" }
+      expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
+        "'name' must be a string"
+      )
+    })
+
+    it("should throw when message is missing", () => {
+      const invalid = { context: {}, name: "Fault", tag: "MY_TAG" }
+      expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
+        "'message' must be a string"
+      )
+    })
+
+    it("should throw when context is not an object", () => {
+      const invalid = {
+        context: "not-object",
+        message: "test",
+        name: "Fault",
+        tag: "MY_TAG",
+      }
+      expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
+        "'context' must be an object"
+      )
+    })
+
+    it("should handle undefined context gracefully", () => {
+      const data = { message: "test", name: "Fault", tag: "MY_TAG" }
+      const fault = Fault.fromSerializable(data as unknown as SerializableFault)
+      expect(fault.context).toEqual({})
     })
   })
 
@@ -1617,6 +1668,17 @@ describe("Fault", () => {
         port: 5432,
       })
     })
+
+    it("should handle conflicting context value types by using later value", () => {
+      const fault1 = Fault.wrap(new Error("test"))
+        .withTag("MY_TAG")
+        .withContext({ requestId: "string-id" })
+      const fault2 = Fault.wrap(fault1)
+        .withTag("MY_TAG")
+        .withContext({ requestId: 12_345 as unknown as string })
+
+      expect(fault2.getFullContext().requestId).toBe(12_345)
+    })
   })
 })
 
@@ -1647,5 +1709,20 @@ describe("partial context type narrowing", () => {
         expect(typeof fault.context.path).toBe("string")
       }
     }
+  })
+})
+
+describe("flatten vs getIssue behavior", () => {
+  it("flatten should include original error message, getIssue should not", () => {
+    const originalError = new Error("Original error from library")
+    const fault = Fault.wrap(originalError)
+      .withTag("MY_TAG")
+      .withDescription("Debug info", "User-facing message")
+
+    // Flatten includes all messages including the original error
+    expect(fault.flatten()).toBe("User-facing message -> Original error from library")
+
+    // GetIssue only includes fault messages, not raw errors
+    expect(Fault.getIssue(fault)).toBe("User-facing message.")
   })
 })
