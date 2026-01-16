@@ -11,6 +11,31 @@
 declare const TagBrand: unique symbol
 
 /**
+ * Generic fault tag type for use with extend().
+ * When using define<TRegistry>(), tags are constrained to keys of the registry.
+ */
+export type FaultTag = string
+
+/**
+ * Gets the context type for a given tag.
+ * For extend(), this is a generic record type.
+ */
+export type ContextForTag<_T extends FaultTag> = Record<string, unknown>
+
+/**
+ * Gets the partial context type for a given tag.
+ */
+export type PartialContextForTag<T extends FaultTag> = Partial<ContextForTag<T>>
+
+/**
+ * Minimal interface for objects that can be used with static methods like getIssue, getDebug.
+ * This allows extended faults to work with these methods.
+ */
+export interface FaultLike {
+  unwrap(): Error[]
+}
+
+/**
  * Internal brand used by tagged faults.
  * Exported as a type (not a value) so consumers never interact with the symbol directly.
  */
@@ -107,6 +132,7 @@ export type FaultJSON<
   debug?: string
   context?: TContext
   cause?: string
+  meta?: Record<string, unknown>
 }
 
 /**
@@ -127,5 +153,6 @@ export interface SerializableFault {
   message: string
   debug?: string
   context?: Record<string, unknown>
+  meta?: Record<string, unknown>
   cause?: SerializableFault | SerializableError
 }

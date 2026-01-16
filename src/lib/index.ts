@@ -2,6 +2,7 @@ import type {
   ChainFormattingOptions,
   ContextParam,
   FaultJSON,
+  FaultLike,
   TagBrand,
   SerializableError,
   SerializableFault,
@@ -62,6 +63,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     protected _tag: string = NO_FAULT_TAG
     protected _context?: Record<string, unknown>
     protected _debug?: string
+    protected _meta?: Record<string, unknown>
 
     get tag(): Tag | typeof NO_FAULT_TAG {
       return this._tag as Tag | typeof NO_FAULT_TAG
@@ -73,6 +75,10 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
 
     get debug(): string | undefined {
       return this._debug
+    }
+
+    get meta(): Record<string, unknown> | undefined {
+      return this._meta
     }
 
     declare cause?: Error
@@ -114,6 +120,14 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     withDebug(debug: string): this {
       this._debug = debug
+      return this
+    }
+
+    /**
+     * Merges metadata into this fault.
+     */
+    withMeta(meta: Record<string, unknown>): this {
+      this._meta = { ...this._meta, ...meta }
       return this
     }
 
@@ -198,14 +212,33 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
+     * Gets the merged meta from all faults in the error chain.
+     * Meta is merged from root cause to current fault, with later
+     * faults overriding earlier ones for duplicate keys.
+     */
+    getFullMeta(): Record<string, unknown> {
+      const chain = this.unwrap()
+      const faults = chain.filter((e): e is FaultBase => FaultBase.isFault(e))
+      const merged: Record<string, unknown> = {}
+
+      for (const fault of faults.toReversed()) {
+        Object.assign(merged, fault.meta ?? {})
+      }
+
+      return merged
+    }
+
+    /**
      * Converts this fault to a JSON-serializable object.
      */
     toJSON(): FaultJSON {
+      const meta = this.meta
       return {
         cause: this.cause?.message,
         context: this.context as Record<string, unknown> | undefined,
         debug: FaultBase.getDebug(this, { separator: " → " }),
         message: FaultBase.getIssue(this, { separator: " → " }),
+        ...(meta === undefined ? {} : { meta }),
         name: this.name,
         tag: this.tag,
       }
@@ -356,12 +389,14 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Serializes a fault and its entire error chain into a plain object.
      */
     static toSerializable(fault: FaultBase): SerializableFault {
+      const meta = fault.meta
       const serialized: SerializableFault = {
         context: fault.context as Record<string, unknown> | undefined,
         debug: fault.debug,
         message: fault.message,
         name: fault.name,
         tag: fault.tag,
+        ...(meta === undefined ? {} : { meta }),
       }
 
       if (fault.cause) {
@@ -422,11 +457,16 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
         throw new Error("Invalid serialized fault: 'context' must be an object or undefined")
       }
 
+      if (data.meta !== undefined && (typeof data.meta !== "object" || data.meta === null)) {
+        throw new Error("Invalid serialized fault: 'meta' must be an object or undefined")
+      }
+
       const cause = reconstructCause(data.cause)
       const instance = new this(data.message, { cause })
       instance._tag = data.tag
       instance._context = data.context
       instance._debug = data.debug
+      instance._meta = data.meta
 
       return instance as InstanceType<This>
     }
@@ -434,7 +474,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     /**
      * Extracts all user-facing messages from the fault chain.
      */
-    static getIssue(fault: FaultBase, options?: Partial<ChainFormattingOptions>): string {
+    static getIssue(fault: FaultLike, options?: Partial<ChainFormattingOptions>): string {
       const {
         separator = " ",
         formatter = (msg: string) => {
@@ -455,7 +495,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     /**
      * Extracts all debug messages from the fault chain.
      */
-    static getDebug(fault: FaultBase, options?: Partial<ChainFormattingOptions>): string {
+    static getDebug(fault: FaultLike, options?: Partial<ChainFormattingOptions>): string {
       const {
         separator = " ",
         formatter = (msg: string) => {
@@ -483,6 +523,29 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
   return FaultBase
 }
 
+/**
+ * Base Fault class with a generic registry for use with extend() and standalone usage.
+ * This class provides static methods like isFault, wrap, getDebug, getIssue, etc.
+ */
+export const BaseFault = define<Record<string, Record<string, unknown>>>()
+
+/**
+ * Type alias for BaseFault instance.
+ */
+export type BaseFault = InstanceType<typeof BaseFault>
+
 // Default export for the Faultier namespace
-const Faultier = { IS_FAULT, UNKNOWN, define }
+const Faultier = {
+  IS_FAULT,
+  UNKNOWN,
+  define,
+  /**
+   * Checks if a value is a Fault instance.
+   */
+  isFault: (value: unknown) => BaseFault.isFault(value),
+  /**
+   * Wraps an unknown error into a Fault instance.
+   */
+  wrap: (error: unknown) => BaseFault.wrap(error),
+}
 export default Faultier
