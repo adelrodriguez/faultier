@@ -67,7 +67,7 @@ describe("Fault", () => {
         .withTag("LAYER_2")
         .withDescription("Service failed", "Authentication service unavailable")
 
-      // eslint-disable-next-line eslint-plugin-unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
+      // oxlint-disable-next-line unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
       const json = JSON.parse(JSON.stringify(fault2))
 
       expect(json.message).toBe(
