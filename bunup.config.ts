@@ -5,7 +5,7 @@ export default defineConfig({
   dts: {
     splitting: true,
   },
-  entry: ["src/index.ts", "src/extend.ts"],
+  entry: ["src/index.ts"],
   format: "esm",
   outDir: "dist",
   sourcemap: true,

@@ -31,10 +31,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./extend": {
-      "types": "./dist/extend.d.ts",
-      "import": "./dist/extend.js"
     }
   },
   "scripts": {
