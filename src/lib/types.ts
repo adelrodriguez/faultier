@@ -40,11 +40,29 @@ export type TagsOf<TFaultClass extends AnyConstructor> = keyof RegistryOf<TFault
 
 /**
  * Extracts the context type for a tag from a Fault class created by `define()`.
+ * Returns `T | undefined` when all properties are optional, `T` when there are required properties.
  */
 export type FaultContext<
   TFaultClass extends AnyConstructor,
   TTag extends TagsOf<TFaultClass>,
-> = Partial<RegistryOf<TFaultClass>[TTag]>
+  // oxlint-disable-next-line typescript/no-empty-object-type
+> = {} extends RegistryOf<TFaultClass>[TTag]
+  ? RegistryOf<TFaultClass>[TTag] | undefined
+  : RegistryOf<TFaultClass>[TTag]
+
+/**
+ * Conditional context parameter for withTag/create methods.
+ * - If T is `never`: no context allowed (empty tuple)
+ * - If all properties in T are optional: context is optional
+ * - If T has required properties: context is required
+ */
+// oxlint-disable-next-line typescript/no-empty-object-type
+export type ContextParam<T> = [T] extends [never]
+  ? []
+  : // oxlint-disable-next-line typescript/no-empty-object-type
+    {} extends T
+    ? [context?: T]
+    : [context: T]
 
 /**
  * A Fault instance with a specific tag and tag-specific context type.
@@ -56,7 +74,7 @@ export type FaultContext<
  * class Fault extends Faultier.define<MyRegistry>() {}
  *
  * function dbOperation(): Faultier.Tagged<typeof Fault, "db.error"> {
- *   return Fault.create("db.error").withContext({ query: "SELECT *" })
+ *   return Fault.create("db.error", { query: "SELECT *" })
  * }
  * ```
  */
@@ -81,13 +99,13 @@ export type ChainFormattingOptions = {
 
 export type FaultJSON<
   TTag extends string = string,
-  TContext extends Record<string, unknown> = Record<string, unknown>,
+  TContext extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
 > = {
   name: string
   tag: TTag
   message: string
   debug?: string
-  context: TContext
+  context?: TContext
   cause?: string
 }
 
@@ -108,6 +126,6 @@ export interface SerializableFault {
   tag: string
   message: string
   debug?: string
-  context: Record<string, unknown>
+  context?: Record<string, unknown>
   cause?: SerializableFault | SerializableError
 }

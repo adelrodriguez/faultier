@@ -73,7 +73,7 @@ type AppErrors = {
   DATABASE_ERROR: { query: string; host?: string }
   AUTH_ERROR: { userId: string; reason: string }
   NOT_FOUND: { resource: string; id: string }
-  VALIDATION_ERROR: { field: string; message: string }
+  VALIDATION_ERROR: { field?: string; message?: string }
   GENERIC_ERROR: never // No context allowed
 }
 
@@ -85,15 +85,17 @@ try {
   await database.query()
 } catch (err) {
   throw Fault.wrap(err) // Wrap any error as a Fault
-    .withTag("DATABASE_ERROR") // Classify with a tag
-    .withContext({ query: "SELECT * FROM users" }) // Attach metadata
+    .withTag("DATABASE_ERROR", { query: "SELECT * FROM users" }) // Tag + context together
 }
 
 // Or create a fault directly when you control the error
-throw Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" })
+throw Fault.create("NOT_FOUND", { resource: "user", id: "123" })
+
+// Context is optional when all properties are optional
+throw Fault.create("VALIDATION_ERROR").withDescription("Invalid input")
 
 // Separate debug info from user-facing messages
-throw Fault.wrap(err).withTag("PAYMENT_ERROR").withDescription(
+throw Fault.wrap(err).withTag("DATABASE_ERROR", { query: "SELECT *" }).withDescription(
   "Stripe API error 402: card_declined (insufficient_funds)", // Debug (for logs)
   "Payment failed. Please try a different card." // User-facing message
 )
@@ -122,14 +124,16 @@ export class Fault extends Faultier.define<AppErrors>() {}
 Now TypeScript enforces correct tag/context combinations:
 
 ```ts
-// Type-safe: context must match the tag
-Fault.create("DATABASE_ERROR").withContext({ query: "SELECT *" }) // OK
+// Required context: DATABASE_ERROR has required `query` property
+Fault.create("DATABASE_ERROR", { query: "SELECT *" }) // OK - context required
+Fault.create("DATABASE_ERROR") // Type error: context is required
 
-Fault.create("DATABASE_ERROR").withContext({ userId: "123" }) // Type error: missing 'query'
+// Optional context: VALIDATION_ERROR has all optional properties
+Fault.create("VALIDATION_ERROR") // OK - context is optional
+Fault.create("VALIDATION_ERROR", { field: "email" }) // OK
 
-Fault.create("NOT_FOUND").withContext({ resource: "user", id: "123" }) // OK
-
-Fault.create("GENERIC_ERROR").withContext({ anything: "value" }) // Type error: withContext returns never
+// No context: GENERIC_ERROR is `never`
+Fault.create("GENERIC_ERROR") // OK - no context allowed
 ```
 
 #### Clean return types for tagged faults
@@ -148,20 +152,25 @@ type AppErrors = {
 export class Fault extends Faultier.define<AppErrors>() {}
 
 export function runQuery(): Tagged<typeof Fault, "DATABASE_ERROR"> {
-  // Note: context is always typed as Partial<...> because it may not be set yet
-  return Fault.create("DATABASE_ERROR").withContext({ query: "SELECT 1" })
+  return Fault.create("DATABASE_ERROR", { query: "SELECT 1" })
 }
 
 // You can also extract the full tag union for a given Fault class:
 export type FaultTag = Tags<typeof Fault>
 ```
 
-When reading context, use optional chaining (or checks) since keys may be absent:
+When checking a fault's tag, TypeScript narrows the context type:
 
 ```ts
-const fault = Fault.create("DATABASE_ERROR")
-fault.context.query?.toUpperCase()
+const fault = Fault.create("DATABASE_ERROR", { query: "SELECT *" })
+
+if (fault.tag === "DATABASE_ERROR") {
+  // TypeScript knows fault.context is { query: string; host?: string }
+  console.log(fault.context?.query) // Use optional chaining since context may be undefined
+}
 ```
+
+Note: Context defaults to `undefined` when not provided. For tags with all optional properties, context can be omitted entirely.
 
 For larger applications with many error types, you can organize them into groups:
 
@@ -213,7 +222,7 @@ try {
 Extract information from the chain:
 
 ```ts
-const fault = Fault.wrap(originalError).withTag("API_ERROR").withContext({ endpoint: "/users" })
+const fault = Fault.wrap(originalError).withTag("API_ERROR", { endpoint: "/users" })
 
 fault.unwrap() // [fault, ...causes, originalError] - full chain as array
 fault.flatten() // "API failed -> Service error -> Connection timeout" - messages joined
@@ -319,7 +328,7 @@ export class Fault extends Faultier.define<AppErrors>() {
 }
 
 // Usage
-const fault = Fault.create("db.timeout").withContext({ timeoutMs: 5000 })
+const fault = Fault.create("db.timeout", { timeoutMs: 5000 })
 if (fault.isRetryable()) {
   // Retry logic
 }
@@ -356,20 +365,19 @@ class Fault extends Faultier.define<MyRegistry>() {}
 Wraps any error into a Fault instance.
 
 ```ts
-Fault.wrap(new Error("Something failed"))
-  .withTag("INTERNAL_ERROR")
-  .withContext({ operation: "sync" })
+Fault.wrap(new Error("Something failed")).withTag("INTERNAL_ERROR", { operation: "sync" })
 ```
 
-#### `Fault.create(tag)`
+#### `Fault.create(tag, context?)`
 
-Creates a new Fault with the specified tag.
+Creates a new Fault with the specified tag and context. Context is required if the registry has required properties for this tag.
 
 ```ts
-Fault.create("VALIDATION_ERROR").withContext({
-  field: "email",
-  message: "Invalid format",
-})
+// Required context
+Fault.create("VALIDATION_ERROR", { field: "email", message: "Invalid format" })
+
+// Optional context (when all properties are optional)
+Fault.create("GENERIC_ERROR")
 ```
 
 #### `Fault.isFault(value)`
@@ -392,9 +400,7 @@ try {
 Converts a fault and its entire error chain to a plain object for serialization.
 
 ```ts
-const fault = Fault.create("API_ERROR")
-  .withContext({ endpoint: "/users" })
-  .withDescription("Request failed")
+const fault = Fault.create("API_ERROR", { endpoint: "/users" }).withDescription("Request failed")
 
 const serialized = Fault.toSerializable(fault)
 // {
@@ -570,13 +576,9 @@ if (httpError) {
 
 ### Instance Methods
 
-#### `fault.withTag(tag)`
+#### `fault.withTag(tag, context?)`
 
-Sets the tag for this fault. Returns `this` for chaining.
-
-#### `fault.withContext(context)`
-
-Sets the context for this fault. Returns `this` for chaining.
+Sets the tag and context for this fault. Context is required if the registry has required properties for this tag. Returns a tagged fault for chaining.
 
 #### `fault.withDescription(debug, message?)`
 
