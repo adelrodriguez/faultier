@@ -89,7 +89,7 @@ describe("Fault", () => {
         .withTag("MY_TAG", { errorCode: 100, requestId: "123" })
         .withDescription("Something went really wrong")
 
-      expect(fault.name).toBe("Fault")
+      expect(fault.name).toBe("Fault[MY_TAG]")
       expect(fault.tag).toBe("MY_TAG")
       expect(fault.message).toBe("something happened")
       expect(fault.debug).toBe("Something went really wrong")
@@ -944,7 +944,7 @@ describe("Fault", () => {
           debug: "Failed to connect",
           message: "Database unavailable",
           meta: { requestId: "req-123", retryable: true },
-          name: "Fault",
+          name: "Fault[LAYER_1]",
           tag: "LAYER_1",
         })
       })
@@ -962,7 +962,7 @@ describe("Fault", () => {
           _isFault: true,
           context: { method: "query", service: "database", statusCode: 500 },
           message: "",
-          name: "Fault",
+          name: "Fault[LAYER_2]",
           tag: "LAYER_2",
         })
         expect(serialized.debug).toBeUndefined()
@@ -1010,13 +1010,13 @@ describe("Fault", () => {
               context: { database: "postgres", host: "localhost", port: 5432 },
               message: "Connection timeout",
               meta: { requestId: "req-1" },
-              name: "Fault",
+              name: "Fault[LAYER_1]",
               tag: "LAYER_1",
             },
             context: { method: "query", service: "database", statusCode: 500 },
             message: "Connection timeout",
             meta: { retryable: true },
-            name: "Fault",
+            name: "Fault[LAYER_2]",
             tag: "LAYER_2",
           },
           context: {
@@ -1027,7 +1027,7 @@ describe("Fault", () => {
           },
           message: "Connection timeout",
           meta: { traceId: "trace-1" },
-          name: "Fault",
+          name: "Fault[LAYER_3]",
           tag: "LAYER_3",
         })
       })
@@ -1046,7 +1046,7 @@ describe("Fault", () => {
           },
           debug: "Connection failed",
           message: "Network failure",
-          name: "Fault",
+          name: "Fault[LAYER_1]",
           tag: "LAYER_1",
         })
       })
@@ -1063,7 +1063,7 @@ describe("Fault", () => {
           context: { service: "database" },
           debug: "Invalid input",
           message: "",
-          name: "Fault",
+          name: "Fault[LAYER_2]",
           tag: "LAYER_2",
         })
         expect(serialized.cause).toBeUndefined()
@@ -1404,13 +1404,13 @@ describe("Fault", () => {
         debug: "Failed to connect",
         message: "Database unavailable",
         meta: { requestId: "req-1" },
-        name: "Fault",
+        name: "Fault[LAYER_1]",
         tag: "LAYER_1" as const,
       }
 
       const fault = Fault.fromSerializable(serialized)
 
-      expect(fault.name).toBe("Fault")
+      expect(fault.name).toBe("Fault[LAYER_1]")
       expect(fault.tag).toBe("LAYER_1")
       expect(fault.message).toBe("Database unavailable")
       expect(fault.debug).toBe("Failed to connect")
@@ -1424,7 +1424,7 @@ describe("Fault", () => {
         _isFault: true,
         context: { service: "auth" },
         message: "Unauthorized",
-        name: "Fault",
+        name: "Fault[LAYER_2]",
         tag: "LAYER_2" as const,
       }
 
@@ -1447,17 +1447,17 @@ describe("Fault", () => {
             },
             context: { host: "localhost", port: 5432 },
             message: "Connection timeout",
-            name: "Fault",
+            name: "Fault[LAYER_1]",
             tag: "LAYER_1" as const,
           },
           context: { service: "database" },
           message: "Connection timeout",
-          name: "Fault",
+          name: "Fault[LAYER_2]",
           tag: "LAYER_2" as const,
         },
         context: { endpoint: "/api/users" },
         message: "Connection timeout",
-        name: "Fault",
+        name: "Fault[LAYER_3]",
         tag: "LAYER_3" as const,
       }
 
@@ -1482,7 +1482,7 @@ describe("Fault", () => {
         context: {},
         debug: "Connection failed",
         message: "Network failure",
-        name: "Fault",
+        name: "Fault[NETWORK_ERROR]",
         tag: "NETWORK_ERROR" as const,
       }
 
@@ -1514,7 +1514,7 @@ describe("Fault", () => {
     })
 
     it("should throw when message is missing", () => {
-      const invalid = { _isFault: true, context: {}, name: "Fault", tag: "MY_TAG" }
+      const invalid = { _isFault: true, context: {}, name: "Fault[MY_TAG]", tag: "MY_TAG" }
       expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
         "'message' must be a string"
       )
@@ -1525,7 +1525,7 @@ describe("Fault", () => {
         _isFault: true,
         context: "not-object",
         message: "test",
-        name: "Fault",
+        name: "Fault[MY_TAG]",
         tag: "MY_TAG",
       }
       expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
@@ -1547,13 +1547,13 @@ describe("Fault", () => {
     })
 
     it("should handle undefined context gracefully", () => {
-      const data = { _isFault: true, message: "test", name: "Fault", tag: "MY_TAG" }
+      const data = { _isFault: true, message: "test", name: "Fault[MY_TAG]", tag: "MY_TAG" }
       const fault = Fault.fromSerializable(data as unknown as SerializableFault)
       expect(fault.context).toBeUndefined()
     })
 
     it("should handle undefined meta gracefully", () => {
-      const data = { _isFault: true, message: "test", name: "Fault", tag: "MY_TAG" }
+      const data = { _isFault: true, message: "test", name: "Fault[MY_TAG]", tag: "MY_TAG" }
       const fault = Fault.fromSerializable(data as unknown as SerializableFault)
       expect(fault.meta).toBeUndefined()
     })
