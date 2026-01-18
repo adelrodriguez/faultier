@@ -11,7 +11,7 @@
 declare const TagBrand: unique symbol
 
 /**
- * Minimal interface for objects that can be used with static methods like getIssue, getDebug.
+ * Minimal interface for objects that can be used with static methods like getIssue, getDetails.
  * This allows extended faults to work with these methods.
  */
 export interface FaultLike {
@@ -96,7 +96,7 @@ export type Tagged<
   }
 
 /**
- * Options for formatting fault chain messages in methods like getIssue, getDebug, and flatten.
+ * Options for formatting fault chain messages in methods like getIssue, getDetails, and flatten.
  */
 export type ChainFormattingOptions = {
   /** Separator used to join messages from the fault chain */
@@ -122,7 +122,7 @@ export interface SerializableFault {
   name: string
   tag: string
   message: string
-  debug?: string
+  details?: string
   context?: Record<string, unknown>
   meta?: Record<string, unknown>
   cause?: SerializableFault | SerializableError

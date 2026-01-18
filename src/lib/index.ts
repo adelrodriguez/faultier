@@ -6,9 +6,7 @@ import type {
   SerializableFault,
   TagBrand,
 } from "#lib/types.ts"
-import { HAS_PUNCTUATION } from "#lib/utils.ts"
-
-const defaultTrimFormatter = (msg: string) => msg.trim()
+import { defaultDetailsFormatter, defaultIssueFormatter, defaultTrimFormatter } from "#lib/utils.ts"
 
 export const IS_FAULT: unique symbol = Symbol("IS_FAULT")
 export const UNKNOWN: unique symbol = Symbol("UNKNOWN")
@@ -61,7 +59,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
 
     protected __tag: string = NO_FAULT_TAG
     protected _context?: Record<string, unknown>
-    protected _debug?: string
+    protected _details?: string
     protected _meta?: Record<string, unknown>
 
     get tag(): Tag | typeof NO_FAULT_TAG {
@@ -81,8 +79,8 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       return this._context
     }
 
-    get debug(): string | undefined {
-      return this._debug
+    get details(): string | undefined {
+      return this._details
     }
 
     get meta(): Record<string, unknown> | undefined {
@@ -113,10 +111,10 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
-     * Sets debug and/or user-facing messages for this fault.
+     * Sets details and/or user-facing messages for this fault.
      */
-    withDescription(debug: string, message?: string): this {
-      this._debug = debug
+    withDescription(details: string, message?: string): this {
+      this._details = details
       if (message !== undefined) {
         this.message = message
       }
@@ -124,10 +122,10 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
-     * Sets only the debug message for this fault.
+     * Sets only the details message for this fault.
      */
-    withDebug(debug: string): this {
-      this._debug = debug
+    withDetails(details: string): this {
+      this._details = details
       return this
     }
 
@@ -391,7 +389,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       const serialized: SerializableFault = {
         _isFault: true,
         context: fault.context as Record<string, unknown> | undefined,
-        debug: fault.debug,
+        details: fault.details,
         message: fault.message,
         meta: fault.meta,
         name: fault.name,
@@ -464,7 +462,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       const instance = new this(data.message, { cause })
       instance._tag = data.tag
       instance._context = data.context
-      instance._debug = data.debug
+      instance._details = data.details
       instance._meta = data.meta
 
       return instance as InstanceType<This>
@@ -474,14 +472,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Extracts all user-facing messages from the fault chain.
      */
     static getIssue(fault: FaultLike, options?: Partial<ChainFormattingOptions>): string {
-      const {
-        separator = " ",
-        formatter = (msg: string) => {
-          const trimmed = msg.trim()
-          if (!trimmed) return ""
-          return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
-        },
-      } = options ?? {}
+      const { separator = " ", formatter = defaultIssueFormatter } = options ?? {}
 
       return fault
         .unwrap()
@@ -492,21 +483,15 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
-     * Extracts all debug messages from the fault chain.
+     * Extracts all details messages from the fault chain.
      */
-    static getDebug(fault: FaultLike, options?: Partial<ChainFormattingOptions>): string {
-      const {
-        separator = " ",
-        formatter = (msg: string) => {
-          const trimmed = msg.trim()
-          return HAS_PUNCTUATION.test(trimmed) ? trimmed : `${trimmed}.`
-        },
-      } = options ?? {}
+    static getDetails(fault: FaultLike, options?: Partial<ChainFormattingOptions>): string {
+      const { separator = " ", formatter = defaultDetailsFormatter } = options ?? {}
 
       return fault
         .unwrap()
         .filter((e): e is FaultBase => FaultBase.isFault(e))
-        .map((err) => formatter(err.debug ?? ""))
+        .map((err) => formatter(err.details ?? ""))
         .filter((msg) => msg.trim() !== "" && msg !== ".")
         .join(separator)
     }
@@ -524,7 +509,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
 
 /**
  * Base Fault class with a generic registry for use with extend() and standalone usage.
- * This class provides static methods like isFault, wrap, getDebug, getIssue, etc.
+ * This class provides static methods like isFault, wrap, getDetails, getIssue, etc.
  */
 export const BaseFault = define<Record<string, Record<string, unknown>>>()
 
