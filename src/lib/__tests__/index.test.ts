@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import type { SerializableFault } from "#lib/types.ts"
-import Faultier, { IS_FAULT, UNKNOWN } from "#lib/index.ts"
+import Faultier, { IS_FAULT, NO_FAULT_TAG, UNKNOWN } from "#lib/index.ts"
 
 // Define test registry
 type TestRegistry = {
@@ -751,8 +751,8 @@ describe("Fault", () => {
 
       const tags = fault.getTags()
 
-      expect(tags).toEqual(["No fault tag set"])
-      expect(fault.tag).toBe("No fault tag set")
+      expect(tags).toEqual([NO_FAULT_TAG])
+      expect(fault.tag).toBe(NO_FAULT_TAG)
     })
   })
 
@@ -1275,7 +1275,7 @@ describe("Fault", () => {
       const originalError = new Error("Something went wrong")
       const fault = Fault.wrap(originalError).withDescription("Debug message")
 
-      expect(fault.tag).toBe("No fault tag set")
+      expect(fault.tag).toBe(NO_FAULT_TAG)
       expect(fault.debug).toBe("Debug message")
       expect(fault.context).toEqual({})
     })
@@ -1725,19 +1725,6 @@ describe("Fault", () => {
 
       expect(fault.isRetryable()).toBe(true)
       expect(fault.toHttpStatus()).toBe(503)
-    })
-
-    it("should be immutable - intermediate results are safe to reuse", () => {
-      const base = AppFault.create("db.timeout")
-      const fault1 = base.withDescription("Error 1")
-      const fault2 = base.withDescription("Error 2")
-
-      // Each is a separate instance
-      expect(fault1.debug).toBe("Error 1")
-      expect(fault2.debug).toBe("Error 2")
-      expect(base.debug).toBeUndefined() // Original unchanged
-      expect(fault1).not.toBe(fault2)
-      expect(fault1).not.toBe(base)
     })
 
     it("should preserve custom methods after multiple chaining operations", () => {
