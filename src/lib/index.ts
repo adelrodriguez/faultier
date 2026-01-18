@@ -1,11 +1,10 @@
 import type {
   ChainFormattingOptions,
   ContextParam,
-  FaultJSON,
   FaultLike,
-  TagBrand,
   SerializableError,
   SerializableFault,
+  TagBrand,
 } from "#lib/types.ts"
 import { HAS_PUNCTUATION } from "#lib/utils.ts"
 
@@ -231,17 +230,8 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     /**
      * Converts this fault to a JSON-serializable object.
      */
-    toJSON(): FaultJSON {
-      const meta = this.meta
-      return {
-        cause: this.cause?.message,
-        context: this.context as Record<string, unknown> | undefined,
-        debug: FaultBase.getDebug(this, { separator: " → " }),
-        message: FaultBase.getIssue(this, { separator: " → " }),
-        ...(meta === undefined ? {} : { meta }),
-        name: this.name,
-        tag: this.tag,
-      }
+    toJSON(): SerializableFault {
+      return FaultBase.toSerializable(this)
     }
 
     // --- Static methods ---
@@ -389,14 +379,14 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Serializes a fault and its entire error chain into a plain object.
      */
     static toSerializable(fault: FaultBase): SerializableFault {
-      const meta = fault.meta
       const serialized: SerializableFault = {
+        _isFault: true,
         context: fault.context as Record<string, unknown> | undefined,
         debug: fault.debug,
         message: fault.message,
+        meta: fault.meta,
         name: fault.name,
         tag: fault.tag,
-        ...(meta === undefined ? {} : { meta }),
       }
 
       if (fault.cause) {
@@ -428,7 +418,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
           return undefined
         }
 
-        if ("tag" in causeData) {
+        if ("_isFault" in causeData) {
           return FaultBase.fromSerializable.call(this, causeData) as Error
         }
 
@@ -437,7 +427,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
         return error
       }
 
-      if (!("tag" in data)) {
+      if (!("_isFault" in data)) {
         throw new Error("Cannot deserialize SerializableError as Fault. Top-level must be a Fault.")
       }
 

@@ -50,27 +50,22 @@ class Fault extends Faultier.define<TestRegistry>() {
 
 describe("Fault", () => {
   describe("toJSON", () => {
-    it("should use getIssue and getDebug helpers for message and debug", () => {
+    it("should serialize using toSerializable output", () => {
       const err = new Error("Something happened")
       const fault = Fault.wrap(err)
         .withTag("MY_TAG", { errorCode: 100, requestId: "123" })
         .withDescription("Something went really wrong")
         .withMeta({ retryable: true, traceId: "trace-123" })
 
-      expect(JSON.stringify(fault)).toEqual(
-        JSON.stringify({
-          cause: "Something happened",
-          context: { errorCode: 100, requestId: "123" },
-          debug: "Something went really wrong.",
-          message: "Something happened.",
-          meta: { retryable: true, traceId: "trace-123" },
-          name: "Fault",
-          tag: "MY_TAG",
-        })
-      )
+      // oxlint-disable-next-line unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
+      const json = JSON.parse(JSON.stringify(fault))
+      // oxlint-disable-next-line unicorn/prefer-structured-clone -- Normalize JSON output for comparison
+      const expected = JSON.parse(JSON.stringify(Fault.toSerializable(fault)))
+
+      expect(json).toEqual(expected)
     })
 
-    it("should aggregate messages from fault chain", () => {
+    it("should serialize nested fault causes", () => {
       const rootError = new Error("Database connection failed")
       const fault1 = Fault.wrap(rootError)
         .withTag("LAYER_1")
@@ -81,11 +76,10 @@ describe("Fault", () => {
 
       // oxlint-disable-next-line unicorn/prefer-structured-clone -- Need JSON.stringify to trigger toJSON()
       const json = JSON.parse(JSON.stringify(fault2))
+      // oxlint-disable-next-line unicorn/prefer-structured-clone -- Normalize JSON output for comparison
+      const expected = JSON.parse(JSON.stringify(Fault.toSerializable(fault2)))
 
-      expect(json.message).toBe(
-        "Authentication service unavailable. → Failed to connect to database."
-      )
-      expect(json.debug).toBe("Service failed. → DB timeout.")
+      expect(json).toEqual(expected)
     })
   })
 
@@ -939,6 +933,7 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          _isFault: true,
           context: {
             database: "postgres",
             host: "localhost",
@@ -964,6 +959,7 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          _isFault: true,
           context: { method: "query", service: "database", statusCode: 500 },
           message: "",
           name: "Fault",
@@ -1002,8 +998,11 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault3)
 
         expect(serialized).toEqual({
+          _isFault: true,
           cause: {
+            _isFault: true,
             cause: {
+              _isFault: true,
               cause: {
                 message: "Connection timeout",
                 name: "Error",
@@ -1040,6 +1039,7 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          _isFault: true,
           cause: {
             message: "Network failure",
             name: "Error",
@@ -1059,6 +1059,7 @@ describe("Fault", () => {
         const serialized = Fault.toSerializable(fault)
 
         expect(serialized).toEqual({
+          _isFault: true,
           context: { service: "database" },
           debug: "Invalid input",
           message: "",
@@ -1398,6 +1399,7 @@ describe("Fault", () => {
   describe("fromSerializable", () => {
     it("should deserialize a single fault", () => {
       const serialized = {
+        _isFault: true,
         context: { host: "localhost", port: 5432 },
         debug: "Failed to connect",
         message: "Database unavailable",
@@ -1419,6 +1421,7 @@ describe("Fault", () => {
 
     it("should deserialize a fault without debug message", () => {
       const serialized = {
+        _isFault: true,
         context: { service: "auth" },
         message: "Unauthorized",
         name: "Fault",
@@ -1433,8 +1436,11 @@ describe("Fault", () => {
 
     it("should deserialize a fault chain", () => {
       const serialized = {
+        _isFault: true,
         cause: {
+          _isFault: true,
           cause: {
+            _isFault: true,
             cause: {
               message: "Connection timeout",
               name: "Error",
@@ -1468,6 +1474,7 @@ describe("Fault", () => {
 
     it("should deserialize a fault ending in plain Error", () => {
       const serialized = {
+        _isFault: true,
         cause: {
           message: "Network failure",
           name: "Error",
@@ -1500,14 +1507,14 @@ describe("Fault", () => {
     })
 
     it("should throw when name is missing", () => {
-      const invalid = { context: {}, message: "test", tag: "MY_TAG" }
+      const invalid = { _isFault: true, context: {}, message: "test", tag: "MY_TAG" }
       expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
         "'name' must be a string"
       )
     })
 
     it("should throw when message is missing", () => {
-      const invalid = { context: {}, name: "Fault", tag: "MY_TAG" }
+      const invalid = { _isFault: true, context: {}, name: "Fault", tag: "MY_TAG" }
       expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
         "'message' must be a string"
       )
@@ -1515,6 +1522,7 @@ describe("Fault", () => {
 
     it("should throw when context is not an object", () => {
       const invalid = {
+        _isFault: true,
         context: "not-object",
         message: "test",
         name: "Fault",
@@ -1539,7 +1547,7 @@ describe("Fault", () => {
     })
 
     it("should handle undefined context gracefully", () => {
-      const data = { message: "test", name: "Fault", tag: "MY_TAG" }
+      const data = { _isFault: true, message: "test", name: "Fault", tag: "MY_TAG" }
       const fault = Fault.fromSerializable(data as unknown as SerializableFault)
       expect(fault.context).toBeUndefined()
     })

@@ -11,23 +11,6 @@
 declare const TagBrand: unique symbol
 
 /**
- * Generic fault tag type for use with extend().
- * When using define<TRegistry>(), tags are constrained to keys of the registry.
- */
-export type FaultTag = string
-
-/**
- * Gets the context type for a given tag.
- * For extend(), this is a generic record type.
- */
-export type ContextForTag<_T extends FaultTag> = Record<string, unknown>
-
-/**
- * Gets the partial context type for a given tag.
- */
-export type PartialContextForTag<T extends FaultTag> = Partial<ContextForTag<T>>
-
-/**
  * Minimal interface for objects that can be used with static methods like getIssue, getDebug.
  * This allows extended faults to work with these methods.
  */
@@ -122,19 +105,6 @@ export type ChainFormattingOptions = {
   formatter?: (message: string) => string
 }
 
-export type FaultJSON<
-  TTag extends string = string,
-  TContext extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
-> = {
-  name: string
-  tag: TTag
-  message: string
-  debug?: string
-  context?: TContext
-  cause?: string
-  meta?: Record<string, unknown>
-}
-
 /**
  * Serialized representation of a plain Error (non-Fault).
  */
@@ -148,6 +118,7 @@ export interface SerializableError {
  * Unlike FaultJSON, this preserves the entire cause chain as nested objects.
  */
 export interface SerializableFault {
+  _isFault: true
   name: string
   tag: string
   message: string
