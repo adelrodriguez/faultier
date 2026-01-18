@@ -1,12 +1,3 @@
-/**
- * Type helpers for Faultier.
- *
- * Design goals:
- * - Keep the public surface **small and readable**.
- * - Preserve **subclass methods** by composing types with `InstanceType<typeof Fault>`.
- * - Provide an ergonomic return-type helper: `Faultier.Tagged<typeof Fault, "tag">`.
- */
-
 // Phantom brand symbol for preserving tag type through method chains
 declare const TagBrand: unique symbol
 
@@ -26,7 +17,7 @@ export type TagBrand<TTag extends string> = {
   readonly [TagBrand]: TTag
 }
 
-type AnyConstructor = abstract new (
+export type AnyConstructor = abstract new (
   // oxlint-disable-next-line typescript/no-explicit-any
   ...args: any[]
   // oxlint-disable-next-line typescript/no-explicit-any
@@ -74,25 +65,28 @@ export type ContextParam<T> = [T] extends [never]
 
 /**
  * A Fault instance with a specific tag and tag-specific context type.
- * Preserves subclass methods because it intersects with `InstanceType<TFaultClass>`.
+ * Preserves subclass methods because it intersects with the instance type.
  *
  * @example
  * ```ts
- * type MyRegistry = { "db.error": { query: string } }
- * class Fault extends Faultier.define<MyRegistry>() {}
+ * import Faultier, { type TaggedFault, type TagsOf, type FaultContext } from "faultier"
  *
- * function dbOperation(): Faultier.Tagged<typeof Fault, "db.error"> {
+ * type Registry = { "db.error": { query: string }, "not.found": {} }
+ * class Fault extends Faultier.define<Registry>() {}
+ *
+ * // Create local alias using TaggedFault
+ * type FaultTagged<T extends TagsOf<typeof Fault>> =
+ *   TaggedFault<Fault, T, FaultContext<typeof Fault, T>>
+ *
+ * function dbOperation(): FaultTagged<"db.error"> {
  *   return Fault.create("db.error", { query: "SELECT *" })
  * }
  * ```
  */
-export type Tagged<
-  TFaultClass extends AnyConstructor,
-  TTag extends TagsOf<TFaultClass>,
-> = InstanceType<TFaultClass> &
+export type TaggedFault<TFaultInstance, TTag extends string, TContext = unknown> = TFaultInstance &
   TagBrand<TTag> & {
     readonly tag: TTag
-    readonly context: FaultContext<TFaultClass, TTag>
+    readonly context: TContext
   }
 
 /**

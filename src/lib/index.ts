@@ -4,7 +4,7 @@ import type {
   FaultLike,
   SerializableError,
   SerializableFault,
-  TagBrand,
+  TaggedFault,
 } from "#lib/types.ts"
 import { defaultDetailsFormatter, defaultIssueFormatter, defaultTrimFormatter } from "#lib/utils.ts"
 
@@ -104,10 +104,23 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      * Sets the tag and context for this fault.
      * Context is required if the registry defines required properties for this tag.
      */
-    withTag<T extends Tag>(tag: T, ...args: ContextParam<TRegistry[T]>): Tagged<this, T> {
+    withTag<T extends Tag>(
+      tag: T,
+      ...args: ContextParam<TRegistry[T]>
+    ): TaggedFault<
+      this,
+      T,
+      // oxlint-disable-next-line typescript/no-empty-object-type
+      {} extends TRegistry[T] ? TRegistry[T] | undefined : TRegistry[T]
+    > {
       this._tag = tag
       this._context = args[0] as Record<string, unknown> | undefined
-      return this as unknown as Tagged<this, T>
+      return this as unknown as TaggedFault<
+        this,
+        T,
+        // oxlint-disable-next-line typescript/no-empty-object-type
+        {} extends TRegistry[T] ? TRegistry[T] | undefined : TRegistry[T]
+      >
     }
 
     /**
@@ -252,11 +265,21 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       this: This,
       tag: T,
       ...args: ContextParam<TRegistry[T]>
-    ): Tagged<InstanceType<This>, T> {
+    ): TaggedFault<
+      InstanceType<This>,
+      T,
+      // oxlint-disable-next-line typescript/no-empty-object-type
+      {} extends TRegistry[T] ? TRegistry[T] | undefined : TRegistry[T]
+    > {
       const instance = new this()
       instance._tag = tag
       instance._context = args[0] as Record<string, unknown> | undefined
-      return instance as unknown as Tagged<InstanceType<This>, T>
+      return instance as unknown as TaggedFault<
+        InstanceType<This>,
+        T,
+        // oxlint-disable-next-line typescript/no-empty-object-type
+        {} extends TRegistry[T] ? TRegistry[T] | undefined : TRegistry[T]
+      >
     }
 
     /**
@@ -324,14 +347,28 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     static matchTag<TTag extends Tag, TResult>(
       error: unknown,
       tag: TTag,
-      callback: (fault: Tagged<FaultBase, TTag>) => TResult
+      callback: (
+        fault: TaggedFault<
+          FaultBase,
+          TTag,
+          // oxlint-disable-next-line typescript/no-empty-object-type
+          {} extends TRegistry[TTag] ? TRegistry[TTag] | undefined : TRegistry[TTag]
+        >
+      ) => TResult
     ): TResult | typeof UNKNOWN {
       if (!FaultBase.isFault(error)) {
         return UNKNOWN
       }
 
       if (error.tag === tag) {
-        return callback(error as unknown as Tagged<FaultBase, TTag>)
+        return callback(
+          error as unknown as TaggedFault<
+            FaultBase,
+            TTag,
+            // oxlint-disable-next-line typescript/no-empty-object-type
+            {} extends TRegistry[TTag] ? TRegistry[TTag] | undefined : TRegistry[TTag]
+          >
+        )
       }
 
       return UNKNOWN
@@ -342,7 +379,14 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     static matchTags<
       THandlers extends {
-        [K in Tag]?: (fault: Tagged<FaultBase, K>) => unknown
+        [K in Tag]?: (
+          fault: TaggedFault<
+            FaultBase,
+            K,
+            // oxlint-disable-next-line typescript/no-empty-object-type
+            {} extends TRegistry[K] ? TRegistry[K] | undefined : TRegistry[K]
+          >
+        ) => unknown
       },
     >(error: unknown, handlers: THandlers): HandlerReturnUnion<THandlers> | typeof UNKNOWN {
       if (!FaultBase.isFault(error)) {
@@ -364,8 +408,15 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     static handle<
       H extends {
-        // oxlint-disable-next-line typescript/no-explicit-any
-        [T in Tag]: (fault: Tagged<FaultBase, T>) => any
+        [T in Tag]: (
+          fault: TaggedFault<
+            FaultBase,
+            T,
+            // oxlint-disable-next-line typescript/no-empty-object-type
+            {} extends TRegistry[T] ? TRegistry[T] | undefined : TRegistry[T]
+          >
+          // oxlint-disable-next-line typescript/no-explicit-any
+        ) => any
       },
     >(error: unknown, handlers: H): HandlerReturnUnion<H> | typeof UNKNOWN {
       if (!FaultBase.isFault(error)) {
@@ -497,13 +548,6 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
   }
 
-  type Tagged<TBase, TTag extends Tag> = TBase &
-    TagBrand<TTag> & {
-      readonly tag: TTag
-      // oxlint-disable-next-line typescript/no-empty-object-type
-      readonly context: {} extends TRegistry[TTag] ? TRegistry[TTag] | undefined : TRegistry[TTag]
-    }
-
   return FaultBase
 }
 
@@ -532,4 +576,5 @@ const Faultier = {
    */
   wrap: (error: unknown) => BaseFault.wrap(error),
 }
+
 export default Faultier

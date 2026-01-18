@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import type { SerializableFault } from "#lib/types.ts"
+import type { FaultContext, SerializableFault, TaggedFault, TagsOf } from "#lib/types.ts"
 import Faultier, { IS_FAULT, NO_FAULT_TAG, UNKNOWN } from "#lib/index.ts"
 
 // Define test registry
@@ -47,6 +47,13 @@ class Fault extends Faultier.define<TestRegistry>() {
     return this.tag === "LAYER_1"
   }
 }
+
+// Type alias for testing TaggedFault compatibility
+type FaultTagged<T extends TagsOf<typeof Fault>> = TaggedFault<
+  Fault,
+  T,
+  FaultContext<typeof Fault, T>
+>
 
 describe("Fault", () => {
   describe("toJSON", () => {
@@ -1857,6 +1864,90 @@ describe("Fault", () => {
       expect(fault.isRetryable()).toBe(true)
       expect(fault.toHttpStatus()).toBe(504)
       expect(fault instanceof AppFault).toBe(true)
+    })
+  })
+
+  describe("TaggedFault type", () => {
+    it("should match return type of Fault.create", () => {
+      const fault1 = Fault.create("MY_TAG", { requestId: "123" })
+      const fault2: FaultTagged<"MY_TAG"> = fault1
+      expect(fault2.tag).toBe("MY_TAG")
+      expect(fault2.context?.requestId).toBe("123")
+    })
+
+    it("should match return type of withTag", () => {
+      const wrapped = Fault.wrap(new Error("test"))
+      const tagged = wrapped.withTag("LAYER_1", { host: "localhost" })
+      const typed: FaultTagged<"LAYER_1"> = tagged
+      expect(typed.tag).toBe("LAYER_1")
+      expect(typed.context?.host).toBe("localhost")
+    })
+
+    it("should work with tags that have required properties", () => {
+      const fault = Fault.create("LAYER_4", { path: "/api/users" })
+      const typed: FaultTagged<"LAYER_4"> = fault
+      expect(typed.tag).toBe("LAYER_4")
+      expect(typed.context.path).toBe("/api/users")
+    })
+
+    it("should work with tags that have no context", () => {
+      const fault = Fault.create("NO_CONTEXT_TAG")
+      const typed: FaultTagged<"NO_CONTEXT_TAG"> = fault
+      expect(typed.tag).toBe("NO_CONTEXT_TAG")
+    })
+
+    it("should preserve custom methods in TaggedFault type", () => {
+      const fault = Fault.create("MY_TAG", { requestId: "123" })
+      const typed: FaultTagged<"MY_TAG"> = fault
+      // Should have custom methods
+      expect(typed.custom()).toBe(123)
+      expect(typed.isRetryable()).toBe(false)
+    })
+
+    it("should work with union types for errors-as-values pattern", () => {
+      function testFunction(): FaultTagged<"MY_TAG"> | FaultTagged<"LAYER_1"> {
+        if (Math.random() > 0.5) {
+          return Fault.create("MY_TAG", { requestId: "123" })
+        }
+        return Fault.create("LAYER_1", { host: "localhost" })
+      }
+
+      const result = testFunction()
+      expect(["MY_TAG", "LAYER_1"]).toContain(result.tag)
+    })
+
+    it("should match type from withTag chaining", () => {
+      const fault = Fault.wrap(new Error("test"))
+        .withTag("MY_TAG", { requestId: "123" })
+        .withDescription("Test description")
+
+      const typed: FaultTagged<"MY_TAG"> = fault
+      expect(typed.tag).toBe("MY_TAG")
+      expect(typed.context?.requestId).toBe("123")
+      expect(typed.details).toBe("Test description")
+    })
+
+    it("should ensure TaggedFault matches return types", () => {
+      // This test ensures structural compatibility
+      const createResult = Fault.create("MY_TAG", { requestId: "123" })
+      const withTagResult = Fault.wrap(new Error("test")).withTag("MY_TAG", { requestId: "123" })
+
+      // Both should be assignable to TaggedFault
+      const typed1: TaggedFault<
+        Fault,
+        "MY_TAG",
+        FaultContext<typeof Fault, "MY_TAG">
+      > = createResult
+      const typed2: TaggedFault<
+        Fault,
+        "MY_TAG",
+        FaultContext<typeof Fault, "MY_TAG">
+      > = withTagResult
+
+      expect(typed1.tag).toBe("MY_TAG")
+      expect(typed2.tag).toBe("MY_TAG")
+      expect(typed1.context?.requestId).toBe("123")
+      expect(typed2.context?.requestId).toBe("123")
     })
   })
 })

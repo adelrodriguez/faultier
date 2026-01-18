@@ -6,7 +6,7 @@ export type {
   FaultContext,
   SerializableError,
   SerializableFault,
-  Tagged,
+  TaggedFault,
   TagsOf,
 } from "#lib/types.ts"
 
