@@ -11,6 +11,7 @@ const defaultTrimFormatter = (msg: string) => msg.trim()
 
 export const IS_FAULT: unique symbol = Symbol("IS_FAULT")
 export const UNKNOWN: unique symbol = Symbol("UNKNOWN")
+export const NO_FAULT_TAG = "No fault tag set" as const
 
 type WithIsFault = {
   readonly [IS_FAULT]: true
@@ -44,13 +45,6 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       : never
   }[keyof THandlers]
 
-  // Internal data structure - loosely typed to avoid casting in method bodies
-  interface FaultData {
-    tag: string
-    context: Record<string, unknown>
-    debug?: string
-  }
-
   class FaultBase extends Error {
     /**
      * Type-only hook so public helpers like `Faultier.Tags<typeof Fault>` can extract
@@ -60,23 +54,20 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     declare static readonly __faultierRegistry?: TRegistry
 
-    // Internal state - mutations happen here without type gymnastics
-    protected _data: FaultData = {
-      context: {},
-      tag: "No fault tag set",
-    }
+    protected _tag: string = NO_FAULT_TAG
+    protected _context: Record<string, unknown> = {}
+    protected _debug?: string
 
-    // Public getters - properly typed, single cast location
-    get tag(): Tag | "No fault tag set" {
-      return this._data.tag as Tag | "No fault tag set"
+    get tag(): Tag | typeof NO_FAULT_TAG {
+      return this._tag as Tag | typeof NO_FAULT_TAG
     }
 
     get context(): Record<string, unknown> {
-      return this._data.context
+      return this._context
     }
 
     get debug(): string | undefined {
-      return this._data.debug
+      return this._debug
     }
 
     declare cause?: Error
@@ -93,75 +84,47 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
-     * Creates an immutable clone with the same prototype chain.
-     * This preserves custom methods from extended classes.
-     */
-    protected _clone(): this {
-      const proto = Object.getPrototypeOf(this)
-      // Object.create accepts null, but TypeScript needs help with the type
-      // oxlint-disable-next-line typescript/no-unsafe-argument
-      const clone = Object.create(proto ?? null) as unknown as this
-      clone._data = { ...this._data, context: { ...this._data.context } }
-      clone.name = this.name
-      clone.message = this.message
-      clone.stack = this.stack
-      clone.cause = this.cause
-      Object.defineProperty(clone, IS_FAULT, {
-        configurable: false,
-        enumerable: false,
-        value: true,
-        writable: false,
-      })
-      return clone
-    }
-
-    /**
      * Sets the tag for this fault.
      */
     withTag<T extends Tag>(tag: T): this {
-      const clone = this._clone()
-      clone._data.tag = tag
-      clone._data.context = {}
-      return clone
+      this._tag = tag
+      this._context = {}
+      return this
     }
 
     /**
      * Sets the context for this fault.
      */
     withContext(context: Record<string, unknown>): this {
-      const clone = this._clone()
-      clone._data.context = context
-      return clone
+      this._context = context
+      return this
     }
 
     /**
      * Sets debug and/or user-facing messages for this fault.
      */
     withDescription(debug: string, message?: string): this {
-      const clone = this._clone()
-      clone._data.debug = debug
+      this._debug = debug
       if (message !== undefined) {
-        clone.message = message
+        this.message = message
       }
-      return clone
+      return this
     }
 
     /**
      * Sets only the debug message for this fault.
      */
     withDebug(debug: string): this {
-      const clone = this._clone()
-      clone._data.debug = debug
-      return clone
+      this._debug = debug
+      return this
     }
 
     /**
      * Sets only the user-facing message for this fault.
      */
     withMessage(message: string): this {
-      const clone = this._clone()
-      clone.message = message
-      return clone
+      this.message = message
+      return this
     }
 
     /**
@@ -262,7 +225,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       tag: T
     ): Tagged<InstanceType<This>, T> {
       const instance = new this()
-      instance._data.tag = tag
+      instance._tag = tag
       return instance as unknown as Tagged<InstanceType<This>, T>
     }
 
@@ -462,10 +425,10 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
 
       const cause = reconstructCause(data.cause)
       const instance = new this(data.message, { cause })
-      instance._data.tag = data.tag
+      instance._tag = data.tag
       // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-      instance._data.context = (data.context ?? {}) as Record<string, unknown>
-      instance._data.debug = data.debug
+      instance._context = (data.context ?? {}) as Record<string, unknown>
+      instance._debug = data.debug
 
       return instance as InstanceType<This>
     }

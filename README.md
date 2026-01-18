@@ -40,7 +40,6 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 - **Typed context** - Associate structured metadata with each error type
 - **Dual messages** - Separate debug messages for logs from user-facing messages
 - **Error chaining** - Wrap and re-throw errors while preserving the full chain
-- **Extensible** - Extend existing Error classes with Fault functionality
 - **Serializable** - Convert faults to JSON and reconstruct them
 - **Instanceof support** - Use `instanceof` checks with your custom Fault class
 - **Extensible** - Add custom methods to your Fault class
@@ -332,19 +331,6 @@ if (error instanceof Fault) {
 }
 ```
 
-**Note:** Chaining methods (`withTag`, `withContext`, `withDescription`, etc.) are immutable - they return new instances. This means you can safely reuse intermediate results:
-
-```ts
-const base = Fault.create("db.timeout")
-const fault1 = base.withDescription("Error 1")
-const fault2 = base.withDescription("Error 2")
-
-// Each is a separate instance - base is unchanged
-expect(fault1.debug).toBe("Error 1")
-expect(fault2.debug).toBe("Error 2")
-expect(base.debug).toBeUndefined()
-```
-
 ## API Reference
 
 ### Creating Your Fault Class
@@ -362,8 +348,6 @@ type MyRegistry = {
 
 class Fault extends Faultier.define<MyRegistry>() {}
 ```
-
-**Note:** Your extended class cannot have required constructor parameters. Use default values or optional parameters if needed.
 
 ### Static Methods
 
@@ -588,23 +572,23 @@ if (httpError) {
 
 #### `fault.withTag(tag)`
 
-Sets the tag for a wrapped fault. Returns a new instance (immutable).
+Sets the tag for this fault. Returns `this` for chaining.
 
 #### `fault.withContext(context)`
 
-Sets the context for a tagged fault. Returns a new instance (immutable).
+Sets the context for this fault. Returns `this` for chaining.
 
 #### `fault.withDescription(debug, message?)`
 
-Sets debug and optional user-facing messages. Returns a new instance (immutable).
+Sets debug and optional user-facing messages. Returns `this` for chaining.
 
 #### `fault.withDebug(debug)`
 
-Sets only the debug message (for developers/logs). Returns a new instance (immutable).
+Sets only the debug message (for developers/logs). Returns `this` for chaining.
 
 #### `fault.withMessage(message)`
 
-Sets only the user-facing message (overrides the original error message). Returns a new instance (immutable).
+Sets only the user-facing message (overrides the original error message). Returns `this` for chaining.
 
 #### `fault.unwrap()`
 
