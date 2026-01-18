@@ -1,5 +1,6 @@
 import type {
   ChainFormattingOptions,
+  ContextParam,
   FaultJSON,
   TagBrand,
   SerializableError,
@@ -29,8 +30,12 @@ type WithIsFault = {
  *
  * export const Fault = defineFault<MyRegistry>()
  *
- * // Now fully typed:
- * Fault.create("auth.unauthenticated").withContext({ requestId: "123" })
+ * // Now fully typed - context required when registry has required properties:
+ * Fault.create("db.connection_failed", { host: "localhost", port: 5432 })
+ *
+ * // Context optional when all properties are optional:
+ * Fault.create("auth.unauthenticated")
+ * Fault.create("auth.unauthenticated", { requestId: "123" })
  * ```
  */
 export function define<TRegistry extends Record<string, Record<string, unknown>>>() {
@@ -55,14 +60,14 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     declare static readonly __faultierRegistry?: TRegistry
 
     protected _tag: string = NO_FAULT_TAG
-    protected _context: Record<string, unknown> = {}
+    protected _context?: Record<string, unknown>
     protected _debug?: string
 
     get tag(): Tag | typeof NO_FAULT_TAG {
       return this._tag as Tag | typeof NO_FAULT_TAG
     }
 
-    get context(): Record<string, unknown> {
+    get context(): unknown {
       return this._context
     }
 
@@ -84,20 +89,13 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     }
 
     /**
-     * Sets the tag for this fault.
+     * Sets the tag and context for this fault.
+     * Context is required if the registry defines required properties for this tag.
      */
-    withTag<T extends Tag>(tag: T): this {
+    withTag<T extends Tag>(tag: T, ...args: ContextParam<TRegistry[T]>): Tagged<this, T> {
       this._tag = tag
-      this._context = {}
-      return this
-    }
-
-    /**
-     * Sets the context for this fault.
-     */
-    withContext(context: Record<string, unknown>): this {
-      this._context = context
-      return this
+      this._context = args[0] as Record<string, unknown> | undefined
+      return this as unknown as Tagged<this, T>
     }
 
     /**
@@ -205,7 +203,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     toJSON(): FaultJSON {
       return {
         cause: this.cause?.message,
-        context: this.context,
+        context: this.context as Record<string, unknown> | undefined,
         debug: FaultBase.getDebug(this, { separator: " → " }),
         message: FaultBase.getIssue(this, { separator: " → " }),
         name: this.name,
@@ -216,16 +214,18 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
     // --- Static methods ---
 
     /**
-     * Creates a new Fault with the specified tag.
-     * Preserves the tag type through method chaining.
+     * Creates a new Fault with the specified tag and context.
+     * Context is required if the registry defines required properties for this tag.
      * Uses polymorphic `this` so extended classes return their own type with custom methods.
      */
     static create<T extends Tag, This extends typeof FaultBase>(
       this: This,
-      tag: T
+      tag: T,
+      ...args: ContextParam<TRegistry[T]>
     ): Tagged<InstanceType<This>, T> {
       const instance = new this()
       instance._tag = tag
+      instance._context = args[0] as Record<string, unknown> | undefined
       return instance as unknown as Tagged<InstanceType<This>, T>
     }
 
@@ -357,8 +357,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     static toSerializable(fault: FaultBase): SerializableFault {
       const serialized: SerializableFault = {
-        // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-        context: fault.context as Record<string, unknown>,
+        context: fault.context as Record<string, unknown> | undefined,
         debug: fault.debug,
         message: fault.message,
         name: fault.name,
@@ -426,8 +425,7 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
       const cause = reconstructCause(data.cause)
       const instance = new this(data.message, { cause })
       instance._tag = data.tag
-      // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-      instance._context = (data.context ?? {}) as Record<string, unknown>
+      instance._context = data.context
       instance._debug = data.debug
 
       return instance as InstanceType<This>
@@ -478,7 +476,8 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
   type Tagged<TBase, TTag extends Tag> = TBase &
     TagBrand<TTag> & {
       readonly tag: TTag
-      readonly context: Partial<TRegistry[TTag]>
+      // oxlint-disable-next-line typescript/no-empty-object-type
+      readonly context: {} extends TRegistry[TTag] ? TRegistry[TTag] | undefined : TRegistry[TTag]
     }
 
   return FaultBase
