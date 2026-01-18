@@ -38,7 +38,7 @@ Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 
 - **Type-safe tags** - Define error tags and get autocomplete and type checking
 - **Typed context** - Associate structured metadata with each error type
-- **Dual messages** - Separate debug messages for logs from user-facing messages
+- **Dual messages** - Separate details messages for logs from user-facing messages
 - **Error chaining** - Wrap and re-throw errors while preserving the full chain
 - **Serializable** - Convert faults to JSON and reconstruct them
 - **Instanceof support** - Use `instanceof` checks with your custom Fault class
@@ -94,7 +94,7 @@ throw Fault.create("NOT_FOUND", { resource: "user", id: "123" })
 // Context is optional when all properties are optional
 throw Fault.create("VALIDATION_ERROR").withDescription("Invalid input")
 
-// Separate debug info from user-facing messages
+// Separate details from user-facing messages
 throw Fault.wrap(err)
   .withTag("DATABASE_ERROR", { query: "SELECT *" })
   .withMeta({ traceId: "trace-123" }) // Metadata
@@ -352,9 +352,9 @@ const fault1 = base.withDescription("Error 1")
 const fault2 = base.withDescription("Error 2")
 
 // Each is a separate instance - base is unchanged
-expect(fault1.debug).toBe("Error 1")
-expect(fault2.debug).toBe("Error 2")
-expect(base.debug).toBeUndefined()
+expect(fault1.details).toBe("Error 1")
+expect(fault2.details).toBe("Error 2")
+expect(base.details).toBeUndefined()
 ```
 
 ## API Reference
@@ -463,19 +463,19 @@ Fault.getIssue(fault, { separator: " | " })
 // "Service unavailable. | Database connection failed."
 ```
 
-#### `Fault.getDebug(fault, options?)`
+#### `Fault.getDetails(fault, options?)`
 
-Extracts and joins debug messages from all faults in the chain.
+Extracts and joins details messages from all faults in the chain.
 
 ```ts
 const fault = Fault.wrap(dbError)
   .withTag("SERVICE_ERROR")
   .withDescription("Connection to postgres:5432 timed out after 30s")
 
-Fault.getDebug(fault)
+Fault.getDetails(fault)
 // "Connection to postgres:5432 timed out after 30s."
 
-Fault.getDebug(fault, { separator: " -> " })
+Fault.getDetails(fault, { separator: " -> " })
 // "Connection to postgres:5432 timed out after 30s. -> Original DB error."
 ```
 
@@ -600,13 +600,13 @@ if (httpError) {
 
 Sets the tag and context for this fault. Context is required if the registry has required properties for this tag. Returns a tagged fault for chaining.
 
-#### `fault.withDescription(debug, message?)`
+#### `fault.withDescription(details, message?)`
 
-Sets debug and optional user-facing messages. Returns `this` for chaining.
+Sets details and optional user-facing messages. Returns `this` for chaining.
 
-#### `fault.withDebug(debug)`
+#### `fault.withDetails(details)`
 
-Sets only the debug message (for developers/logs). Returns `this` for chaining.
+Sets only the details message (for developers/logs). Returns `this` for chaining.
 
 #### `fault.withMeta(meta)`
 
