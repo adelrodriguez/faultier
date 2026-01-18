@@ -59,13 +59,22 @@ export function define<TRegistry extends Record<string, Record<string, unknown>>
      */
     declare static readonly __faultierRegistry?: TRegistry
 
-    protected _tag: string = NO_FAULT_TAG
+    protected __tag: string = NO_FAULT_TAG
     protected _context?: Record<string, unknown>
     protected _debug?: string
     protected _meta?: Record<string, unknown>
 
     get tag(): Tag | typeof NO_FAULT_TAG {
-      return this._tag as Tag | typeof NO_FAULT_TAG
+      return this.__tag as Tag | typeof NO_FAULT_TAG
+    }
+
+    protected get _tag(): string {
+      return this.__tag
+    }
+
+    protected set _tag(value: string) {
+      this.__tag = value
+      this.name = value === NO_FAULT_TAG ? "Fault" : `Fault[${value}]`
     }
 
     get context(): unknown {
