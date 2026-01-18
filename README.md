@@ -345,33 +345,6 @@ expect(fault2.debug).toBe("Error 2")
 expect(base.debug).toBeUndefined()
 ```
 
-### Extending Error Classes
-
-Use `faultier/extend` to add Fault functionality to existing Error classes:
-
-```ts
-import { extend } from "faultier/extend"
-
-class HttpError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number
-  ) {
-    super(message)
-  }
-}
-
-const HttpFault = extend(HttpError)
-
-const fault = HttpFault.create("Not found", 404)
-  .withTag("HTTP_ERROR")
-  .withContext({ path: "/api/users" })
-
-console.log(fault.statusCode) // 404
-console.log(fault.tag) // "HTTP_ERROR"
-console.log(fault.flatten()) // Works like regular Fault
-```
-
 ## API Reference
 
 ### Creating Your Fault Class
