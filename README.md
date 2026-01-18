@@ -95,10 +95,13 @@ throw Fault.create("NOT_FOUND", { resource: "user", id: "123" })
 throw Fault.create("VALIDATION_ERROR").withDescription("Invalid input")
 
 // Separate debug info from user-facing messages
-throw Fault.wrap(err).withTag("DATABASE_ERROR", { query: "SELECT *" }).withDescription(
-  "Stripe API error 402: card_declined (insufficient_funds)", // Debug (for logs)
-  "Payment failed. Please try a different card." // User-facing message
-)
+throw Fault.wrap(err)
+  .withTag("DATABASE_ERROR", { query: "SELECT *" })
+  .withMeta({ traceId: "trace-123" }) // Metadata
+  .withDescription(
+    "Stripe API error 402: card_declined (insufficient_funds)", // Debug (for logs)
+    "Payment failed. Please try a different card." // User-facing message
+  )
 ```
 
 ### Type Safety
@@ -228,6 +231,7 @@ fault.unwrap() // [fault, ...causes, originalError] - full chain as array
 fault.flatten() // "API failed -> Service error -> Connection timeout" - messages joined
 fault.getTags() // ["API_ERROR", "SERVICE_ERROR", "DB_ERROR"] - all tags in chain
 fault.getFullContext() // { endpoint: "/users", host: "..." } - merged context from all faults
+fault.getFullMeta() // { traceId: "..." } - merged meta from all faults
 ```
 
 ### Handling Faults
@@ -340,6 +344,19 @@ if (error instanceof Fault) {
 }
 ```
 
+**Note:** Chaining methods (`withTag`, `withDescription`, etc.) are immutable - they return new instances. `withMeta` is the exception and mutates the same instance. This means you can safely reuse intermediate results:
+
+```ts
+const base = Fault.create("db.timeout")
+const fault1 = base.withDescription("Error 1")
+const fault2 = base.withDescription("Error 2")
+
+// Each is a separate instance - base is unchanged
+expect(fault1.debug).toBe("Error 1")
+expect(fault2.debug).toBe("Error 2")
+expect(base.debug).toBeUndefined()
+```
+
 ## API Reference
 
 ### Creating Your Fault Class
@@ -400,7 +417,9 @@ try {
 Converts a fault and its entire error chain to a plain object for serialization.
 
 ```ts
-const fault = Fault.create("API_ERROR", { endpoint: "/users" }).withDescription("Request failed")
+const fault = Fault.create("API_ERROR", { endpoint: "/users" })
+  .withMeta({ traceId: "trace-123" })
+  .withDescription("Request failed")
 
 const serialized = Fault.toSerializable(fault)
 // {
@@ -408,6 +427,7 @@ const serialized = Fault.toSerializable(fault)
 //   tag: "API_ERROR",
 //   message: "Request failed",
 //   context: { endpoint: "/users" },
+//   meta: { traceId: "trace-123" },
 //   cause: { name: "Error", message: "Connection timeout" }
 // }
 
@@ -588,6 +608,10 @@ Sets debug and optional user-facing messages. Returns `this` for chaining.
 
 Sets only the debug message (for developers/logs). Returns `this` for chaining.
 
+#### `fault.withMeta(meta)`
+
+Merges metadata into the fault. Mutates and returns the same instance.
+
 #### `fault.withMessage(message)`
 
 Sets only the user-facing message (overrides the original error message). Returns `this` for chaining.
@@ -607,6 +631,10 @@ Returns all tags from faults in the chain.
 #### `fault.getFullContext()`
 
 Returns merged context from all faults in the chain.
+
+#### `fault.getFullMeta()`
+
+Returns merged meta from all faults in the chain.
 
 ## Contributing
 

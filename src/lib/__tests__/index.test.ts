@@ -55,6 +55,7 @@ describe("Fault", () => {
       const fault = Fault.wrap(err)
         .withTag("MY_TAG", { errorCode: 100, requestId: "123" })
         .withDescription("Something went really wrong")
+        .withMeta({ retryable: true, traceId: "trace-123" })
 
       expect(JSON.stringify(fault)).toEqual(
         JSON.stringify({
@@ -62,6 +63,7 @@ describe("Fault", () => {
           context: { errorCode: 100, requestId: "123" },
           debug: "Something went really wrong.",
           message: "Something happened.",
+          meta: { retryable: true, traceId: "trace-123" },
           name: "Fault",
           tag: "MY_TAG",
         })
@@ -192,6 +194,26 @@ describe("Fault", () => {
         expect(fault.message).toBe("User message")
         expect(fault.tag).toBe("MY_TAG")
         expect(fault.context).toEqual({ requestId: "123" })
+      })
+    })
+
+    describe("withMeta", () => {
+      it("should merge meta across calls", () => {
+        const fault = Fault.wrap(new Error("test"))
+          .withMeta({ requestId: "123", retryable: true })
+          .withMeta({ retryable: false, traceId: "trace-1" })
+
+        expect(fault.meta).toEqual({ requestId: "123", retryable: false, traceId: "trace-1" })
+      })
+
+      it("should allow chaining", () => {
+        const fault = Fault.wrap(new Error("test"))
+          .withTag("MY_TAG", { requestId: "123", timestamp: 1 })
+          .withMeta({ source: "api" })
+          .withDebug("Debug message")
+
+        expect(fault.meta).toEqual({ source: "api" })
+        expect(fault.tag).toBe("MY_TAG")
       })
     })
 
@@ -723,6 +745,51 @@ describe("Fault", () => {
     })
   })
 
+  describe("getFullMeta", () => {
+    it("should merge meta from all faults in chain", () => {
+      const dbError = new Error("Database timeout")
+      const fault1 = Fault.wrap(dbError).withTag("LAYER_1").withMeta({ host: "localhost" })
+      const fault2 = Fault.wrap(fault1).withTag("LAYER_2").withMeta({ service: "auth" })
+      const fault3 = Fault.wrap(fault2).withTag("LAYER_3").withMeta({ endpoint: "/login" })
+
+      expect(fault3.getFullMeta()).toEqual({
+        endpoint: "/login",
+        host: "localhost",
+        service: "auth",
+      })
+    })
+
+    it("should override duplicate keys from root to current", () => {
+      const fault1 = Fault.wrap(new Error("test")).withTag("MY_TAG").withMeta({
+        requestId: "abc",
+        retryable: true,
+      })
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withMeta({
+        requestId: "def",
+        traceId: "trace-1",
+      })
+
+      expect(fault2.getFullMeta()).toEqual({
+        requestId: "def",
+        retryable: true,
+        traceId: "trace-1",
+      })
+    })
+
+    it("should work with single fault", () => {
+      const fault = Fault.wrap(new Error("test")).withTag("MY_TAG").withMeta({ requestId: "value" })
+
+      expect(fault.getFullMeta()).toEqual({ requestId: "value" })
+    })
+
+    it("should handle empty meta", () => {
+      const fault1 = Fault.wrap(new Error("test"))
+      const fault2 = Fault.wrap(fault1).withTag("MY_TAG").withMeta({ requestId: "value" })
+
+      expect(fault2.getFullMeta()).toEqual({ requestId: "value" })
+    })
+  })
+
   describe("getTags", () => {
     it("should get all tags from fault chain", () => {
       const rootError = new Error("Database error")
@@ -865,7 +932,9 @@ describe("Fault", () => {
           port: 5432,
           retries: 3,
           timeout: 5000,
-        }).withDescription("Failed to connect", "Database unavailable")
+        })
+          .withDescription("Failed to connect", "Database unavailable")
+          .withMeta({ requestId: "req-123", retryable: true })
 
         const serialized = Fault.toSerializable(fault)
 
@@ -879,6 +948,7 @@ describe("Fault", () => {
           },
           debug: "Failed to connect",
           message: "Database unavailable",
+          meta: { requestId: "req-123", retryable: true },
           name: "Fault",
           tag: "LAYER_1",
         })
@@ -904,24 +974,30 @@ describe("Fault", () => {
 
       it("should serialize a fault chain", () => {
         const rootError = new Error("Connection timeout")
-        const fault1 = Fault.wrap(rootError).withTag("LAYER_1", {
-          database: "postgres",
-          host: "localhost",
-          port: 5432,
-        })
+        const fault1 = Fault.wrap(rootError)
+          .withTag("LAYER_1", {
+            database: "postgres",
+            host: "localhost",
+            port: 5432,
+          })
+          .withMeta({ requestId: "req-1" })
 
-        const fault2 = Fault.wrap(fault1).withTag("LAYER_2", {
-          method: "query",
-          service: "database",
-          statusCode: 500,
-        })
+        const fault2 = Fault.wrap(fault1)
+          .withTag("LAYER_2", {
+            method: "query",
+            service: "database",
+            statusCode: 500,
+          })
+          .withMeta({ retryable: true })
 
-        const fault3 = Fault.wrap(fault2).withTag("LAYER_3", {
-          endpoint: "/api/users",
-          headers: { "Content-Type": "application/json" },
-          method: "GET",
-          statusCode: 503,
-        })
+        const fault3 = Fault.wrap(fault2)
+          .withTag("LAYER_3", {
+            endpoint: "/api/users",
+            headers: { "Content-Type": "application/json" },
+            method: "GET",
+            statusCode: 503,
+          })
+          .withMeta({ traceId: "trace-1" })
 
         const serialized = Fault.toSerializable(fault3)
 
@@ -934,11 +1010,13 @@ describe("Fault", () => {
               },
               context: { database: "postgres", host: "localhost", port: 5432 },
               message: "Connection timeout",
+              meta: { requestId: "req-1" },
               name: "Fault",
               tag: "LAYER_1",
             },
             context: { method: "query", service: "database", statusCode: 500 },
             message: "Connection timeout",
+            meta: { retryable: true },
             name: "Fault",
             tag: "LAYER_2",
           },
@@ -949,6 +1027,7 @@ describe("Fault", () => {
             statusCode: 503,
           },
           message: "Connection timeout",
+          meta: { traceId: "trace-1" },
           name: "Fault",
           tag: "LAYER_3",
         })
@@ -1322,6 +1401,7 @@ describe("Fault", () => {
         context: { host: "localhost", port: 5432 },
         debug: "Failed to connect",
         message: "Database unavailable",
+        meta: { requestId: "req-1" },
         name: "Fault",
         tag: "LAYER_1" as const,
       }
@@ -1333,6 +1413,7 @@ describe("Fault", () => {
       expect(fault.message).toBe("Database unavailable")
       expect(fault.debug).toBe("Failed to connect")
       expect(fault.context).toEqual({ host: "localhost", port: 5432 })
+      expect(fault.meta).toEqual({ requestId: "req-1" })
       expect(fault.cause).toBeUndefined()
     })
 
@@ -1444,10 +1525,29 @@ describe("Fault", () => {
       )
     })
 
+    it("should throw when meta is not an object", () => {
+      const invalid = {
+        _isFault: true,
+        message: "test",
+        meta: "not-object",
+        name: "Fault",
+        tag: "MY_TAG",
+      }
+      expect(() => Fault.fromSerializable(invalid as unknown as SerializableFault)).toThrow(
+        "'meta' must be an object"
+      )
+    })
+
     it("should handle undefined context gracefully", () => {
       const data = { message: "test", name: "Fault", tag: "MY_TAG" }
       const fault = Fault.fromSerializable(data as unknown as SerializableFault)
       expect(fault.context).toBeUndefined()
+    })
+
+    it("should handle undefined meta gracefully", () => {
+      const data = { _isFault: true, message: "test", name: "Fault", tag: "MY_TAG" }
+      const fault = Fault.fromSerializable(data as unknown as SerializableFault)
+      expect(fault.meta).toBeUndefined()
     })
   })
 
@@ -1456,7 +1556,9 @@ describe("Fault", () => {
       const original = Fault.create("LAYER_1", {
         host: "localhost",
         port: 5432,
-      }).withDescription("Connection failed", "Database unavailable")
+      })
+        .withDescription("Connection failed", "Database unavailable")
+        .withMeta({ requestId: "req-1" })
 
       const serialized = Fault.toSerializable(original)
       const json = JSON.stringify(serialized)
@@ -1467,16 +1569,23 @@ describe("Fault", () => {
       expect(restored.message).toBe(original.message)
       expect(restored.debug).toBe(original.debug)
       expect(restored.context).toEqual(original.context)
+      expect(restored.meta).toEqual(original.meta)
       expect(restored.name).toBe(original.name)
     })
 
     it("should preserve fault chain through round trip", () => {
       const rootError = new Error("Network timeout")
-      const fault1 = Fault.wrap(rootError).withTag("LAYER_1", { host: "localhost", port: 5432 })
+      const fault1 = Fault.wrap(rootError)
+        .withTag("LAYER_1", { host: "localhost", port: 5432 })
+        .withMeta({ requestId: "req-1" })
 
-      const fault2 = Fault.wrap(fault1).withTag("LAYER_2", { service: "database" })
+      const fault2 = Fault.wrap(fault1)
+        .withTag("LAYER_2", { service: "database" })
+        .withMeta({ retryable: true })
 
-      const fault3 = Fault.wrap(fault2).withTag("LAYER_3", { endpoint: "/api/users" })
+      const fault3 = Fault.wrap(fault2)
+        .withTag("LAYER_3", { endpoint: "/api/users" })
+        .withMeta({ traceId: "trace-1" })
 
       const serialized = Fault.toSerializable(fault3)
       const json = JSON.stringify(serialized)
@@ -1499,6 +1608,7 @@ describe("Fault", () => {
           if (Fault.isFault(rest)) {
             expect(rest.tag).toBe(orig.tag)
             expect(rest.context).toEqual(orig.context)
+            expect(rest.meta).toEqual(orig.meta)
             expect(rest.debug).toBe(orig.debug)
           }
         }
