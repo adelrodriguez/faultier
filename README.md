@@ -141,25 +141,41 @@ Fault.create("GENERIC_ERROR") // OK - no context allowed
 
 #### Clean return types for tagged faults
 
-When you want to annotate function return types (or public API surfaces), use the helper type:
-`Tagged<typeof Fault, "TAG">`.
+When you want to annotate function return types (or public API surfaces), create a local type alias:
 
 ```ts
-import Faultier, { type Tagged, type Tags } from "faultier"
+import Faultier, { type TaggedFault, type TagsOf, type FaultContext } from "faultier"
 
 type AppErrors = {
   DATABASE_ERROR: { query: string; host?: string }
+  ANOTHER_TAG: {}
   GENERIC_ERROR: never
 }
 
 export class Fault extends Faultier.define<AppErrors>() {}
 
-export function runQuery(): Tagged<typeof Fault, "DATABASE_ERROR"> {
+// Create local alias using TaggedFault
+type FaultTagged<T extends TagsOf<typeof Fault>> = TaggedFault<
+  Fault,
+  T,
+  FaultContext<typeof Fault, T>
+>
+
+// Clean syntax for return type annotations
+export function runQuery(): FaultTagged<"DATABASE_ERROR"> {
   return Fault.create("DATABASE_ERROR", { query: "SELECT 1" })
 }
 
+// Works great for errors-as-values patterns
+function test(): FaultTagged<"DATABASE_ERROR"> | FaultTagged<"ANOTHER_TAG"> {
+  if (someCondition) {
+    return Fault.create("DATABASE_ERROR", { query: "SELECT 1" })
+  }
+  return Fault.create("ANOTHER_TAG")
+}
+
 // You can also extract the full tag union for a given Fault class:
-export type FaultTag = Tags<typeof Fault>
+export type FaultTag = TagsOf<typeof Fault>
 ```
 
 When checking a fault's tag, TypeScript narrows the context type:
