@@ -5,8 +5,8 @@ import type {
   SerializableError,
   SerializableFault,
   TaggedFault,
-} from "#lib/types.ts"
-import { defaultDetailsFormatter, defaultIssueFormatter, defaultTrimFormatter } from "#lib/utils.ts"
+} from "./types.ts"
+import { defaultDetailsFormatter, defaultIssueFormatter, defaultTrimFormatter } from "./utils.ts"
 
 export const IS_FAULT: unique symbol = Symbol("IS_FAULT")
 export const UNKNOWN: unique symbol = Symbol("UNKNOWN")
