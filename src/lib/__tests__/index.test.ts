@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
-import type { FaultContext, SerializableFault, TaggedFault, TagsOf } from "#lib/types.ts"
-import Faultier, { IS_FAULT, NO_FAULT_TAG, UNKNOWN } from "#lib/index.ts"
+import type { FaultContext, SerializableFault, TaggedFault, TagsOf } from "../types.ts"
+import Faultier, { IS_FAULT, NO_FAULT_TAG, UNKNOWN } from "../index.ts"
 
 // Define test registry
 type TestRegistry = {
