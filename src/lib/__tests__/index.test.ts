@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import type { FaultContext, SerializableFault, TaggedFault, TagsOf } from "../types.ts"
-import Faultier, { IS_FAULT, NO_FAULT_TAG, UNKNOWN } from "../index.ts"
+import { define, IS_FAULT, NO_FAULT_TAG, UNKNOWN } from "../index.ts"
 
 // Define test registry
 type TestRegistry = {
@@ -37,7 +37,7 @@ type TestRegistry = {
 }
 
 // Create test Fault class
-class Fault extends Faultier.define<TestRegistry>() {
+class Fault extends define<TestRegistry>() {
   custom(): 123 {
     void this
     return 123
@@ -54,6 +54,34 @@ type FaultTagged<T extends TagsOf<typeof Fault>> = TaggedFault<
   T,
   FaultContext<typeof Fault, T>
 >
+
+// Type-level tests (compile-time only)
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
+
+type Expect<T extends true> = T
+
+// oxlint-disable-next-line typescript/no-unused-vars -- type-level test
+type TagsMatchRegistry = Expect<Equal<TagsOf<typeof Fault>, keyof TestRegistry>>
+
+// oxlint-disable-next-line typescript/no-unused-vars -- type-level test
+type Layer4ContextIsRequired = Expect<
+  Equal<FaultContext<typeof Fault, "LAYER_4">, TestRegistry["LAYER_4"]>
+>
+
+// oxlint-disable-next-line typescript/no-unused-vars -- type-level test
+type MyTagContextIsOptional = Expect<
+  Equal<FaultContext<typeof Fault, "MY_TAG">, TestRegistry["MY_TAG"] | undefined>
+>
+
+// oxlint-disable-next-line typescript/no-unused-vars -- type-level test
+type NoContextTagIsNever = Expect<Equal<FaultContext<typeof Fault, "NO_CONTEXT_TAG">, never>>
+
+function assertKnown<T>(value: T | typeof UNKNOWN): asserts value is T {
+  if (value === UNKNOWN) {
+    throw new Error("Expected handler result")
+  }
+}
 
 describe("Fault", () => {
   describe("toJSON", () => {
@@ -493,6 +521,7 @@ describe("Fault", () => {
         },
       })
 
+      assertKnown(result)
       expect(result).toEqual({ status: 404 })
     })
 
@@ -535,6 +564,8 @@ describe("Fault", () => {
       const result1 = handler(fault1)
       const result2 = handler(fault2)
 
+      assertKnown(result1)
+      assertKnown(result2)
       expect(result1).toEqual({ status: 404 })
       expect(result2).toEqual({ status: 500 })
     })
@@ -553,6 +584,7 @@ describe("Fault", () => {
         },
       })
 
+      assertKnown(result)
       expect(result).toBe("123")
     })
 
@@ -569,6 +601,8 @@ describe("Fault", () => {
       const result1 = handler(fault1)
       const result2 = handler(fault2)
 
+      assertKnown(result1)
+      assertKnown(result2)
       expect(result1).toBe("string result")
       expect(result2).toBe(42)
     })
@@ -1789,7 +1823,7 @@ describe("Fault", () => {
 
   describe("custom methods", () => {
     // Extended Fault class with custom methods
-    class AppFault extends Faultier.define<{
+    class AppFault extends define<{
       "db.connection_failed": { host: string }
       "db.timeout": { timeoutMs: number }
       "auth.unauthenticated": { requestId?: string }
