@@ -26,11 +26,12 @@ export type AnyConstructor = abstract new (
 /**
  * Extracts the registry type from a Fault class created by `define()`.
  */
-type RegistryOf<TFaultClass extends AnyConstructor> = TFaultClass extends {
-  readonly __faultierRegistry?: infer R
-}
-  ? R
-  : never
+type RegistryOf<TFaultClass extends AnyConstructor> =
+  InstanceType<TFaultClass> extends {
+    readonly __faultierRegistry?: infer R
+  }
+    ? R
+    : never
 
 /**
  * Extracts the tag union from a Fault class created by `define()`.
@@ -69,14 +70,14 @@ export type ContextParam<T> = [T] extends [never]
  *
  * @example
  * ```ts
- * import Faultier, { type TaggedFault, type TagsOf, type FaultContext } from "faultier"
+ * import * as Faultier from "faultier"
  *
  * type Registry = { "db.error": { query: string }, "not.found": {} }
  * class Fault extends Faultier.define<Registry>() {}
  *
  * // Create local alias using TaggedFault
- * type FaultTagged<T extends TagsOf<typeof Fault>> =
- *   TaggedFault<Fault, T, FaultContext<typeof Fault, T>>
+ * type FaultTagged<T extends Faultier.TagsOf<typeof Fault>> =
+ *   Faultier.TaggedFault<Fault, T, Faultier.FaultContext<typeof Fault, T>>
  *
  * function dbOperation(): FaultTagged<"db.error"> {
  *   return Fault.create("db.error", { query: "SELECT *" })
