@@ -1,5 +1,86 @@
 # faultier
 
+## 2.0.0
+
+### Major Changes
+
+- a55a947: ### Breaking changes
+  - Registry model changed: module augmentation (`FaultRegistry`) and the default `Fault` class are gone. Migration: `import { define } from "faultier"`, define a registry type, then `class Fault extends define<Registry>() {}` and use that class for `create`, `wrap`, `handle`, `matchTag(s)`, etc.
+  - Removed `faultier/extend` export and the `extend()` helper. Migration: add custom methods directly to your `Fault` class; `instanceof` works with your defined class.
+  - Tag + context API simplified: `withContext` removed; use `Fault.create(tag, context?)` and `fault.withTag(tag, context?)`. Context can now be `undefined` when omitted, so update access to use optional chaining where needed.
+  - Debug terminology renamed: `withDebug` → `withDetails`, `getDebug` → `getDetails`, `fault.debug` → `fault.details`, and serialized `debug` → `details`.
+  - Serialization format changed: `toJSON()` now returns `SerializableFault` (same as `toSerializable()`), includes `_isFault`, `details`, `meta`, and nested `cause` objects. It no longer aggregates chain messages. Migration: call `Fault.getIssue()`/`Fault.getDetails()` for aggregated strings and update stored JSON to add `_isFault`, rename `debug` to `details`, and include `meta` if used.
+  - Type exports changed: removed `FaultJSON`, `FaultRegistry`, `FaultTag`, `ContextForTag`. New/renamed exports: `TaggedFault`, `TagsOf`, `FaultContext`, `ChainFormattingOptions`. Update type imports and any `Tagged` usage.
+  - `fault.name` now includes the tag (`Fault[TAG]`). Update any `name` checks or prefer `Fault.isFault()` or a class returned by `define()`.
+  - Tagging/context updates now mutate the instance (no `TaggedFault` class cloning). If you relied on immutability, create fresh faults before branching.
+
+  ### Migration example
+
+  ```ts
+  // Before
+  import Fault from "faultier"
+
+  declare module "faultier" {
+    interface FaultRegistry {
+      DATABASE_ERROR: { query: string }
+      GENERIC_ERROR: never
+    }
+  }
+
+  throw Fault.wrap(err).withTag("DATABASE_ERROR").withContext({ query: "SELECT 1" })
+
+  // After
+  import { define } from "faultier"
+
+  type AppErrors = {
+    DATABASE_ERROR: { query: string }
+    GENERIC_ERROR: never
+  }
+
+  export class Fault extends define<AppErrors>() {}
+
+  throw Fault.wrap(err).withTag("DATABASE_ERROR", { query: "SELECT 1" })
+  ```
+
+### Minor Changes
+
+- 547cb32: Add fault metadata helpers with `withMeta`, `meta` getter, and `getFullMeta`, and include metadata in JSON and serializable output.
+
+### Patch Changes
+
+- 8224b71: Fix type resolution for package consumers by replacing internal path aliases with relative imports
+
+  The generated `dist/index.d.ts` previously contained unresolved `#lib/*` path aliases, breaking type inference for consumers importing the package. Imports now use relative paths so declaration files resolve correctly.
+
+- 81e6402: Remove default export and `BaseFault` in favor of named `define` export
+
+  The default export (`import Faultier from "faultier"`) and `BaseFault` export are removed. Use the named `define` export directly instead.
+
+  **Migration:**
+
+  ```ts
+  // Before
+  import Faultier from "faultier"
+  export class Fault extends Faultier.define<AppErrors>() {}
+
+  // After
+  import { define } from "faultier"
+  export class Fault extends define<AppErrors>() {}
+  ```
+
+  If you were using `BaseFault` as a type or for static methods:
+
+  ```ts
+  // Before
+  import { BaseFault } from "faultier"
+  const isFault = BaseFault.isFault(error)
+
+  // After
+  import { define } from "faultier"
+  const BaseFault = define()
+  const isFault = BaseFault.isFault(error)
+  ```
+
 ## 1.1.1
 
 ### Patch Changes
