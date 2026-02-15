@@ -23,10 +23,13 @@ Default to using Bun instead of Node.js.
 
 - Prefer `Bun.file` over `node:fs`'s readFile/writeFile
 - Bun.$`ls` instead of execa.
+- Prefer function declarations for standalone functions; avoid arrow functions for individually named functions.
 
 ## Testing
 
 Use `bun test` to run tests. Use `describe` to group tests by function or feature. Write tests using "should" statements for the test descriptions.
+
+- `describe` labels should be the exact function or class being tested (for example: `describe("Fault")`, `describe("withCause")`).
 
 ```ts#index.test.ts
 import { test, expect } from "bun:test";
