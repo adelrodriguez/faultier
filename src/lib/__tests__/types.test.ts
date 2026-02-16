@@ -1,6 +1,7 @@
 import { describe, test } from "bun:test"
 
 import type { Fault } from "../fault"
+import { matchTag, matchTags } from "../match"
 import { merge } from "../merge"
 import { registry } from "../registry"
 import { Tagged } from "../tagged"
@@ -20,6 +21,7 @@ class PaymentError extends Tagged("PaymentError")<{ invoiceId: string }>() {}
 const AppFault = registry({ NotFoundError, TimeoutError })
 const DbFault = registry({ DatabaseError })
 const BillingFault = registry({ PaymentError })
+type AppError = NotFoundError | TimeoutError | PaymentError
 
 // ── Positive type-level tests ────────────────────────────────────────────────
 describe("type-level inference", () => {
@@ -79,6 +81,92 @@ describe("type-level inference", () => {
         return "timeout"
       },
     })
+  })
+
+  test("matchTag should narrow handler parameter and return type", () => {
+    const err = new NotFoundError({ id: "123" }) as AppError
+
+    const withoutFallback = matchTag(err, "NotFoundError", (e) => {
+      type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+      return e.id
+    })
+
+    const withFallback = matchTag(
+      err,
+      "NotFoundError",
+      (e) => {
+        type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+        return e.id
+      },
+      (e) => {
+        type _IsExclude = Expect<Equal<typeof e, TimeoutError | PaymentError>>
+        return e._tag
+      }
+    )
+
+    type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
+    type _WithFallback = Expect<Equal<typeof withFallback, string>>
+  })
+
+  test("matchTags should narrow handlers and return type", () => {
+    const err = new TimeoutError() as AppError
+
+    const withoutFallback = matchTags(err, {
+      NotFoundError: (e) => {
+        type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+        return e.id
+      },
+      TimeoutError: (e) => {
+        type _IsTimeout = Expect<Equal<typeof e, TimeoutError>>
+        return "timeout"
+      },
+    })
+
+    const withFallback = matchTags(
+      err,
+      {
+        NotFoundError: (e) => {
+          type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+          return e.id
+        },
+      },
+      (e) => {
+        type _IsAppError = Expect<Equal<typeof e, AppError>>
+        return "fallback"
+      }
+    )
+
+    // HandlerResult<H> infers R from the handler map values.
+    // The result is structurally equivalent to `string` but not nominally
+    // identical, so Equal<> fails. Two-way extends checks equivalence instead.
+    type _WithoutFallbackA = Expect<typeof withoutFallback extends string | undefined ? true : false>
+    type _WithoutFallbackB = Expect<string | undefined extends typeof withoutFallback ? true : false>
+    type _WithFallbackA = Expect<typeof withFallback extends string ? true : false>
+    type _WithFallbackB = Expect<string extends typeof withFallback ? true : false>
+  })
+
+  test("matchTags exhaustive map should return R without fallback", () => {
+    const err = new TimeoutError() as AppError
+
+    const result = matchTags(err, {
+      NotFoundError: (e) => e.id,
+      PaymentError: (e) => e.invoiceId,
+      TimeoutError: () => "timeout",
+    })
+
+    type _ResultA = Expect<typeof result extends string ? true : false>
+    type _ResultB = Expect<string extends typeof result ? true : false>
+  })
+
+  test("matchTags partial map should return R | undefined without fallback", () => {
+    const err = new TimeoutError() as AppError
+
+    const result = matchTags(err, {
+      TimeoutError: () => "timeout",
+    })
+
+    type _ResultA = Expect<typeof result extends string | undefined ? true : false>
+    type _ResultB = Expect<string | undefined extends typeof result ? true : false>
   })
 
   test("registry.matchTag return type should narrow with fallback", () => {
@@ -161,6 +249,9 @@ function _negativeTypeTests() {
   // @ts-expect-error — "BadTag" is not a registered tag
   AppFault.matchTag({}, "BadTag", () => "nope")
 
+  // @ts-expect-error — "BadTag" is not in AppError union
+  matchTag(new TimeoutError() as AppError, "BadTag", () => "nope")
+
   AppFault.matchTags(
     {},
     {
@@ -168,6 +259,11 @@ function _negativeTypeTests() {
       BadTag: () => "nope",
     }
   )
+
+  matchTags(new TimeoutError() as AppError, {
+    // @ts-expect-error — "BadTag" is not in AppError union
+    BadTag: () => "nope",
+  })
 
   const MergedFault = merge(AppFault, DbFault)
 
