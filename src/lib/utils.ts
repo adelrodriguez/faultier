@@ -15,6 +15,7 @@ export const FAULT_INSTANCE_RESERVED_KEYS = [
 ] as const
 
 export const FAULT_METHOD_KEYS = [
+  "toJSON",
   "toSerializable",
   "withMeta",
   "withMessage",
