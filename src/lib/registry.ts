@@ -67,15 +67,26 @@ export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
     this: void,
     err: unknown,
     tag: K,
+    handler: (e: InstanceType<M[K]>) => R
+  ): R | undefined
+  matchTag<R, K extends keyof M>(
+    this: void,
+    err: unknown,
+    tag: K,
     handler: (e: InstanceType<M[K]>) => R,
-    fallback?: (err: unknown) => R
+    fallback: (err: unknown) => R
+  ): R
+  matchTags<R>(
+    this: void,
+    err: unknown,
+    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>
   ): R | undefined
   matchTags<R>(
     this: void,
     err: unknown,
     handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
-    fallback?: (err: unknown) => R
-  ): R | undefined
+    fallback: (err: unknown) => R
+  ): R
   toSerializable(err: unknown): SerializableFault
   fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault
   readonly __faultier: {
@@ -116,6 +127,58 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
     return false
   }
 
+  function matchTag<R, K extends keyof M>(
+    this: void,
+    err: unknown,
+    tag: K,
+    handler: (e: InstanceType<M[K]>) => R
+  ): R | undefined
+  function matchTag<R, K extends keyof M>(
+    this: void,
+    err: unknown,
+    tag: K,
+    handler: (e: InstanceType<M[K]>) => R,
+    fallback: (err: unknown) => R
+  ): R
+  function matchTag<R, K extends keyof M>(
+    this: void,
+    err: unknown,
+    tag: K,
+    handler: (e: InstanceType<M[K]>) => R,
+    fallback?: (err: unknown) => R
+  ): R | undefined {
+    if (is(err) && err._tag === tag) {
+      return handler(err as InstanceType<M[K]>)
+    }
+    return fallback?.(err)
+  }
+
+  function matchTags<R>(
+    this: void,
+    err: unknown,
+    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>
+  ): R | undefined
+  function matchTags<R>(
+    this: void,
+    err: unknown,
+    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
+    fallback: (err: unknown) => R
+  ): R
+  function matchTags<R>(
+    this: void,
+    err: unknown,
+    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
+    fallback?: (err: unknown) => R
+  ): R | undefined {
+    if (is(err)) {
+      const maybeHandler = handlers[err._tag as keyof M]
+      if (typeof maybeHandler === "function") {
+        return maybeHandler(err as never)
+      }
+    }
+    return fallback?.(err)
+  }
+
   const instance: FaultRegistry<M> = {
     tags: tags as ReadonlyArray<keyof M>,
 
@@ -133,33 +196,9 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
 
     is,
 
-    matchTag<R, K extends keyof M>(
-      this: void,
-      err: unknown,
-      tag: K,
-      handler: (e: InstanceType<M[K]>) => R,
-      fallback?: (err: unknown) => R
-    ): R | undefined {
-      if (is(err) && err._tag === tag) {
-        return handler(err as InstanceType<M[K]>)
-      }
-      return fallback?.(err)
-    },
+    matchTag,
 
-    matchTags<R>(
-      this: void,
-      err: unknown,
-      handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
-      fallback?: (err: unknown) => R
-    ): R | undefined {
-      if (is(err)) {
-        const maybeHandler = handlers[err._tag as keyof M]
-        if (typeof maybeHandler === "function") {
-          return maybeHandler(err as never)
-        }
-      }
-      return fallback?.(err)
-    },
+    matchTags,
 
     toSerializable(err: unknown): SerializableFault {
       if (err instanceof Fault) {

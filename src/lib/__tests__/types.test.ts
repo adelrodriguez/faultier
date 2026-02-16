@@ -81,6 +81,39 @@ describe("type-level inference", () => {
     })
   })
 
+  test("registry.matchTag return type should narrow with fallback", () => {
+    const fault = AppFault.create("NotFoundError", { id: "123" })
+
+    const withoutFallback = AppFault.matchTag(fault, "NotFoundError", (e) => e.id)
+    const withFallback = AppFault.matchTag(
+      fault,
+      "NotFoundError",
+      (e) => e.id,
+      () => "fallback"
+    )
+
+    type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
+    type _WithFallback = Expect<Equal<typeof withFallback, string>>
+  })
+
+  test("registry.matchTags return type should narrow with fallback", () => {
+    const fault = AppFault.create("NotFoundError", { id: "123" })
+
+    const withoutFallback = AppFault.matchTags(fault, {
+      NotFoundError: (e) => e.id,
+    })
+    const withFallback = AppFault.matchTags(
+      fault,
+      {
+        NotFoundError: (e) => e.id,
+      },
+      () => "fallback"
+    )
+
+    type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
+    type _WithFallback = Expect<Equal<typeof withFallback, string>>
+  })
+
   test("merge should preserve type inference across 3+ modules", () => {
     const MergedFault = merge(AppFault, DbFault, BillingFault)
 
