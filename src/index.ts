@@ -52,6 +52,16 @@ export { registry } from "./lib/registry"
 export { merge } from "./lib/merge"
 
 /**
+ * Standalone union-driven tag matcher for a single tag.
+ */
+export { matchTag } from "./lib/match"
+
+/**
+ * Standalone union-driven tag matcher using a handler map.
+ */
+export { matchTags } from "./lib/match"
+
+/**
  * Deserializes a generic fault from the wire format.
  *
  * Use `registry.fromSerializable` when you want subclass reconstruction for registered tags.
@@ -87,6 +97,16 @@ export type { FlattenField } from "./lib/fault"
  * Options shared by `flatten`.
  */
 export type { FlattenOptions } from "./lib/fault"
+
+/**
+ * Tag discriminant extracted from a Fault union.
+ */
+export type { TagOf } from "./lib/match"
+
+/**
+ * Extracts the member of a Fault union for a specific tag.
+ */
+export type { ByTag } from "./lib/match"
 
 /**
  * Serializable fault payload shape.
