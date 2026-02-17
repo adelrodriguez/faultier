@@ -236,6 +236,10 @@ export abstract class Fault extends Error {
   toSerializable(): SerializableFault {
     return serializeFault(this, 0)
   }
+
+  toJSON(): SerializableFault {
+    return this.toSerializable()
+  }
 }
 
 export function isFault(value: unknown): value is Fault {

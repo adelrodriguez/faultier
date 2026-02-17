@@ -306,6 +306,22 @@ describe("Fault", () => {
     expect(keys).not.toContain("flatten")
     expect(keys).not.toContain("unwrap")
     expect(keys).not.toContain("toSerializable")
+    expect(keys).not.toContain("toJSON")
+  })
+
+  test("should serialize through toJSON when stringified", () => {
+    const fault = new ExampleFault()
+      .withDescription("message", "details")
+      .withMeta({ key: "value" })
+
+    const json = JSON.stringify(fault)
+    const parsed = JSON.parse(json) as Record<string, unknown>
+
+    expect(parsed.__faultier).toBe(true)
+    expect(parsed._tag).toBe("ExampleFault")
+    expect(parsed.message).toBe("message")
+    expect(parsed.details).toBe("details")
+    expect(parsed.meta).toEqual({ key: "value" })
   })
 })
 

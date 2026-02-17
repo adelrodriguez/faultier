@@ -139,8 +139,12 @@ describe("type-level inference", () => {
     // HandlerResult<H> infers R from the handler map values.
     // The result is structurally equivalent to `string` but not nominally
     // identical, so Equal<> fails. Two-way extends checks equivalence instead.
-    type _WithoutFallbackA = Expect<typeof withoutFallback extends string | undefined ? true : false>
-    type _WithoutFallbackB = Expect<string | undefined extends typeof withoutFallback ? true : false>
+    type _WithoutFallbackA = Expect<
+      typeof withoutFallback extends string | undefined ? true : false
+    >
+    type _WithoutFallbackB = Expect<
+      string | undefined extends typeof withoutFallback ? true : false
+    >
     type _WithFallbackA = Expect<typeof withFallback extends string ? true : false>
     type _WithFallbackB = Expect<string extends typeof withFallback ? true : false>
   })
