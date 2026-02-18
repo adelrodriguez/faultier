@@ -1,5 +1,11 @@
 # faultier
 
+## 2.2.2
+
+### Patch Changes
+
+- 7bb10fa: Restructure README with centered header, badges, features list, table of contents, and detailed API reference
+
 ## 2.2.1
 
 ### Patch Changes
