@@ -1,5 +1,13 @@
 # faultier
 
+## 2.2.1
+
+### Patch Changes
+
+- 19c4383: Remove TypeScript peer dependency requirement
+
+  Consumers no longer need to satisfy a `typescript` peer dependency. TypeScript is now a dev-only dependency of the package.
+
 ## 2.2.0
 
 ### Minor Changes
