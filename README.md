@@ -1,35 +1,50 @@
+![Faultier Banner](./assets/banner.webp)
+
 <div align="center">
   <h1 align="center">🦥 faultier</h1>
 
   <p align="center">
-    <strong>Structured, type-safe fault handling for TypeScript</strong>
+    <strong>Structured, extensible, type-safe error handling for TypeScript</strong>
   </p>
 
   <p align="center">
     <a href="https://www.npmjs.com/package/faultier"><img src="https://img.shields.io/npm/v/faultier" alt="npm version" /></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
-    <a href="https://pkg-size.dev/faultier"><img src="https://pkg-size.dev/badge/bundle/faultier" alt="Bundle size" /></a>
-    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg" alt="TypeScript" /></a>
   </p>
 </div>
 
-Faultier provides a structured way to create, classify, and handle errors with type-safe tags and structured context. Define your fault types as classes, group them in registries, and use them throughout your application with full TypeScript support for error classification and associated metadata.
+Create, classify, and extend errors with type-safe tags and structured context. Define your fault types as classes, group them in registries, and use them throughout your application with full TypeScript support for error classification and associated metadata.
 
-Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
+```ts
+import * as Faultier from "faultier"
+
+class NotFoundError extends Faultier.Tagged("NotFoundError")<{ id: string }>() {}
+const fault = new NotFoundError({ id: "123" }).withDescription(
+  "User not found",
+  "DB query returned 0 rows"
+)
+fault._tag // "NotFoundError"
+fault.id // "123"
+fault.message // "User not found"           — user-facing
+fault.details // "DB query returned 0 rows" — for logs
+```
 
 <details>
 <summary>Table of Contents</summary>
 
 - [Features](#features)
 - [Installation](#installation)
+- [Core Concepts](#core-concepts)
+- [Quick Start](#quick-start)
 - [Usage](#usage)
-  - [Quick Start](#quick-start)
   - [Tagged Faults](#tagged-faults)
   - [Error Chaining](#error-chaining)
   - [Registries](#registries)
   - [Handling Faults](#handling-faults)
   - [Serialization](#serialization)
 - [API Reference](#api-reference)
+- [Common Recipes](#common-recipes)
+- [When not to use Faultier](#when-not-to-use-faultier)
 - [Contributing](#contributing)
 - [Acknowledgments](#acknowledgments)
 - [License](#license)
@@ -63,36 +78,63 @@ yarn add faultier
 pnpm add faultier
 ```
 
-## Usage
+## Core Concepts
 
-### Quick Start
+| Term         | Meaning                                                                           |
+| ------------ | --------------------------------------------------------------------------------- |
+| **Fault**    | Base error class. Every faultier error extends it.                                |
+| **Tag**      | A string discriminant (`_tag`) on each fault, used for matching.                  |
+| **message**  | User-facing description ("User not found").                                       |
+| **details**  | Internal/diagnostic info for logs ("DB query returned 0 rows").                   |
+| **meta**     | Arbitrary structured metadata (`{ traceId, requestId, ... }`).                    |
+| **context**  | The merged `meta` from every fault in a cause chain (head wins on key conflicts). |
+| **Registry** | A scoped group of fault classes with `create`, `wrap`, and `match` helpers.       |
+
+Not sure if Faultier is a good fit for your project? See [When not to use Faultier](#when-not-to-use-faultier).
+
+## Quick Start
+
+Define tagged fault classes and throw/catch them with full type safety:
 
 ```ts
 import * as Faultier from "faultier"
 
-// Define fault types as tagged subclasses
-class NotFoundError extends Faultier.Tagged("NotFoundError")<{
-  resource: string
-  id: string
-}>() {}
+class NotFoundError extends Faultier.Tagged("NotFoundError")<{ id: string }>() {}
+class DatabaseError extends Faultier.Tagged("DatabaseError")() {}
 
-class TimeoutError extends Faultier.Tagged("TimeoutError")() {}
+const AppFault = Faultier.registry({ NotFoundError, DatabaseError })
 
-// Group them into a registry
-const AppFault = Faultier.registry({
-  NotFoundError,
-  TimeoutError,
-})
-
-// Create faults through the registry
-const error = AppFault.create("NotFoundError", {
-  resource: "user",
-  id: "123",
-}).withDescription("User not found", "Lookup failed after retries")
-
-// Or wrap existing errors
-const wrapped = AppFault.wrap(new Error("connection reset")).as("TimeoutError")
+try {
+  throw AppFault.create("NotFoundError", { id: "123" }).withMessage("User not found")
+} catch (err) {
+  AppFault.matchTags(err, {
+    NotFoundError: (fault) => console.log(fault.id), // "123" — fully typed
+    DatabaseError: () => console.log("db failed"),
+  })
+}
 ```
+
+In a real application, you'd use registries to create and wrap errors across your codebase:
+
+```ts
+async function getUser(id: string) {
+  let row: { id: string; name: string } | undefined
+
+  try {
+    row = await db.query("SELECT * FROM users WHERE id = ?", [id])
+  } catch (err) {
+    throw AppFault.wrap(err).as("DatabaseError")
+  }
+
+  if (!row) {
+    throw AppFault.create("NotFoundError", { id })
+  }
+
+  return row
+}
+```
+
+## Usage
 
 ### Tagged Faults
 
@@ -136,7 +178,7 @@ const outer = new NotFoundError({ resource: "user", id: "123" })
   .withDescription("User not found", "Lookup failed after retries")
   .withCause(inner)
 
-outer.unwrap()  // [outer, inner, root] — full chain as array
+outer.unwrap() // [outer, inner, root] — full chain as array
 outer.getTags() // ["NotFoundError", "TimeoutError"] — all tags in chain
 outer.getContext() // merged metadata from all faults (head wins on conflicts)
 ```
@@ -157,6 +199,16 @@ outer.flatten({
 })
 // "LOOKUP FAILED AFTER RETRIES | UPSTREAM TIMEOUT AFTER 30S"
 ```
+
+`flatten()` accepts an options object:
+
+| Option      | Type                        | Default     | Description                           |
+| ----------- | --------------------------- | ----------- | ------------------------------------- |
+| `field`     | `"message" \| "details"`    | `"message"` | Which field to collect from the chain |
+| `separator` | `string`                    | `" -> "`    | Join separator between values         |
+| `formatter` | `(value: string) => string` | trim        | Transform each value before joining   |
+
+When `field` is `"message"` (default), non-Fault nodes in the chain are included (via `Error.message` or string coercion). Consecutive duplicate values are deduplicated. When `field` is `"details"`, only Fault nodes with a defined `details` field are included.
 
 ### Registries
 
@@ -224,91 +276,103 @@ const restored = AuthFault.fromSerializable(json)
 
 ## API Reference
 
-### `Fault`
+### Fault Instance
 
-The abstract base class for all fault types.
+| Method                               | Description                                                   |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `message`                            | User-facing message ("what happened")                         |
+| `details`                            | Technical/diagnostic context for developers and logs          |
+| `withMessage(message)`               | Set user-facing message (fluent)                              |
+| `withDetails(details)`               | Set technical details (fluent)                                |
+| `withDescription(message, details?)` | Set both message and details (fluent)                         |
+| `withMeta(meta)`                     | Set structured metadata, merges with existing (fluent)        |
+| `withCause(cause)`                   | Chain a cause (fluent)                                        |
+| `unwrap()`                           | Cause chain as array `[head, ..., leaf]`                      |
+| `getTags()`                          | `_tag` values from all Faults in the chain                    |
+| `getContext()`                       | Merged metadata from all Faults (head wins on conflicts)      |
+| `flatten(options?)`                  | Cause chain to string (see [Error Chaining](#error-chaining)) |
+| `toSerializable()`                   | Serialize to wire format                                      |
 
-**Fields:**
+### Registry
 
-- `message` — user-facing message ("what happened")
-- `details` — technical/diagnostic context for developers and logs
+| Method                                     | Description                                                 |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| `create(tag, fields?)`                     | Create a fault by tag                                       |
+| `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                    |
+| `is(error)`                                | Type guard for any fault in the registry                    |
+| `matchTag(error, tag, handler, fallback?)` | Single tag matching                                         |
+| `matchTags(error, handlers, fallback?)`    | Multiple tag matching                                       |
+| `toSerializable(error)`                    | Serialize any error (Fault, Error, or unknown thrown value) |
+| `fromSerializable(data)`                   | Reconstruct a fault, restoring registered subclasses        |
 
-**Setters (fluent, returns `this`):**
+### Top-level (`Faultier.*`)
 
-- `withMessage(message)` — set user-facing message
-- `withDetails(details)` — set technical details
-- `withDescription(message, details?)` — convenience for both; message is always set, details only when provided
-- `withMeta(meta)` — set structured metadata (merges with existing)
-- `withCause(cause)` — chain a cause
+| Method                   | Description                                                  |
+| ------------------------ | ------------------------------------------------------------ |
+| `Tagged(tag)<Fields>()`  | Create a tagged Fault subclass with `_tag` as discriminant   |
+| `registry({ ...ctors })` | Create a scoped fault registry from tagged constructors      |
+| `merge(a, b, ...rest)`   | Merge registries into one union (throws on conflicting tags) |
+| `isFault(value)`         | Type guard for Fault instances (not cross-realm safe)        |
+| `fromSerializable(data)` | Reconstruct a generic Fault (no subclass restoration)        |
 
-**Chain methods:**
+### Exports
 
-- `unwrap()` — raw cause chain as an array `[head, ..., leaf]`
-- `getTags()` — `_tag` values from all Faults in the chain
-- `getContext()` — merged metadata from all Faults in the chain (head wins on key conflicts)
-- `flatten(options?)` — configurable chain-to-string
+**Runtime:** `Fault`, `Tagged`, `registry`, `merge`, `isFault`, `fromSerializable`, `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
 
-**Serialization:**
+**Types:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `SerializableFault`, `SerializableCause`
 
-- `toSerializable()` — serialize to wire format
+## Common Recipes
 
-### `Tagged(tag)`
-
-Creates a strongly typed fault subclass factory with `_tag` as discriminant.
+### Map faults to HTTP status codes
 
 ```ts
-class MyError extends Faultier.Tagged("MyError")<{ code: number }>() {}
+function toHttpStatus(err: unknown) {
+  return AppFault.matchTags(
+    err,
+    {
+      NotFoundError: () => 404,
+      ValidationError: () => 422,
+      DatabaseError: () => 503,
+    },
+    () => 500
+  )
+}
 ```
 
-### `registry({ ...ctors })`
+### Wrap unknown errors safely
 
-Creates a scoped fault registry from a set of tagged constructors.
+```ts
+try {
+  await riskyOperation()
+} catch (err) {
+  // Wraps anything — Error instances, strings, even undefined
+  throw AppFault.wrap(err).as("DatabaseError")
+}
+```
 
-**Methods:**
+### Serialize across a boundary
 
-- `create(tag, fields?)` — create a fault by tag
-- `wrap(error).as(tag, fields?)` — wrap an existing error as a tagged fault
-- `matchTag(error, tag, onMatch, onElse)` — single tag matching
-- `matchTags(error, handlers)` — multiple tag matching
-- `fromSerializable(data)` — reconstruct a fault from serialized data (restores registered subclasses)
-- `toSerializable(error)` — serialize any error (Fault, Error, or unknown thrown value)
+```ts
+// Server: serialize any error for the wire
+const payload = AppFault.toSerializable(err)
+res.json(payload)
 
-### `merge(a, b, ...rest)`
-
-Merges registries into one larger union. Throws `RegistryMergeConflictError` on duplicate tags with different constructors.
-
-### `isFault(value)`
-
-Type guard to check if a value is a `Fault` instance. Uses `instanceof`, so it is not cross-realm safe.
-
-### `fromSerializable(data)`
-
-Reconstructs a generic `Fault` from serialized data (no subclass restoration).
-
-### `flatten()` Options
-
-| Option      | Type                        | Default     | Description                           |
-| ----------- | --------------------------- | ----------- | ------------------------------------- |
-| `field`     | `"message" \| "details"`    | `"message"` | Which field to collect from the chain |
-| `separator` | `string`                    | `" -> "`    | Join separator between values         |
-| `formatter` | `(value: string) => string` | trim        | Transform each value before joining   |
-
-When `field` is `"message"` (default), non-Fault nodes in the chain are included (via `Error.message` or string coercion). Consecutive duplicate values are deduplicated.
-
-When `field` is `"details"`, only Fault nodes with a defined `details` field are included.
-
-### Runtime Exports
-
-`Fault`, `Tagged`, `registry`, `merge`, `isFault`, `fromSerializable`, `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
-
-### Type Exports
-
-`FaultRegistry`, `FlattenOptions`, `FlattenField`, `SerializableFault`, `SerializableCause`
+// Client: reconstruct with subclass restoration
+const fault = AppFault.fromSerializable(payload)
+fault instanceof NotFoundError // true (if registered)
+```
 
 ## Notes
 
 - Cause chains are capped at 100 levels (`MAX_CAUSE_DEPTH`) in traversal, serialization, and deserialization to prevent stack overflow.
 - Reserved constructor field names in `Tagged` throw `ReservedFieldError`.
+
+## When not to use Faultier
+
+- **Small scripts or one-off CLIs** — plain `throw new Error()` is fine when you don't need classification.
+- **You already have a tagged error solution** — if your codebase already uses a library with `_tag` discriminants (e.g., Effect errors), adding Faultier would be redundant.
+- **You don't want to maintain an error taxonomy** — Faultier works best when your team commits to defining and evolving a set of fault classes. If that feels like too much overhead, it probably is.
+- **Very high-volume failure paths** — class instantiation per error is negligible for normal use, but may matter if errors are part of expected control flow at high frequency (e.g., validation in a tight loop).
 
 ## Contributing
 
@@ -317,6 +381,8 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## Acknowledgments
 
 This project is inspired by the [Fault](https://github.com/Southclaws/fault) library.
+
+Made with [🥐 `pastry`](https://github.com/adelrodriguez/pastry)
 
 ## License
 
