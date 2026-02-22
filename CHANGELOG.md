@@ -1,5 +1,11 @@
 # faultier
 
+## 2.2.2
+
+### Patch Changes
+
+- 7bb10fa: Improve README for new users with TL;DR example, Core Concepts glossary, self-contained Quick Start, Common Recipes, tabular API reference, and "When not to use Faultier" section
+
 ## 2.2.1
 
 ### Patch Changes
