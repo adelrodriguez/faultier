@@ -82,6 +82,8 @@ export function fromSerializable(json: SerializableFault): Fault {
 }
 
 function fromSerializableInternal(json: SerializableFault, depth: number): Fault {
+  // Runtime callers may pass parsed input that does not match the static type.
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!isRecord(json) || !json.__faultier) {
     throw new Error("Invalid Faultier payload: expected __faultier: true")
   }

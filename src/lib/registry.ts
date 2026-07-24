@@ -113,7 +113,7 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
   }
 
   function create<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]> {
-    const ctor = ctors[tag] as M[K]
+    const ctor = ctors[tag]
     // Safe: instantiate() performs runtime Fault validation and returns the exact ctor instance.
     // oxlint-disable-next-line typescript/no-unsafe-return
     return instantiate(ctor, args as unknown[])
@@ -148,7 +148,7 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
     fallback?: (err: unknown) => R
   ): R | undefined {
     if (is(err) && err._tag === tag) {
-      return handler(err as InstanceType<M[K]>)
+      return handler(err)
     }
     return fallback?.(err)
   }
@@ -173,14 +173,14 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
     if (is(err)) {
       const maybeHandler = handlers[err._tag as keyof M]
       if (typeof maybeHandler === "function") {
-        return maybeHandler(err as never)
+        return maybeHandler(err)
       }
     }
     return fallback?.(err)
   }
 
   const instance: FaultRegistry<M> = {
-    tags: tags as ReadonlyArray<keyof M>,
+    tags,
 
     create,
 

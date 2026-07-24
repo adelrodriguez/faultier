@@ -65,5 +65,5 @@ export function merge<
       tags: orderedTags,
     },
     tags: orderedTags,
-  } as MergedRegistry<Registries>
+  }
 }
