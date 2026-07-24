@@ -9,6 +9,7 @@
     "allowJs": true,
     "moduleResolution": "bundler",
     "noEmit": true,
+    "types": ["bun"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
