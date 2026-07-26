@@ -1,5 +1,22 @@
 # faultier
 
+## 3.0.0
+
+### Major Changes
+
+- 59e97d3: Make registry constructor-map state internal. Registry objects no longer expose the undocumented `__faultier` property, and `merge()` now rejects structurally forged or spread-cloned registries; pass only registries created by `registry()` or `merge()`.
+
+  Standalone and registry matchers now share matching behavior and infer independent handler and fallback result unions. Standalone `matchTags` now accurately distinguishes exhaustive handler maps from partial or possibly undefined handlers, while registry matchers continue to accept `unknown` input and guard registered constructor identity rather than matching by tag alone.
+
+  Faultier now requires TypeScript 5.4 or newer because its public matcher declarations use the `NoInfer` intrinsic.
+
+  The root entrypoint now contains only the core runtime API. Migrate library error class imports from `faultier` to `faultier/errors`, and explicit public type imports from `faultier` to `faultier/types`.
+
+### Patch Changes
+
+- 8ad6109: Refresh the TypeScript 7 build and validation toolchain without changing runtime behavior
+- 9702c72: Fix generic and registry deserialization so reserved payload collisions never overwrite existing `__payload_` fields, prototype-sensitive keys are restored safely, registered constructors retain normalized fields, and registered nested causes reconstruct beneath unregistered outer faults.
+
 ## 2.2.2
 
 ### Patch Changes
@@ -71,6 +88,7 @@
 ### Major Changes
 
 - a55a947: ### Breaking changes
+
   - Registry model changed: module augmentation (`FaultRegistry`) and the default `Fault` class are gone. Migration: `import { define } from "faultier"`, define a registry type, then `class Fault extends define<Registry>() {}` and use that class for `create`, `wrap`, `handle`, `matchTag(s)`, etc.
   - Removed `faultier/extend` export and the `extend()` helper. Migration: add custom methods directly to your `Fault` class; `instanceof` works with your defined class.
   - Tag + context API simplified: `withContext` removed; use `Fault.create(tag, context?)` and `fault.withTag(tag, context?)`. Context can now be `undefined` when omitted, so update access to use optional chaining where needed.
@@ -160,6 +178,7 @@
 - b232ada: Add selective fault matching with `matchTag`, `matchTags`, and `isUnknown` methods
 
   **New Methods:**
+
   - **`Fault.matchTag(error, tag, callback)`** - Match a single fault tag and run a callback if it matches. Returns `UNKNOWN` if the error is not a fault or has a different tag. Use this when you only need to handle one specific fault type.
 
   - **`Fault.matchTags(error, handlers)`** - Match multiple fault tags with partial handlers. Unlike `handle()`, this only requires handlers for the tags you want to match, making it ideal for middleware and route-specific error handling. Returns `UNKNOWN` if the error is not a fault or no handler matches.
@@ -169,6 +188,7 @@
   **Use Cases:**
 
   The new methods provide more flexibility than the existing exhaustive `handle()` method:
+
   - `matchTag` for single fault type handling in specific contexts
   - `matchTags` for partial matching in middleware or routes where you only care about certain fault types
   - `handle` remains for global error handlers that need to exhaustively handle all registered fault types
@@ -203,6 +223,7 @@
 ### Patch Changes
 
 - 4591d32: Update development dependencies:
+
   - `@types/bun` from 1.3.1 to 1.3.5
   - `@types/yargs` from 17.0.34 to 17.0.35
 
@@ -211,6 +232,7 @@
 - b49aa0f: Enhance README documentation with improved structure and clarity
 
   **Documentation Improvements:**
+
   - **Added badges** displaying npm version, MIT license, and TypeScript 5.0+ compatibility for quick reference
   - **Added table of contents** in a collapsible section for easier navigation through the documentation
   - **Expanded installation instructions** with examples for npm, yarn, pnpm, and bun package managers
@@ -224,6 +246,7 @@
 - b3dd2ae: Fix context type safety for tagged faults by introducing partial context types
 
   **Context Type System Improvements:**
+
   - **Added `PartialContextForTag<T>` type** to correctly represent context that may or may not be present on a tagged fault. When you call `.withTag()` without `.withContext()`, the fault now correctly has an empty context object (`{}`) typed as `Partial<ContextForTag<T>>`.
 
   - **Simplified type hierarchy** by consolidating `FaultWithContext` and `FaultWithTag` into a single `TaggedFault` class. Both `withContext()` and `clearContext()` are now available on all tagged faults, eliminating the need for separate type branches.
@@ -231,6 +254,7 @@
   - **Improved type narrowing** after `isFault()` checks. When checking `fault.tag === "MY_TAG"`, TypeScript now correctly narrows the context type to `Partial<{ ... }>`, allowing safe property access with optional chaining or `in` checks.
 
   **Extended Fault API Changes:**
+
   - Renamed `ExtendedFaultWithTag` → `ExtendedTaggedFault` for consistency
   - Removed `ExtendedFaultWithContext` type (merged into `ExtendedTaggedFault`)
   - Both extended and core faults now follow the same type patterns
@@ -271,6 +295,7 @@
 - ec009f2: Export extended fault type interfaces for improved TypeScript developer experience
 
   Exports previously internal TypeScript interfaces and types from the `extend()` functionality to improve type inference and IDE autocomplete when working with extended faults:
+
   - `FaultRegistry` - Now exported from main package entry for module augmentation
   - `WithBaseFaultMethods` - Helper type ensuring extended faults have BaseFault methods
   - `ExtendedFaultBase` - Base extended fault interface before `.withTag()` is called
@@ -282,6 +307,7 @@
   **Critical fix:** Enable TypeScript declaration splitting (`dts.splitting: true`) to resolve module augmentation type recognition issue. Previously, when using `declare module "faultier"` to extend the `FaultRegistry` interface, extended faults created with `extend()` weren't properly recognizing the augmented types because the generated `.d.ts` files weren't importing the `FaultRegistry` type from its own module - they were duplicating the type definition inline. With declaration splitting enabled, the build now correctly generates imports like `import type { FaultRegistry } from './types'`, ensuring that module augmentation properly applies to all extended fault types.
 
   **Build improvements:**
+
   - Enable TypeScript declaration splitting for better tree-shaking of type imports and correct module augmentation behavior
   - Add automatic output directory cleaning before builds to prevent stale artifacts
 
@@ -300,6 +326,7 @@
 - 39aebea: Refactor internal architecture and simplify FaultRegistry type system
 
   **Breaking Changes**
+
   1. **Simplified FaultRegistry interface**: The `FaultRegistry` interface now directly maps tag names to their context types, eliminating the separate `tags` and `context` properties for a more intuitive API.
 
      **Before:**
@@ -329,6 +356,7 @@
      ```
 
      **Benefits:**
+
      - More concise and easier to read
      - Supports extending with grouped error types using TypeScript's `extends` keyword
      - Better type inference with `never` for tags without context (prevents `withContext()` at type level)
@@ -337,6 +365,7 @@
   2. **Internal structure reorganized**: Core implementation moved from `src/` to `src/lib/` directory. This is transparent to users importing from the main package entry point.
 
   3. **Simplified type exports**: Streamlined exported types to public API essentials:
+
      - **Removed exports**: `ChainFormattingOptions`, `FaultRegistry` (internal implementation details)
      - **Added exports**: `ContextForTag`, `FaultJSON`, `FaultTag` (type-safe registry utilities)
      - **Unchanged exports**: `SerializableError`, `SerializableFault`
@@ -404,6 +433,7 @@
   ```
 
   **If you were importing removed types:**
+
   - `FaultRegistry` - This was never meant to be imported directly. Use module augmentation as shown above.
 
   - `ChainFormattingOptions` - This type was internal. The options are passed directly to methods like `BaseFault.getIssue()` and don't need to be imported.
@@ -428,6 +458,7 @@
   ```
 
   **New Features**
+
   - **Type-safe prevention of withContext()**: Tags with `never` context type now properly prevent `withContext()` calls at compile time, returning `never` type
   - **Improved handler typing**: `Fault.handle()` now correctly types handlers based on whether tags require context or not
   - **Better type inference**: `ContextForTag<T>` utility type now properly handles `never` for tags without context
@@ -438,11 +469,13 @@
   - Added `withMessage(message)` method to set only the user-facing message
 
   **Bug Fixes**
+
   - Fixed `IS_FAULT` symbol being lost after calling `clearContext()` on extended faults. The symbol is now properly preserved using `Object.defineProperty()` with non-enumerable configuration, ensuring `Fault.isFault()` checks work correctly throughout the fault's lifecycle.
   - Fixed stack traces being lost when calling `withTag()` or `withContext()` on extended faults. Stack traces now correctly point to the original fault creation location rather than where transformation methods were called, improving debuggability.
   - Improved type safety for `IS_FAULT` and `UNKNOWN` symbols by declaring them as `unique symbol` types instead of plain `symbol`, preventing accidental symbol collisions.
 
   **Internal Changes**
+
   - Deleted `src/core.ts` in favor of reorganized `src/lib/index.ts`
   - Moved all tests to `src/lib/__tests__/` directory
   - Updated build configuration to support multiple entry points
@@ -456,6 +489,7 @@
 - 06845ba: Fix type inconsistencies and improve strict typing throughout the codebase
 
   **Type Improvements**
+
   - **`isFault()` type guard**: Returns `BaseFault<FaultTag, ContextForTag<FaultTag>>` for strict registry type narrowing
   - **`extend()` return type**: Returns `BaseFault<FaultTag, ContextForTag<FaultTag>>` for proper type inference
   - **`withTag()` return type**: Properly narrows to `BaseFault<SelectedTag, ContextForTag<SelectedTag>>`
@@ -465,6 +499,7 @@
   - **`FaultJSON`**: Changed from interface to type, `context` now `Partial<TContext>`
 
   **Bug Fixes**
+
   - Fixed test assertions to work with strict typing (removed unnecessary type casts)
   - Corrected invalid tag names in tests to match actual error definitions
 
@@ -475,6 +510,7 @@
 - 213e614: Add ChainFormattingOptions and smart message formatting
 
   **Breaking Changes**
+
   1. **Helper functions removed**: `getIssue()` and `getDebug()` are no longer exported. They are now static methods on `BaseFault`.
 
   2. **Smart formatting by default**: Messages now automatically have periods added if they don't end with punctuation (`.!?`).
@@ -507,6 +543,7 @@
   ```
 
   **New Features**
+
   - **ChainFormattingOptions**: New type for customizing message formatting with `separator` and `formatter` options
   - **Smart defaults**:
     - `getIssue()` and `getDebug()`: Trim messages and add periods if missing (separator: `" "`)
@@ -542,12 +579,14 @@
   Faultier now supports serializing fault chains into plain objects and deserializing them back into full Fault instances, enabling error transmission across network boundaries or storage systems while preserving the entire error chain.
 
   **New Types**
+
   - `SerializableFault<TTag, TContext>` - Serialized representation of a Fault with full error chain support via nested `cause` objects
   - `SerializableError` - Serialized representation of plain Error objects (non-Fault)
 
   Both types are exported from the main package entry point.
 
   **New Methods**
+
   - **`BaseFault.toSerializable(fault)`** - Static method that converts a Fault instance into a plain object representation, recursively serializing the entire cause chain. Unlike `toJSON()` which only includes the cause's message string, `toSerializable()` preserves the full chain structure with all tags, contexts, and debug messages.
 
   - **`Fault.fromSerializable(data)`** - Static method that reconstructs a Fault instance from serialized data, rebuilding the complete error chain with all properties preserved. Each Fault in the chain is properly instantiated with its tag, context, debug message, and cause reference.
@@ -576,6 +615,7 @@
   ```
 
   **Use Cases**
+
   - Transmitting errors from server to client in API responses
   - Logging structured error data to external systems
   - Persisting error states for later analysis
@@ -600,6 +640,7 @@
 - 5ada53d: Fix package exports configuration to point to built distribution files
 
   Previously, the package.json incorrectly pointed the "module" field to the source file (`src/index.ts`), which would cause import failures when the package is published and consumed by users. This change updates the package configuration to properly export the built files from the `dist/` directory:
+
   - Added `main` field pointing to `./dist/index.js` for CommonJS compatibility
   - Updated `module` field to point to `./dist/index.js` instead of source
   - Added `types` field pointing to `./dist/index.d.ts` for TypeScript type definitions
@@ -616,12 +657,14 @@
   Faultier is a comprehensive error handling library built with TypeScript that provides enhanced error objects with tagging, context, debug messages, and error chaining capabilities. This release includes the complete core implementation and comprehensive test coverage.
 
   **Core Architecture**
+
   - **BaseFault class** - Abstract base class providing the foundation for all fault functionality including fluent API methods for error enrichment
   - **Fault class** - Main error class extending BaseFault with static factory methods (`wrap`, `create`, `extend`)
   - **Type-safe registry system** - Module augmentation support through `FaultRegistry` interface allowing applications to define custom fault tags and context schemas with full type inference
   - **Error chaining** - Built-in support for wrapping and unwrapping error chains through the `cause` property
 
   **Key Features**
+
   - **Tag-based categorization** - Type-safe error classification system using string tags defined in the registry
   - **Structured context** - Attach typed metadata to errors with automatic merging and clearing capabilities
   - **Debug messages** - Separate internal debug messages from user-facing error messages
@@ -631,12 +674,14 @@
   - **JSON serialization** - Built-in `toJSON()` for structured error logging
 
   **Helper Functions**
+
   - `getIssue()` - Extract all user-facing messages from a fault chain
   - `getDebug()` - Extract all debug messages from a fault chain
 
   **Testing**
 
   Comprehensive test suite with 500+ lines of tests covering:
+
   - Core functionality (wrapping, tagging, context management)
   - Error chain traversal and context merging
   - Type safety with registry augmentation
@@ -644,6 +689,7 @@
   - Edge cases and error scenarios
 
   **Documentation**
+
   - Extensive JSDoc comments on all public APIs with usage examples
   - Type definitions exported for consumer applications
   - Module augmentation patterns for custom fault registries
