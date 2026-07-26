@@ -36,10 +36,10 @@ src/
     ├── registry.ts
     ├── merge.ts
     ├── match.ts
-    ├── serialize.ts
-    ├── internal.ts
+    ├── reviver.ts
+    ├── registry-state.ts
     ├── errors.ts
-    └── utils.ts
+    └── wire.ts
 ```
 
 See [`CONTEXT.md`](CONTEXT.md) for the domain glossary, behavioral model, and detailed module responsibilities.

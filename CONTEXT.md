@@ -14,6 +14,7 @@
 ## Behavioral Model
 
 - Registry membership uses constructor identity, not only `_tag`. A foreign Fault with the same tag is not a registry member.
+- Registry composition is statically known: `merge()` requires at least two tuple entries so it can preserve per-tag constructor inference. Dynamically sized arrays are intentionally unsupported.
 - Standalone matching accepts a typed Fault union. Registry matching accepts `unknown`, checks membership, then uses the same tag dispatch.
 - `Fault.toSerializable()` encodes a fault. `fromSerializable()` reconstructs a generic Fault, while `registry.fromSerializable()` restores registered subclasses when possible.
 - Generic and registry reconstruction share validation, payload restoration, cause recursion, and depth accounting.
@@ -38,13 +39,13 @@ src/
 └── lib/
     ├── errors.ts             # Library error classes
     ├── fault.ts              # Fault, isFault, and Fault encoding
-    ├── internal.ts           # Constructor types and private registry state
     ├── match.ts              # Shared matching runtime and standalone signatures
     ├── merge.ts              # Registry composition
-    ├── registry.ts           # Registry construction and methods
-    ├── serialize.ts          # Wire contracts, arbitrary values, validation, and reconstruction
+    ├── registry.ts           # Registry construction, methods, and unknown-value envelopes
+    ├── reviver.ts            # Wire payload validation and Fault reconstruction
+    ├── registry-state.ts     # Constructor types and private registry state
     ├── tagged.ts             # Tagged subclass factory
-    └── utils.ts              # Shared constants and payload collection
+    └── wire.ts               # Wire format contract: types, reserved keys, payload collection
 ```
 
 Public tests import only `src/index.ts`, `src/errors.ts`, or `src/types.ts`. `scripts/verify-package.ts` separately validates built package resolution, runtime export surfaces, constructor identity, and strict NodeNext declaration consumption.

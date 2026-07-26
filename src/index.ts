@@ -69,4 +69,4 @@ export { matchTags } from "./lib/match"
  *
  * Use `registry.fromSerializable` when you want subclass reconstruction for registered tags.
  */
-export { fromSerializable } from "./lib/serialize"
+export { fromSerializable } from "./lib/reviver"

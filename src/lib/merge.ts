@@ -1,8 +1,8 @@
-import type { AnyFaultCtor } from "./internal"
 import type { FaultRegistry } from "./registry"
+import type { AnyFaultCtor } from "./registry-state"
 import { RegistryMergeConflictError } from "./errors"
-import { getRegistryState } from "./internal"
 import { registryFromEntries } from "./registry"
+import { getRegistryState } from "./registry-state"
 
 type AnyFaultRegistry = FaultRegistry<Record<string, AnyFaultCtor>>
 

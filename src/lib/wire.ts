@@ -1,8 +1,29 @@
+// The wire format contract shared by Fault encoding (fault.ts) and
+// decoding (reviver.ts). This module must stay dependency-free so the
+// lib import graph remains a DAG.
+
+export type SerializableCause =
+  | { kind: "fault"; value: SerializableFault }
+  | { kind: "error"; name: string; message: string; stack?: string }
+  | { kind: "thrown"; value: unknown }
+
+export type SerializableFault = {
+  __faultier: true
+  _tag: string
+  name: string
+  message?: string
+  details?: string
+  meta?: Record<string, unknown>
+  stack?: string
+  cause?: SerializableCause
+  [key: string]: unknown
+}
+
 export const MAX_CAUSE_DEPTH = 100
 
-export function defaultTrimFormatter(value: string): string {
-  return value.trim()
-}
+// Prefix applied (repeatedly, until unique) to payload keys that would
+// collide with reserved Fault fields during deserialization.
+export const PAYLOAD_PREFIX = "__payload_"
 
 export const FAULT_INSTANCE_RESERVED_KEYS = [
   "_tag",
@@ -28,14 +49,16 @@ export const FAULT_METHOD_KEYS = [
   "flatten",
 ] as const
 
-export const RESERVED_KEYS = new Set<string>([
+export const RESERVED_KEYS: ReadonlySet<string> = new Set<string>([
   ...FAULT_INSTANCE_RESERVED_KEYS,
   ...FAULT_METHOD_KEYS,
 ])
 
-export const RESERVED_SERIALIZE_KEYS = new Set<string>(FAULT_INSTANCE_RESERVED_KEYS)
+export const RESERVED_SERIALIZE_KEYS: ReadonlySet<string> = new Set<string>(
+  FAULT_INSTANCE_RESERVED_KEYS
+)
 
-export const RESERVED_FROM_SERIALIZABLE_KEYS = new Set<string>([
+export const RESERVED_FROM_SERIALIZABLE_KEYS: ReadonlySet<string> = new Set<string>([
   "__faultier",
   ...FAULT_INSTANCE_RESERVED_KEYS,
 ])

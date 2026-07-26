@@ -1,11 +1,11 @@
-import type { SerializableCause, SerializableFault } from "./serialize"
 import {
   collectPayloadFields,
-  defaultTrimFormatter,
   FAULT_METHOD_KEYS,
   MAX_CAUSE_DEPTH,
   RESERVED_SERIALIZE_KEYS,
-} from "./utils"
+  type SerializableCause,
+  type SerializableFault,
+} from "./wire"
 
 export type FlattenField = "message" | "details"
 
@@ -21,6 +21,10 @@ const SERIALIZE_EXCLUDED_KEYS = new Set<string>([
   ...FAULT_METHOD_KEY_SET,
 ])
 const originalStacks = new WeakMap<Fault, string | undefined>()
+
+function defaultTrimFormatter(value: string): string {
+  return value.trim()
+}
 
 function toCause(cause: unknown, depth: number): SerializableCause {
   if (cause instanceof Fault) {
