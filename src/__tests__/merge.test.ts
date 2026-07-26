@@ -37,6 +37,24 @@ describe("merge", () => {
     expect(MergedFault.tags).toEqual(["NotFoundError", "TimeoutError", "DatabaseError"])
   })
 
+  it("preserves first-seen order for integer-like tags", () => {
+    class SecondError extends Tagged("2")() {}
+    class FirstError extends Tagged("1")() {}
+
+    const SecondFault = registry({ "2": SecondError })
+    const FirstFault = registry({ "1": FirstError })
+
+    expect(merge(SecondFault, FirstFault).tags).toEqual(["2", "1"])
+  })
+
+  it("rejects registry objects without internal state", () => {
+    const AppFault = registry({ NotFoundError, TimeoutError })
+    const DbFault = registry({ DatabaseError })
+    const forged = { ...AppFault }
+
+    expect(() => merge(forged, DbFault)).toThrow("Invalid Fault registry")
+  })
+
   it("behaves like a normal registry", () => {
     const AppFault = registry({ NotFoundError })
     const DbFault = registry({ DatabaseError, TimeoutError })

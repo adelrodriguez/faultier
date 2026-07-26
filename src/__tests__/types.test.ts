@@ -236,6 +236,9 @@ describe("type-level inference", () => {
 // The function bodies never execute — only the type checker matters.
 
 function _negativeTypeTests() {
+  // @ts-expect-error -- registry state is internal
+  void AppFault.__faultier
+
   // @ts-expect-error — "BadTag" is not a registered tag
   AppFault.create("BadTag", {})
 
