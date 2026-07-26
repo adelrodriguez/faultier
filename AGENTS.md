@@ -3,6 +3,7 @@
 ## Agents
 
 - Always use the `changeset-writer` agent when you need to create or update changeset entries based on git changes.
+- Add changesets only for user-facing changes. Never choose a major bump without explicit user approval.
 
 ## Validation
 
@@ -30,6 +31,9 @@ Default to using Bun instead of Node.js.
 Use `bun test` to run tests. Use `describe` to group tests by function or feature. Write test descriptions as present-tense behavioral sentences without "should" (for example: `it("returns value when function succeeds")`, `it("throws Panic when catch throws")`).
 
 - `describe` labels should be the exact function or class being tested (for example: `describe("Fault")`, `describe("withCause")`).
+- Public API tests live in `src/__tests__/` and import only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`.
+- Public API type changes must be covered in `src/__tests__/types.test.ts`.
+- Type assertions are enforced by `bun run check` and `bun run typecheck`, not `bun test`.
 
 ```ts#index.test.ts
 import { it, expect } from "bun:test";
@@ -38,3 +42,8 @@ it("returns the expected value", () => {
   expect(1).toBe(1);
 });
 ```
+
+## Suppressions
+
+- Use `@ts-expect-error -- reason` for intentional type errors.
+- Keep Oxlint disables as narrow as possible and explain why the suppressed operation is safe.
