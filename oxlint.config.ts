@@ -18,7 +18,7 @@ export default defineConfig({
       rules: { "typescript/no-invalid-void-type": "off" },
     },
     {
-      files: ["src/lib/__tests__/types.test.ts"],
+      files: ["src/__tests__/types.test.ts"],
       rules: { "typescript/no-unnecessary-type-parameters": "off" },
     },
   ],

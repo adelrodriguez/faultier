@@ -1,11 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, it } from "bun:test"
 
-import { ReservedFieldError } from "../errors"
-import { Fault } from "../fault"
-import { Tagged } from "../tagged"
+import { Fault, ReservedFieldError, Tagged } from "../index"
 
 describe("Tagged", () => {
-  test("should create class with matching _tag and name", () => {
+  it("creates class with matching _tag and name", () => {
     class NotFoundError extends Tagged("NotFoundError")<{ resource: string }>() {}
 
     const fault = new NotFoundError({ resource: "user" })
@@ -15,7 +13,7 @@ describe("Tagged", () => {
     expect(fault.name).toBe("NotFoundError")
   })
 
-  test("should assign constructor fields to instance", () => {
+  it("assigns constructor fields to instance", () => {
     class NotFoundError extends Tagged("NotFoundError")<{ id: string; resource: string }>() {}
 
     const fault = new NotFoundError({ id: "123", resource: "user" })
@@ -24,14 +22,14 @@ describe("Tagged", () => {
     expect(fault.resource).toBe("user")
   })
 
-  test("should throw ReservedFieldError for reserved field keys", () => {
+  it("throws ReservedFieldError for reserved field keys", () => {
     class InvalidFieldError extends Tagged("InvalidFieldError")<{ message: string }>() {}
 
     expect(() => new InvalidFieldError({ message: "nope" })).toThrow(ReservedFieldError)
     expect(() => new InvalidFieldError({ message: "nope" })).toThrow("Reserved field key: message")
   })
 
-  test("should accept no constructor args for empty fields", () => {
+  it("accepts no constructor arguments for empty fields", () => {
     class TimeoutError extends Tagged("TimeoutError")() {}
 
     const fault = new TimeoutError()

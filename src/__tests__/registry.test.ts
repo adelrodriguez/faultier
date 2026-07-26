@@ -1,16 +1,13 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, it } from "bun:test"
 
-import type { SerializableFault } from "../fault"
-import { RegistryTagMismatchError } from "../errors"
-import { Fault } from "../fault"
-import { registry } from "../registry"
-import { Tagged } from "../tagged"
+import type { SerializableFault } from "../index"
+import { Fault, registry, RegistryTagMismatchError, Tagged } from "../index"
 
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}
 
 describe("registry", () => {
-  test("should throw when registry key does not match ctor tag", () => {
+  it("throws when registry key does not match constructor tag", () => {
     class TimeoutErrorAlias extends Tagged("TimeoutError")() {}
 
     expect(() =>
@@ -21,7 +18,7 @@ describe("registry", () => {
     ).toThrow(RegistryTagMismatchError)
   })
 
-  test("should create tagged faults by tag", () => {
+  it("creates tagged faults by tag", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     const fault = Faults.create("NotFoundError", { id: "123" })
@@ -30,7 +27,7 @@ describe("registry", () => {
     expect(fault.id).toBe("123")
   })
 
-  test("should create wrapped faults using wrap().as", () => {
+  it("creates wrapped faults using wrap().as", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const cause = new Error("root")
 
@@ -40,7 +37,7 @@ describe("registry", () => {
     expect(fault.cause).toBe(cause)
   })
 
-  test("should match top-level tag only", () => {
+  it("matches top-level tag only", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("NotFoundError", { id: "123" })
 
@@ -54,7 +51,7 @@ describe("registry", () => {
     expect(value).toBe("123")
   })
 
-  test("should support destructured matchTag", () => {
+  it("supports destructured matchTag", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const { matchTag } = Faults
     const fault = Faults.create("NotFoundError", { id: "123" })
@@ -69,7 +66,7 @@ describe("registry", () => {
     expect(value).toBe("123")
   })
 
-  test("should use fallback for non-fault values", () => {
+  it("uses fallback for non-fault values", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     const value = Faults.matchTag(
@@ -82,7 +79,7 @@ describe("registry", () => {
     expect(value).toBe("fallback")
   })
 
-  test("should return undefined without fallback", () => {
+  it("returns undefined without fallback", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("TimeoutError")
 
@@ -91,7 +88,7 @@ describe("registry", () => {
     expect(value).toBeUndefined()
   })
 
-  test("should restore subclass from registry.fromSerializable", () => {
+  it("restores subclass from registry.fromSerializable", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const original = Faults.create("NotFoundError", { id: "123" }).withMessage("Missing user")
 
@@ -103,7 +100,7 @@ describe("registry", () => {
     expect(restored.message).toBe("Missing user")
   })
 
-  test("should restore nested fault causes with registry.fromSerializable", () => {
+  it("restores nested fault causes with registry.fromSerializable", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     const cause = Faults.create("TimeoutError").withMessage("Timed out")
@@ -118,7 +115,7 @@ describe("registry", () => {
     expect((restored.cause as TimeoutError).message).toBe("Timed out")
   })
 
-  test("should serialize unknown errors as UnknownError", () => {
+  it("serializes unknown errors as UnknownError", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     const serialized = Faults.toSerializable(new Error("boom"))
@@ -127,7 +124,7 @@ describe("registry", () => {
     expect(serialized.cause?.kind).toBe("error")
   })
 
-  test("should serialize non-Error thrown values as UnknownThrown", () => {
+  it("serializes non-Error thrown values as UnknownThrown", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     const serializedString = Faults.toSerializable("boom")
@@ -140,7 +137,7 @@ describe("registry", () => {
     expect(serializedNull.cause).toEqual({ kind: "thrown", value: null })
   })
 
-  test("should identify members with registry.is", () => {
+  it("identifies members with registry.is", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("TimeoutError")
 
@@ -148,7 +145,7 @@ describe("registry", () => {
     expect(Faults.is(new Error("x"))).toBe(false)
   })
 
-  test("should support destructured is", () => {
+  it("supports destructured is", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const { is } = Faults
 
@@ -156,7 +153,7 @@ describe("registry", () => {
     expect(is(new Error("plain"))).toBe(false)
   })
 
-  test("should return false from registry.is for faults from other registries", () => {
+  it("returns false from registry.is for faults from other registries", () => {
     const AppFaults = registry({ NotFoundError })
 
     class PaymentError extends Tagged("PaymentError")() {}
@@ -166,7 +163,7 @@ describe("registry", () => {
     expect(AppFaults.is(billingFault)).toBe(false)
   })
 
-  test("should support matchTags handler map", () => {
+  it("supports matchTags handler map", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("TimeoutError")
 
@@ -181,7 +178,7 @@ describe("registry", () => {
     expect(value).toBe("timeout")
   })
 
-  test("should support destructured matchTags", () => {
+  it("supports destructured matchTags", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const { matchTags } = Faults
     const fault = Faults.create("TimeoutError")
@@ -197,7 +194,7 @@ describe("registry", () => {
     expect(value).toBe("timeout")
   })
 
-  test("should return undefined from matchTags without fallback", () => {
+  it("returns undefined from matchTags without fallback", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("NotFoundError", { id: "123" })
 
@@ -208,7 +205,7 @@ describe("registry", () => {
     expect(value).toBeUndefined()
   })
 
-  test("should use fallback in matchTags when no handler matches", () => {
+  it("uses fallback in matchTags when no handler matches", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("NotFoundError", { id: "123" })
 
@@ -223,7 +220,7 @@ describe("registry", () => {
     expect(value).toBe("fallback")
   })
 
-  test("should fallback to base fromSerializable for unknown tag", () => {
+  it("falls back to base fromSerializable for unknown tag", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     const restored = Faults.fromSerializable({
@@ -237,7 +234,7 @@ describe("registry", () => {
     expect(restored).not.toBeInstanceOf(NotFoundError)
   })
 
-  test("should cap deep nested registry cause chains during deserialization", () => {
+  it("caps deep nested registry cause chains during deserialization", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
     let current: SerializableFault = {
@@ -269,7 +266,7 @@ describe("registry", () => {
     expect(depth).toBeLessThanOrEqual(100)
   })
 
-  test("should throw when constructor does not produce a Fault instance", () => {
+  it("throws when constructor does not produce a Fault instance", () => {
     // oxlint-disable-next-line eslint/no-extraneous-class
     class NotAFault {
       static readonly _tag = "NotAFault"

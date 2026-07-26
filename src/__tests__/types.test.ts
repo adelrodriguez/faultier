@@ -1,10 +1,8 @@
-import { describe, test } from "bun:test"
+// Type assertions are enforced by `bun run check` and `bun run typecheck`, not `bun test`.
+import { describe, it } from "bun:test"
 
-import type { Fault } from "../fault"
-import { matchTag, matchTags } from "../match"
-import { merge } from "../merge"
-import { registry } from "../registry"
-import { Tagged } from "../tagged"
+import type { Fault } from "../index"
+import { matchTag, matchTags, merge, registry, Tagged } from "../index"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 type Equal<A, B> =
@@ -25,39 +23,39 @@ type AppError = NotFoundError | TimeoutError | PaymentError
 
 // ── Positive type-level tests ────────────────────────────────────────────────
 describe("type-level inference", () => {
-  test("Tagged instance should have correct _tag literal type", () => {
+  it("gives Tagged instances the correct _tag literal type", () => {
     const fault = new NotFoundError({ id: "123" })
 
     type _TagIsLiteral = Expect<Equal<typeof fault._tag, "NotFoundError">>
   })
 
-  test("Tagged instance should expose fields as readonly properties", () => {
+  it("exposes Tagged fields as readonly properties", () => {
     const fault = new NotFoundError({ id: "123" })
 
     type _IdIsString = Expect<Equal<typeof fault.id, string>>
   })
 
-  test("Tagged instance should extend Fault", () => {
+  it("makes Tagged instances extend Fault", () => {
     const fault = new NotFoundError({ id: "123" })
 
     type _ExtendsFault = Expect<Equal<typeof fault extends Fault ? true : false, true>>
   })
 
-  test("registry.create should infer correct instance type", () => {
+  it("infers the correct registry.create instance type", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
     type _IsNotFound = Expect<Equal<typeof fault, NotFoundError>>
     type _HasId = Expect<Equal<typeof fault.id, string>>
   })
 
-  test("registry.wrap().as should infer correct instance type", () => {
+  it("infers the correct registry.wrap().as instance type", () => {
     const fault = AppFault.wrap(new Error("root")).as("NotFoundError", { id: "123" })
 
     type _IsNotFound = Expect<Equal<typeof fault, NotFoundError>>
     type _HasId = Expect<Equal<typeof fault.id, string>>
   })
 
-  test("registry.matchTag handler should receive correctly typed instance", () => {
+  it("types the registry.matchTag handler instance", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
     AppFault.matchTag(fault, "NotFoundError", (e) => {
@@ -67,7 +65,7 @@ describe("type-level inference", () => {
     })
   })
 
-  test("registry.matchTags handlers should receive correctly typed instances", () => {
+  it("types registry.matchTags handler instances", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
     AppFault.matchTags(fault, {
@@ -83,7 +81,7 @@ describe("type-level inference", () => {
     })
   })
 
-  test("matchTag should narrow handler parameter and return type", () => {
+  it("narrows matchTag handler and return types", () => {
     const err = new NotFoundError({ id: "123" }) as AppError
 
     const withoutFallback = matchTag(err, "NotFoundError", (e) => {
@@ -108,7 +106,7 @@ describe("type-level inference", () => {
     type _WithFallback = Expect<Equal<typeof withFallback, string>>
   })
 
-  test("matchTags should narrow handlers and return type", () => {
+  it("narrows matchTags handlers and return type", () => {
     const err = new TimeoutError() as AppError
 
     const withoutFallback = matchTags(err, {
@@ -149,7 +147,7 @@ describe("type-level inference", () => {
     type _WithFallbackB = Expect<string extends typeof withFallback ? true : false>
   })
 
-  test("matchTags exhaustive map should return R without fallback", () => {
+  it("returns R from an exhaustive matchTags map without fallback", () => {
     const err = new TimeoutError() as AppError
 
     const result = matchTags(err, {
@@ -162,7 +160,7 @@ describe("type-level inference", () => {
     type _ResultB = Expect<string extends typeof result ? true : false>
   })
 
-  test("matchTags partial map should return R | undefined without fallback", () => {
+  it("returns R or undefined from a partial matchTags map without fallback", () => {
     const err = new TimeoutError() as AppError
 
     const result = matchTags(err, {
@@ -173,7 +171,7 @@ describe("type-level inference", () => {
     type _ResultB = Expect<string | undefined extends typeof result ? true : false>
   })
 
-  test("registry.matchTag return type should narrow with fallback", () => {
+  it("narrows registry.matchTag return type with fallback", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
     const withoutFallback = AppFault.matchTag(fault, "NotFoundError", (e) => e.id)
@@ -188,7 +186,7 @@ describe("type-level inference", () => {
     type _WithFallback = Expect<Equal<typeof withFallback, string>>
   })
 
-  test("registry.matchTags return type should narrow with fallback", () => {
+  it("narrows registry.matchTags return type with fallback", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
     const withoutFallback = AppFault.matchTags(fault, {
@@ -206,7 +204,7 @@ describe("type-level inference", () => {
     type _WithFallback = Expect<Equal<typeof withFallback, string>>
   })
 
-  test("merge should preserve type inference across 3+ modules", () => {
+  it("preserves merge type inference across three or more modules", () => {
     const MergedFault = merge(AppFault, DbFault, BillingFault)
 
     const nf = MergedFault.create("NotFoundError", { id: "123" })
@@ -221,7 +219,7 @@ describe("type-level inference", () => {
     type _PayHasInvoiceId = Expect<Equal<typeof pay.invoiceId, string>>
   })
 
-  test("fluent methods should preserve subclass type", () => {
+  it("preserves subclass type through fluent methods", () => {
     const fault = new NotFoundError({ id: "123" })
       .withDescription("new message", "new details")
       .withMessage("gone")
