@@ -36,19 +36,44 @@ describe("matchTag", () => {
 
   it("calls fallback when tag does not match", () => {
     const error = asAppError(new TimeoutError())
+    let fallbackInput: AppError | undefined
 
     const result = matchTag(
       error,
       "NotFoundError",
       (e) => e.id,
-      () => "fallback"
+      (fallbackError) => {
+        fallbackInput = fallbackError
+        return "fallback"
+      }
     )
 
     expect(result).toBe("fallback")
+    expect(fallbackInput).toBe(error)
   })
 })
 
 describe("matchTags", () => {
+  it("calls fallback when an omitted tag matches an inherited property", () => {
+    class ToStringError extends Tagged("toString")() {}
+    const error = new ToStringError()
+
+    const result = matchTags(error, {}, () => "fallback")
+
+    expect(result).toBe("fallback")
+  })
+
+  it("dispatches an own handler whose tag matches an inherited property", () => {
+    class ToStringError extends Tagged("toString")() {}
+    const error = new ToStringError()
+
+    const result = matchTags(error, {
+      toString: () => "matched",
+    })
+
+    expect(result).toBe("matched")
+  })
+
   it("dispatches to matching handler", () => {
     const error = new TimeoutError()
 
@@ -71,16 +96,21 @@ describe("matchTags", () => {
 
   it("calls fallback when no handler matches", () => {
     const error = asAppError(new PaymentError({ invoiceId: "inv_1" }))
+    let fallbackInput: AppError | undefined
 
     const result = matchTags(
       error,
       {
         TimeoutError: () => "timeout",
       },
-      () => "fallback"
+      (fallbackError) => {
+        fallbackInput = fallbackError
+        return "fallback"
+      }
     )
 
     expect(result).toBe("fallback")
+    expect(fallbackInput).toBe(error)
   })
 
   it("matches a union of three members", () => {
