@@ -2,6 +2,7 @@ import type { SerializableFault } from "./serialize"
 import { RegistryTagMismatchError } from "./errors"
 import { Fault } from "./fault"
 import { type AnyFaultCtor, setRegistryState } from "./internal"
+import { dispatchTag, dispatchTags, type HandlerResult } from "./match"
 import { deserializeFault, toSerializableValue } from "./serialize"
 
 type FaultCtorEntry = readonly [string, AnyFaultCtor]
@@ -12,6 +13,10 @@ type CreateArgs<Ctor extends AnyFaultCtor> =
   undefined extends ConstructorFields<Ctor>
     ? [fields?: Exclude<ConstructorFields<Ctor>, undefined>]
     : [fields: ConstructorFields<Ctor>]
+
+type RegistryMatchHandlers<M extends Record<string, AnyFaultCtor>> = Partial<{
+  [K in keyof M]: (fault: InstanceType<M[K]>) => unknown
+}>
 
 function constructFault(ctor: AnyFaultCtor, args: unknown[]): Fault {
   const value: unknown = Reflect.construct(ctor, args)
@@ -36,30 +41,30 @@ export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
     as<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]>
   }
   is(this: void, err: unknown): err is InstanceType<M[keyof M]>
-  matchTag<R, K extends keyof M>(
+  matchTag<RH, K extends keyof M>(
     this: void,
     err: unknown,
     tag: K,
-    handler: (e: InstanceType<M[K]>) => R
-  ): R | undefined
-  matchTag<R, K extends keyof M>(
+    handler: (e: InstanceType<M[K]>) => RH
+  ): RH | undefined
+  matchTag<RH, RF, K extends keyof M>(
     this: void,
     err: unknown,
     tag: K,
-    handler: (e: InstanceType<M[K]>) => R,
-    fallback: (err: unknown) => R
-  ): R
-  matchTags<R>(
+    handler: (e: InstanceType<M[K]>) => RH,
+    fallback: (err: unknown) => RF
+  ): RH | RF
+  matchTags<const H extends RegistryMatchHandlers<M>>(
     this: void,
     err: unknown,
-    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>
-  ): R | undefined
-  matchTags<R>(
+    handlers: H
+  ): HandlerResult<H> | undefined
+  matchTags<const H extends RegistryMatchHandlers<M>, RF>(
     this: void,
     err: unknown,
-    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
-    fallback: (err: unknown) => R
-  ): R
+    handlers: H,
+    fallback: (err: unknown) => RF
+  ): HandlerResult<H> | RF
   toSerializable(err: unknown): SerializableFault
   fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault
 }
@@ -113,56 +118,49 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
     return false
   }
 
-  function matchTag<R, K extends keyof M>(
+  function matchTag<RH, K extends keyof M>(
     this: void,
     err: unknown,
     tag: K,
-    handler: (e: InstanceType<M[K]>) => R
-  ): R | undefined
-  function matchTag<R, K extends keyof M>(
+    handler: (e: InstanceType<M[K]>) => RH
+  ): RH | undefined
+  function matchTag<RH, RF, K extends keyof M>(
     this: void,
     err: unknown,
     tag: K,
-    handler: (e: InstanceType<M[K]>) => R,
-    fallback: (err: unknown) => R
-  ): R
-  function matchTag<R, K extends keyof M>(
+    handler: (e: InstanceType<M[K]>) => RH,
+    fallback: (err: unknown) => RF
+  ): RH | RF
+  function matchTag<RH, RF, K extends keyof M>(
     this: void,
     err: unknown,
     tag: K,
-    handler: (e: InstanceType<M[K]>) => R,
-    fallback?: (err: unknown) => R
-  ): R | undefined {
-    if (is(err) && err._tag === tag) {
-      return handler(err)
-    }
-    return fallback?.(err)
+    handler: (e: InstanceType<M[K]>) => RH,
+    fallback?: (err: unknown) => RF
+  ): RH | RF | undefined {
+    if (!is(err)) return fallback?.(err)
+    return dispatchTag(err, tag, handler, fallback) as RH | RF | undefined
   }
 
-  function matchTags<R>(
+  function matchTags<const H extends RegistryMatchHandlers<M>>(
     this: void,
     err: unknown,
-    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>
-  ): R | undefined
-  function matchTags<R>(
+    handlers: H
+  ): HandlerResult<H> | undefined
+  function matchTags<const H extends RegistryMatchHandlers<M>, RF>(
     this: void,
     err: unknown,
-    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
-    fallback: (err: unknown) => R
-  ): R
-  function matchTags<R>(
+    handlers: H,
+    fallback: (err: unknown) => RF
+  ): HandlerResult<H> | RF
+  function matchTags<const H extends RegistryMatchHandlers<M>, RF>(
     this: void,
     err: unknown,
-    handlers: Partial<{ [K in keyof M]: (e: InstanceType<M[K]>) => R }>,
-    fallback?: (err: unknown) => R
-  ): R | undefined {
-    if (is(err)) {
-      const maybeHandler = handlers[err._tag as keyof M]
-      if (typeof maybeHandler === "function") {
-        return maybeHandler(err)
-      }
-    }
-    return fallback?.(err)
+    handlers: H,
+    fallback?: (err: unknown) => RF
+  ): HandlerResult<H> | RF | undefined {
+    if (!is(err)) return fallback?.(err)
+    return dispatchTags(err, handlers, fallback) as HandlerResult<H> | RF | undefined
   }
 
   const instance: FaultRegistry<M> = {

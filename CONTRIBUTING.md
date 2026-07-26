@@ -7,7 +7,7 @@ Thank you for your interest in contributing to Faultier! This document provides 
 ### Prerequisites
 
 - [Bun](https://bun.sh) 1.3.0 or higher
-- TypeScript knowledge
+- TypeScript 5.4 or higher
 
 ### Installation
 

@@ -102,8 +102,16 @@ describe("type-level inference", () => {
       }
     )
 
+    const heterogeneousResult = matchTag(
+      err,
+      "NotFoundError",
+      () => "found" as const,
+      () => 404 as const
+    )
+
     type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
     type _WithFallback = Expect<Equal<typeof withFallback, string>>
+    type _HeterogeneousResult = Expect<Equal<typeof heterogeneousResult, "found" | 404>>
   })
 
   it("narrows matchTags handlers and return type", () => {
@@ -116,7 +124,7 @@ describe("type-level inference", () => {
       },
       TimeoutError: (e) => {
         type _IsTimeout = Expect<Equal<typeof e, TimeoutError>>
-        return "timeout"
+        return 408 as const
       },
     })
 
@@ -130,45 +138,66 @@ describe("type-level inference", () => {
       },
       (e) => {
         type _IsAppError = Expect<Equal<typeof e, AppError>>
-        return "fallback"
+        return false as const
       }
     )
 
-    // HandlerResult<H> infers R from the handler map values.
-    // The result is structurally equivalent to `string` but not nominally
-    // identical, so Equal<> fails. Two-way extends checks equivalence instead.
-    type _WithoutFallbackA = Expect<
-      typeof withoutFallback extends string | undefined ? true : false
-    >
-    type _WithoutFallbackB = Expect<
-      string | undefined extends typeof withoutFallback ? true : false
-    >
-    type _WithFallbackA = Expect<typeof withFallback extends string ? true : false>
-    type _WithFallbackB = Expect<string extends typeof withFallback ? true : false>
+    type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | 408 | undefined>>
+    type _WithFallback = Expect<Equal<typeof withFallback, string | false>>
   })
 
   it("returns R from an exhaustive matchTags map without fallback", () => {
     const err = new TimeoutError() as AppError
 
     const result = matchTags(err, {
-      NotFoundError: (e) => e.id,
-      PaymentError: (e) => e.invoiceId,
-      TimeoutError: () => "timeout",
+      NotFoundError: () => "not-found" as const,
+      PaymentError: () => "payment" as const,
+      TimeoutError: () => 408 as const,
     })
 
-    type _ResultA = Expect<typeof result extends string ? true : false>
-    type _ResultB = Expect<string extends typeof result ? true : false>
+    type _Result = Expect<Equal<typeof result, "not-found" | "payment" | 408>>
   })
 
   it("returns R or undefined from a partial matchTags map without fallback", () => {
     const err = new TimeoutError() as AppError
 
     const result = matchTags(err, {
-      TimeoutError: () => "timeout",
+      TimeoutError: () => 408 as const,
     })
 
-    type _ResultA = Expect<typeof result extends string | undefined ? true : false>
-    type _ResultB = Expect<string | undefined extends typeof result ? true : false>
+    type _Result = Expect<Equal<typeof result, 408 | undefined>>
+  })
+
+  it("keeps undefined for variable maps with optional handlers", () => {
+    const err = new TimeoutError() as AppError
+    const handlers: Partial<{
+      NotFoundError: (error: NotFoundError) => "not-found"
+      PaymentError: (error: PaymentError) => "payment"
+      TimeoutError: (error: TimeoutError) => 408
+    }> = {
+      TimeoutError: () => 408,
+    }
+
+    const result = matchTags(err, handlers)
+
+    type _Result = Expect<Equal<typeof result, "not-found" | "payment" | 408 | undefined>>
+  })
+
+  it("keeps undefined when a required handler may be undefined", () => {
+    const err = new TimeoutError() as AppError
+    const handlers: {
+      NotFoundError: ((error: NotFoundError) => "not-found") | undefined
+      PaymentError: (error: PaymentError) => "payment"
+      TimeoutError: (error: TimeoutError) => 408
+    } = {
+      NotFoundError: undefined,
+      PaymentError: () => "payment",
+      TimeoutError: () => 408,
+    }
+
+    const result = matchTags(err, handlers)
+
+    type _Result = Expect<Equal<typeof result, "not-found" | "payment" | 408 | undefined>>
   })
 
   it("narrows registry.matchTag return type with fallback", () => {
@@ -178,30 +207,37 @@ describe("type-level inference", () => {
     const withFallback = AppFault.matchTag(
       fault,
       "NotFoundError",
-      (e) => e.id,
-      () => "fallback"
+      () => "found" as const,
+      (e) => {
+        type _IsUnknown = Expect<Equal<typeof e, unknown>>
+        return 404 as const
+      }
     )
 
     type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
-    type _WithFallback = Expect<Equal<typeof withFallback, string>>
+    type _WithFallback = Expect<Equal<typeof withFallback, "found" | 404>>
   })
 
   it("narrows registry.matchTags return type with fallback", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
     const withoutFallback = AppFault.matchTags(fault, {
-      NotFoundError: (e) => e.id,
+      NotFoundError: () => "not-found" as const,
+      TimeoutError: () => 408 as const,
     })
     const withFallback = AppFault.matchTags(
       fault,
       {
-        NotFoundError: (e) => e.id,
+        NotFoundError: () => "not-found" as const,
       },
-      () => "fallback"
+      (e) => {
+        type _IsUnknown = Expect<Equal<typeof e, unknown>>
+        return false as const
+      }
     )
 
-    type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
-    type _WithFallback = Expect<Equal<typeof withFallback, string>>
+    type _WithoutFallback = Expect<Equal<typeof withoutFallback, "not-found" | 408 | undefined>>
+    type _WithFallback = Expect<Equal<typeof withFallback, "not-found" | false>>
   })
 
   it("preserves merge type inference across three or more modules", () => {
@@ -239,45 +275,45 @@ function _negativeTypeTests() {
   // @ts-expect-error -- registry state is internal
   void AppFault.__faultier
 
-  // @ts-expect-error — "BadTag" is not a registered tag
+  // @ts-expect-error -- "BadTag" is not a registered tag
   AppFault.create("BadTag", {})
 
-  // @ts-expect-error — id should be string, not number
+  // @ts-expect-error -- id should be string, not number
   AppFault.create("NotFoundError", { id: 123 })
 
-  // @ts-expect-error — NotFoundError requires { id: string }
+  // @ts-expect-error -- NotFoundError requires { id: string }
   AppFault.create("NotFoundError")
 
-  // @ts-expect-error — "BadTag" is not a registered tag
+  // @ts-expect-error -- "BadTag" is not a registered tag
   AppFault.wrap(new Error("root")).as("BadTag", {})
 
-  // @ts-expect-error — "BadTag" is not a registered tag
+  // @ts-expect-error -- "BadTag" is not a registered tag
   AppFault.matchTag({}, "BadTag", () => "nope")
 
-  // @ts-expect-error — "BadTag" is not in AppError union
+  // @ts-expect-error -- "BadTag" is not in AppError union
   matchTag(new TimeoutError() as AppError, "BadTag", () => "nope")
 
   AppFault.matchTags(
     {},
     {
-      // @ts-expect-error — "BadTag" is not a registered tag
+      // @ts-expect-error -- "BadTag" is not a registered tag
       BadTag: () => "nope",
     }
   )
 
   matchTags(new TimeoutError() as AppError, {
-    // @ts-expect-error — "BadTag" is not in AppError union
+    // @ts-expect-error -- "BadTag" is not in AppError union
     BadTag: () => "nope",
   })
 
   const MergedFault = merge(AppFault, DbFault)
 
-  // @ts-expect-error — "BadTag" is not in any merged registry
+  // @ts-expect-error -- "BadTag" is not in any merged registry
   MergedFault.create("BadTag", {})
 
   const fault = AppFault.create("TimeoutError")
 
-  // @ts-expect-error — flatten field must be "message" | "details"
+  // @ts-expect-error -- flatten field must be "message" | "details"
   fault.flatten({ field: "bad-field" })
 }
 

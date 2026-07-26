@@ -86,6 +86,26 @@ describe("registry", () => {
     expect(value).toBe("fallback")
   })
 
+  it("uses fallback for an unregistered constructor with a registered tag", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+    class ForeignNotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
+    const foreignFault = new ForeignNotFoundError({ id: "123" })
+    let fallbackInput: unknown
+
+    const value = Faults.matchTag(
+      foreignFault,
+      "NotFoundError",
+      () => "match" as const,
+      (error) => {
+        fallbackInput = error
+        return "fallback" as const
+      }
+    )
+
+    expect(value).toBe("fallback")
+    expect(fallbackInput).toBe(foreignFault)
+  })
+
   it("returns undefined without fallback", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const fault = Faults.create("TimeoutError")
@@ -280,6 +300,16 @@ describe("registry", () => {
     )
 
     expect(value).toBe("timeout")
+  })
+
+  it("uses fallback when an omitted tag matches an inherited property", () => {
+    class ConstructorError extends Tagged("constructor")() {}
+    const Faults = registry({ constructor: ConstructorError })
+    const fault = Faults.create("constructor")
+
+    const value = Faults.matchTags(fault, {}, () => "fallback")
+
+    expect(value).toBe("fallback")
   })
 
   it("supports destructured matchTags", () => {

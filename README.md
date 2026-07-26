@@ -64,6 +64,8 @@ fault.details // "DB query returned 0 rows" — for logs
 
 ## Installation
 
+Faultier requires TypeScript 5.4 or newer.
+
 ```bash
 # bun
 bun add faultier
@@ -236,7 +238,20 @@ Conflicting duplicate tags (same tag, different constructor) throw `RegistryMerg
 
 #### Single Tag Matching
 
-Use `matchTag` when you only need to handle one specific fault type:
+Use the standalone `matchTag` when you already have a typed Fault union. Its fallback
+excludes the matched type:
+
+```ts
+const result = Faultier.matchTag(
+  error,
+  "TimeoutError",
+  () => "retry",
+  () => "ignore"
+)
+```
+
+Use the registry method for `unknown` input. It invokes handlers only for instances of
+the registered constructor, even when another Fault uses the same tag:
 
 ```ts
 const result = AuthFault.matchTag(
@@ -249,14 +264,19 @@ const result = AuthFault.matchTag(
 
 #### Multiple Tag Matching
 
-Use `matchTags` to handle several fault types:
+The same distinction applies to `matchTags`. Standalone matching operates on a typed
+union and recognizes exhaustive handler maps:
 
 ```ts
-const result = AuthFault.matchTags(error, {
+const result = Faultier.matchTags(error, {
   NotFoundError: (fault) => ({ status: 404 }),
   TimeoutError: (fault) => ({ status: 503 }),
 })
 ```
+
+Registry matching accepts `unknown`, checks registry membership first, and therefore
+keeps `undefined` in the return type when no fallback is provided. Registry fallbacks
+receive the original value as `unknown`.
 
 ### Serialization
 
@@ -316,14 +336,16 @@ overwriting an existing payload field.
 | `Tagged(tag)<Fields>()`  | Create a tagged Fault subclass with `_tag` as discriminant   |
 | `registry({ ...ctors })` | Create a scoped fault registry from tagged constructors      |
 | `merge(a, b, ...rest)`   | Merge registries into one union (throws on conflicting tags) |
+| `matchTag(...)`          | Match one tag in a typed Fault union                         |
+| `matchTags(...)`         | Match several tags in a typed Fault union                    |
 | `isFault(value)`         | Type guard for Fault instances (not cross-realm safe)        |
 | `fromSerializable(data)` | Reconstruct a generic Fault (no subclass restoration)        |
 
 ### Exports
 
-**Runtime:** `Fault`, `Tagged`, `registry`, `merge`, `isFault`, `fromSerializable`, `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
+**Runtime:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `fromSerializable`, `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
 
-**Types:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `SerializableFault`, `SerializableCause`
+**Types:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `TagOf`, `ByTag`, `SerializableFault`, `SerializableCause`
 
 ## Common Recipes
 
