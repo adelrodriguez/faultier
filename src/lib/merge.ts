@@ -1,9 +1,8 @@
-import type { Fault } from "./fault"
+import type { AnyFaultCtor } from "./internal"
 import type { FaultRegistry } from "./registry"
 import { RegistryMergeConflictError } from "./errors"
-import { registry } from "./registry"
-
-type AnyFaultCtor = new (...args: never[]) => Fault
+import { getRegistryState } from "./internal"
+import { registryFromEntries } from "./registry"
 
 type AnyFaultRegistry = FaultRegistry<Record<string, AnyFaultCtor>>
 
@@ -23,29 +22,15 @@ type MergedRegistry<
   Registries extends readonly [AnyFaultRegistry, AnyFaultRegistry, ...AnyFaultRegistry[]],
 > = FaultRegistry<MergeCtorMaps<Registries>>
 
-function toCtorRecord(tagToCtor: Map<string, AnyFaultCtor>): Record<string, AnyFaultCtor> {
-  const record: Record<string, AnyFaultCtor> = {}
-  for (const [tag, ctor] of tagToCtor) {
-    record[tag] = ctor
-  }
-  return record
-}
-
 export function merge<
   const Registries extends readonly [AnyFaultRegistry, AnyFaultRegistry, ...AnyFaultRegistry[]],
 >(...registries: Registries): MergedRegistry<Registries> {
   const tagToCtor = new Map<string, AnyFaultCtor>()
-  const orderedTags: string[] = []
 
   for (const current of registries) {
-    for (const tag of current.__faultier.tags) {
-      const ctor = current.__faultier.tagToCtor.get(tag)
-
-      if (!ctor) continue
-
+    for (const [tag, ctor] of getRegistryState(current).tagToCtor) {
       if (!tagToCtor.has(tag)) {
         tagToCtor.set(tag, ctor)
-        orderedTags.push(tag)
         continue
       }
 
@@ -56,14 +41,5 @@ export function merge<
     }
   }
 
-  const merged = registry(toCtorRecord(tagToCtor))
-
-  return {
-    ...merged,
-    __faultier: {
-      ...merged.__faultier,
-      tags: orderedTags,
-    },
-    tags: orderedTags,
-  }
+  return registryFromEntries([...tagToCtor])
 }

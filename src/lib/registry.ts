@@ -1,9 +1,10 @@
 import type { SerializableFault } from "./serialize"
 import { RegistryTagMismatchError } from "./errors"
 import { Fault } from "./fault"
+import { type AnyFaultCtor, setRegistryState } from "./internal"
 import { deserializeFault, toSerializableValue } from "./serialize"
 
-type AnyFaultCtor = new (...args: never[]) => Fault
+type FaultCtorEntry = readonly [string, AnyFaultCtor]
 
 type ConstructorFields<Ctor extends AnyFaultCtor> = ConstructorParameters<Ctor>[0]
 
@@ -12,17 +13,20 @@ type CreateArgs<Ctor extends AnyFaultCtor> =
     ? [fields?: Exclude<ConstructorFields<Ctor>, undefined>]
     : [fields: ConstructorFields<Ctor>]
 
-function instantiate<Ctor extends AnyFaultCtor>(ctor: Ctor, args: unknown[]): InstanceType<Ctor> {
-  const value = Reflect.construct(ctor as unknown as new (...innerArgs: unknown[]) => unknown, args)
+function constructFault(ctor: AnyFaultCtor, args: unknown[]): Fault {
+  const value: unknown = Reflect.construct(ctor, args)
 
   if (!(value instanceof Fault)) {
     throw new Error("Invalid Fault constructor: expected Fault instance")
   }
 
-  // Safe: runtime guard above guarantees we only return Fault instances.
-  // The generic cast bridges Reflect.construct to the caller's ctor instance type.
+  return value
+}
+
+function instantiate<Ctor extends AnyFaultCtor>(ctor: Ctor, args: unknown[]): InstanceType<Ctor> {
+  // Safe: constructFault validates the instance; this preserves the specific constructor type.
   // oxlint-disable-next-line typescript/no-unsafe-return
-  return value as InstanceType<Ctor>
+  return constructFault(ctor, args) as InstanceType<Ctor>
 }
 
 export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
@@ -58,17 +62,30 @@ export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
   ): R
   toSerializable(err: unknown): SerializableFault
   fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault
-  readonly __faultier: {
-    readonly tagToCtor: Map<string, AnyFaultCtor>
-    readonly tags: readonly string[]
-  }
 }
 
 export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M): FaultRegistry<M> {
+  return createRegistry(ctors, Object.entries(ctors))
+}
+
+export function registryFromEntries(
+  entries: readonly FaultCtorEntry[]
+): FaultRegistry<Record<string, AnyFaultCtor>> {
+  const ctors: Record<string, AnyFaultCtor> = {}
+  for (const [tag, ctor] of entries) {
+    ctors[tag] = ctor
+  }
+  return createRegistry(ctors, entries)
+}
+
+function createRegistry<const M extends Record<string, AnyFaultCtor>>(
+  ctors: M,
+  entries: readonly FaultCtorEntry[]
+): FaultRegistry<M> {
   const tagToCtor = new Map<string, AnyFaultCtor>()
   const tags: string[] = []
 
-  for (const [registryKey, ctor] of Object.entries(ctors)) {
+  for (const [registryKey, ctor] of entries) {
     const ctorTag = (ctor as { _tag?: unknown })._tag
     if (ctorTag !== registryKey) {
       throw new RegistryTagMismatchError({
@@ -83,7 +100,7 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
 
   function create<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]> {
     const ctor = ctors[tag]
-    // Safe: instantiate() performs runtime Fault validation and returns the exact ctor instance.
+    // Safe: instantiate() validates the instance and preserves the selected constructor type.
     // oxlint-disable-next-line typescript/no-unsafe-return
     return instantiate(ctor, args as unknown[])
   }
@@ -156,7 +173,7 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
     wrap(cause: unknown) {
       return {
         as<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]> {
-          // Safe: create() returns a Fault subtype and withCause is defined on Fault.
+          // Safe: create() returns the selected Fault subtype, whose fluent methods preserve `this`.
           // oxlint-disable-next-line typescript/no-unsafe-return, typescript/no-unsafe-call
           return create(tag, ...args).withCause(cause)
         },
@@ -176,17 +193,12 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
     fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault {
       return deserializeFault(json, (tag, payload) => {
         const ctor = tagToCtor.get(tag)
-        // Safe: instantiate() validates that registered constructors return Fault instances.
-        // oxlint-disable-next-line typescript/no-unsafe-return
-        return ctor ? instantiate(ctor, [payload]) : undefined
+        return ctor ? constructFault(ctor, [payload]) : undefined
       })
     },
-
-    __faultier: {
-      tagToCtor,
-      tags,
-    },
   }
+
+  setRegistryState(instance, { tagToCtor })
 
   return instance
 }

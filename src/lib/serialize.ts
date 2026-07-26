@@ -86,10 +86,6 @@ function definePayloadField(target: Record<string, unknown>, key: string, value:
   })
 }
 
-function isReservedPayloadKey(key: string): boolean {
-  return RESERVED_KEYS.has(key) || key in Fault.prototype
-}
-
 function preparePayload(payload: Record<string, unknown>): PreparedPayload {
   const collisionPayload: Record<string, unknown> = {}
   const constructorPayload: Record<string, unknown> = {}
@@ -101,7 +97,8 @@ function preparePayload(payload: Record<string, unknown>): PreparedPayload {
     let targetKey = key
 
     while (
-      isReservedPayloadKey(targetKey) ||
+      RESERVED_KEYS.has(targetKey) ||
+      targetKey in Fault.prototype ||
       assignedKeys.has(targetKey) ||
       (targetKey !== key && rawKeys.has(targetKey))
     ) {

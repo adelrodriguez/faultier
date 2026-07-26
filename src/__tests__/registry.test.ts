@@ -27,6 +27,13 @@ describe("registry", () => {
     expect(fault.id).toBe("123")
   })
 
+  it("exposes registered tags without internal state", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+
+    expect(Faults.tags).toEqual(["NotFoundError", "TimeoutError"])
+    expect("__faultier" in Faults).toBe(false)
+  })
+
   it("creates wrapped faults using wrap().as", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const cause = new Error("root")
