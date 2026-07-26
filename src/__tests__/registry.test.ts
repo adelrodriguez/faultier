@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test"
 
-import type { SerializableFault } from "../index"
-import { Fault, registry, RegistryTagMismatchError, Tagged } from "../index"
+import type { SerializableFault } from "../types"
+import { RegistryTagMismatchError } from "../errors"
+import { Fault, registry, Tagged } from "../index"
 
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}

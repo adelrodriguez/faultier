@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
-import { merge, registry, RegistryMergeConflictError, Tagged } from "../index"
+import { RegistryMergeConflictError } from "../errors"
+import { merge, registry, Tagged } from "../index"
 
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}

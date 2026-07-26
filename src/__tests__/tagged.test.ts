@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
-import { Fault, ReservedFieldError, Tagged } from "../index"
+import { ReservedFieldError } from "../errors"
+import { Fault, Tagged } from "../index"
 
 describe("Tagged", () => {
   it("creates class with matching _tag and name", () => {

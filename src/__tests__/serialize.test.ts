@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 
-import type { SerializableFault } from "../index"
+import type { SerializableFault } from "../types"
 import { Fault, fromSerializable, Tagged } from "../index"
 
 describe("toSerializable", () => {
