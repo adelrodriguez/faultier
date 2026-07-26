@@ -1,12 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, it } from "bun:test"
 
-import type { SerializableFault } from "../fault"
-import { Fault } from "../fault"
-import { fromSerializable } from "../serialize"
-import { Tagged } from "../tagged"
+import type { SerializableFault } from "../index"
+import { Fault, fromSerializable, Tagged } from "../index"
 
 describe("toSerializable", () => {
-  test("should serialize own payload fields alongside reserved fields", () => {
+  it("serializes own payload fields alongside reserved fields", () => {
     class NotFoundError extends Tagged("NotFoundError")<{ id: string; resource: string }>() {}
 
     const fault = new NotFoundError({ id: "123", resource: "user" })
@@ -27,7 +25,7 @@ describe("toSerializable", () => {
 })
 
 describe("fromSerializable", () => {
-  test("should round-trip nested fault causes recursively", () => {
+  it("round-trips nested fault causes recursively", () => {
     class DatabaseError extends Tagged("DatabaseError")<{ query: string }>() {}
     class ServiceError extends Tagged("ServiceError")<{ endpoint: string }>() {}
 
@@ -45,7 +43,7 @@ describe("fromSerializable", () => {
     expect((cause as unknown as { query: string }).query).toBe("SELECT 1")
   })
 
-  test("should deserialize a serialized Fault payload", () => {
+  it("deserializes a serialized Fault payload", () => {
     class NotFoundError extends Tagged("NotFoundError")<{ id: string; resource: string }>() {}
 
     const original = new NotFoundError({ id: "123", resource: "user" })
@@ -67,13 +65,13 @@ describe("fromSerializable", () => {
     expect(deserialized.cause).toBeInstanceOf(Error)
   })
 
-  test("should throw for invalid payloads", () => {
+  it("throws for invalid payloads", () => {
     expect(() => fromSerializable({ __faultier: false } as unknown as SerializableFault)).toThrow(
       "Invalid Faultier payload"
     )
   })
 
-  test("should rewrite payload keys that collide with reserved names", () => {
+  it("rewrites payload keys that collide with reserved names", () => {
     const deserialized = fromSerializable({
       __faultier: true,
       _tag: "CollisionError",
@@ -88,7 +86,7 @@ describe("fromSerializable", () => {
     expect(value.withCause).not.toBe("payload-value")
   })
 
-  test("should deserialize thrown causes", () => {
+  it("deserializes thrown causes", () => {
     const deserialized = fromSerializable({
       __faultier: true,
       _tag: "ThrownCauseError",
@@ -103,7 +101,7 @@ describe("fromSerializable", () => {
     expect(deserialized.cause).toBe(42)
   })
 
-  test("should support JSON round-trip before deserialization", () => {
+  it("supports JSON round-trip before deserialization", () => {
     class ApiError extends Tagged("ApiError")<{ endpoint: string }>() {}
 
     const original = new ApiError({ endpoint: "/users" })
@@ -126,7 +124,7 @@ describe("fromSerializable", () => {
     expect(restored.cause).toBeInstanceOf(Error)
   })
 
-  test("should not stack overflow for deeply nested cause chains", () => {
+  it("avoids stack overflow for deeply nested cause chains", () => {
     // Build a payload 150 levels deep — beyond MAX_CAUSE_DEPTH (100)
     let current: SerializableFault = {
       __faultier: true,
@@ -158,7 +156,7 @@ describe("fromSerializable", () => {
     expect(depth).toBeLessThanOrEqual(100)
   })
 
-  test("should throw when meta is not an object", () => {
+  it("throws when meta is not an object", () => {
     expect(() =>
       fromSerializable({
         __faultier: true,

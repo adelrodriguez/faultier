@@ -1,8 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, it } from "bun:test"
 
-import { isFault } from "../../index"
-import { Fault } from "../fault"
-import { Tagged } from "../tagged"
+import { Fault, isFault, Tagged } from "../index"
 
 class ExampleFault extends Fault {
   constructor(message?: string) {
@@ -11,14 +9,14 @@ class ExampleFault extends Fault {
 }
 
 describe("Fault", () => {
-  test("should default message to tag", () => {
+  it("defaults message to tag", () => {
     const fault = new ExampleFault()
     expect(fault.message).toBe("ExampleFault")
     expect(fault.name).toBe("ExampleFault")
     expect(fault._tag).toBe("ExampleFault")
   })
 
-  test("should set cause through withCause", () => {
+  it("sets cause through withCause", () => {
     const cause = new Error("root")
     const fault = new ExampleFault().withCause(cause)
 
@@ -26,7 +24,7 @@ describe("Fault", () => {
     expect(fault.unwrap().length).toBe(2)
   })
 
-  test("should append an indented caused-by stack", () => {
+  it("appends an indented caused-by stack", () => {
     const cause = new Error("root")
     cause.stack = "RootError: root\nline-1\nline-2"
 
@@ -37,7 +35,7 @@ describe("Fault", () => {
     expect(fault.stack).toContain("\n  line-2")
   })
 
-  test("should rebuild stack correctly when withCause is called multiple times", () => {
+  it("rebuilds stack when withCause is called multiple times", () => {
     const first = new Error("first")
     first.stack = "Error: first\nfirst-line"
     const second = new Error("second")
@@ -51,7 +49,7 @@ describe("Fault", () => {
     expect(fault.stack).not.toContain("Caused by: Error: first")
   })
 
-  test("should restore original stack when cause has no stack", () => {
+  it("restores original stack when cause has no stack", () => {
     const cause = new Error("root")
     cause.stack = "Error: root\nroot-line"
 
@@ -62,7 +60,7 @@ describe("Fault", () => {
     expect(fault.stack).not.toContain("Caused by:")
   })
 
-  test("should return unwrap chain in head-to-leaf order", () => {
+  it("returns unwrap chain in head-to-leaf order", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
 
@@ -74,7 +72,7 @@ describe("Fault", () => {
     expect(chain[1]).toBe(leaf)
   })
 
-  test("should return full unwrap chain from latest fault to root cause", () => {
+  it("returns full unwrap chain from latest fault to root cause", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
     class ApiError extends Tagged("ApiError")() {}
@@ -89,7 +87,7 @@ describe("Fault", () => {
     expect(chain).toEqual([api, svc, db, root])
   })
 
-  test("should stop unwrap traversal when cause depth exceeds max", () => {
+  it("stops unwrap traversal when cause depth exceeds max", () => {
     const head = new ExampleFault("head")
     let current: ExampleFault = head
 
@@ -105,7 +103,7 @@ describe("Fault", () => {
     expect(chain[0]).toBe(head)
   })
 
-  test("should stop unwrap traversal for circular cause chains", () => {
+  it("stops unwrap traversal for circular cause chains", () => {
     const fault = new ExampleFault().withMessage("loop")
     fault.withCause(fault)
 
@@ -116,7 +114,7 @@ describe("Fault", () => {
     expect(chain[1]).toBe(fault)
   })
 
-  test("should not stack overflow when serializing circular cause chains", () => {
+  it("avoids stack overflow when serializing circular cause chains", () => {
     const fault = new ExampleFault().withMessage("loop")
     fault.withCause(fault)
 
@@ -136,14 +134,14 @@ describe("Fault", () => {
     expect(current.cause).toBeUndefined()
   })
 
-  test("should merge context with head precedence", () => {
+  it("merges context with head precedence", () => {
     const leaf = new ExampleFault().withMeta({ a: 1, b: 1 })
     const head = new ExampleFault().withMeta({ b: 2 }).withCause(leaf)
 
     expect(head.getContext()).toEqual({ a: 1, b: 2 })
   })
 
-  test("should merge full context in head-to-leaf order with head precedence", () => {
+  it("merges full context in head-to-leaf order with head precedence", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
     class ApiError extends Tagged("ApiError")() {}
@@ -160,7 +158,7 @@ describe("Fault", () => {
     })
   })
 
-  test("should set message only with withDescription when details is omitted", () => {
+  it("sets only message with withDescription when details is omitted", () => {
     const fault = new ExampleFault().withDetails("existing details")
 
     fault.withDescription("updated message")
@@ -169,14 +167,14 @@ describe("Fault", () => {
     expect(fault.details).toBe("existing details")
   })
 
-  test("should set both message and details with withDescription", () => {
+  it("sets both message and details with withDescription", () => {
     const fault = new ExampleFault().withDescription("user message", "dev details")
 
     expect(fault.message).toBe("user message")
     expect(fault.details).toBe("dev details")
   })
 
-  test("should overwrite existing message and details with withDescription", () => {
+  it("overwrites existing message and details with withDescription", () => {
     const fault = new ExampleFault().withMessage("old message").withDetails("old details")
 
     fault.withDescription("new message", "new details")
@@ -185,7 +183,7 @@ describe("Fault", () => {
     expect(fault.details).toBe("new details")
   })
 
-  test("should preserve fluent chaining subclass type with withDescription", () => {
+  it("preserves fluent chaining subclass type with withDescription", () => {
     class AppError extends Tagged("AppError")() {}
 
     const fault = new AppError().withDescription("message", "details").withMeta({ code: "x" })
@@ -194,7 +192,7 @@ describe("Fault", () => {
     expect(fault.message).toBe("message")
   })
 
-  test("should accumulate meta across multiple withMeta calls", () => {
+  it("accumulates meta across multiple withMeta calls", () => {
     const fault = new ExampleFault()
       .withMeta({ requestId: "req-1" })
       .withMeta({ traceId: "trace-1" })
@@ -206,7 +204,7 @@ describe("Fault", () => {
     })
   })
 
-  test("should return tags from fault nodes in chain order", () => {
+  it("returns tags from fault nodes in chain order", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
 
@@ -216,7 +214,7 @@ describe("Fault", () => {
     expect(head.getTags()).toEqual(["ServiceError", "DatabaseError"])
   })
 
-  test("should flatten and deduplicate consecutive messages", () => {
+  it("flattens and deduplicates consecutive messages", () => {
     class InnerError extends Tagged("InnerError")() {}
     class OuterError extends Tagged("OuterError")() {}
 
@@ -226,7 +224,7 @@ describe("Fault", () => {
     expect(head.flatten()).toBe("same")
   })
 
-  test("should flatten in head-to-leaf order", () => {
+  it("flattens in head-to-leaf order", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
 
@@ -236,7 +234,7 @@ describe("Fault", () => {
     expect(head.flatten()).toBe("svc -> db")
   })
 
-  test("should skip empty values in message flatten path", () => {
+  it("skips empty values in message flatten path", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
 
@@ -252,7 +250,7 @@ describe("Fault", () => {
     expect(flattened).toBe("svc")
   })
 
-  test("should flatten details when field is details", () => {
+  it("flattens details when field is details", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
 
@@ -262,7 +260,7 @@ describe("Fault", () => {
     expect(head.flatten({ field: "details" })).toBe("service details -> db details")
   })
 
-  test("should skip faults without details when flattening details", () => {
+  it("skips faults without details when flattening details", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
 
@@ -272,13 +270,13 @@ describe("Fault", () => {
     expect(head.flatten({ field: "details" })).toBe("db details")
   })
 
-  test("should flatten chains with non-fault Error causes", () => {
+  it("flattens chains with non-fault Error causes", () => {
     const fault = new ExampleFault().withMessage("svc").withCause(new Error("db"))
 
     expect(fault.flatten()).toBe("svc -> db")
   })
 
-  test("should flatten safely when cause contains a circular object", () => {
+  it("flattens safely when cause contains a circular object", () => {
     const circular: Record<string, unknown> = {}
     circular.self = circular
 
@@ -288,7 +286,7 @@ describe("Fault", () => {
     expect(fault.flatten()).toBe("top -> [object Object]")
   })
 
-  test("should not include method keys in serialized payload", () => {
+  it("excludes method keys from serialized payload", () => {
     const fault = new ExampleFault()
       .withDescription("message", "details")
       .withMeta({ key: "value" })
@@ -309,7 +307,7 @@ describe("Fault", () => {
     expect(keys).not.toContain("toJSON")
   })
 
-  test("should serialize through toJSON when stringified", () => {
+  it("serializes through toJSON when stringified", () => {
     const fault = new ExampleFault()
       .withDescription("message", "details")
       .withMeta({ key: "value" })
@@ -326,11 +324,11 @@ describe("Fault", () => {
 })
 
 describe("isFault", () => {
-  test("should return true for Fault instances", () => {
+  it("returns true for Fault instances", () => {
     expect(isFault(new ExampleFault())).toBe(true)
   })
 
-  test("should return false for non-Fault values", () => {
+  it("returns false for non-Fault values", () => {
     expect(isFault(new Error("plain"))).toBe(false)
     expect(isFault("error")).toBe(false)
     expect(isFault(null)).toBe(false)

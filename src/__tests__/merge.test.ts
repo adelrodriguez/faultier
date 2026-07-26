@@ -1,9 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, it } from "bun:test"
 
-import { RegistryMergeConflictError } from "../errors"
-import { merge } from "../merge"
-import { registry } from "../registry"
-import { Tagged } from "../tagged"
+import { merge, registry, RegistryMergeConflictError, Tagged } from "../index"
 
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}
@@ -12,7 +9,7 @@ class PaymentError extends Tagged("PaymentError")<{ invoiceId: string }>() {}
 class TimeoutConflictError extends Tagged("TimeoutError")<{ retryable: boolean }>() {}
 
 describe("merge", () => {
-  test("should throw for conflicting duplicate tags", () => {
+  it("throws for conflicting duplicate tags", () => {
     const AppFault = registry({ NotFoundError, TimeoutError })
     const DbFault = registry({
       DatabaseError,
@@ -22,7 +19,7 @@ describe("merge", () => {
     expect(() => merge(AppFault, DbFault)).toThrow(RegistryMergeConflictError)
   })
 
-  test("should allow duplicate tags when constructor reference is identical", () => {
+  it("allows duplicate tags when constructor reference is identical", () => {
     const AppFault = registry({ NotFoundError, TimeoutError })
     const SharedFault = registry({ TimeoutError })
 
@@ -31,7 +28,7 @@ describe("merge", () => {
     expect(MergedFault.tags).toEqual(["NotFoundError", "TimeoutError"])
   })
 
-  test("should preserve deterministic tag order", () => {
+  it("preserves deterministic tag order", () => {
     const AppFault = registry({ NotFoundError, TimeoutError })
     const DbFault = registry({ DatabaseError, TimeoutError })
 
@@ -40,7 +37,7 @@ describe("merge", () => {
     expect(MergedFault.tags).toEqual(["NotFoundError", "TimeoutError", "DatabaseError"])
   })
 
-  test("should behave like a normal registry", () => {
+  it("behaves like a normal registry", () => {
     const AppFault = registry({ NotFoundError })
     const DbFault = registry({ DatabaseError, TimeoutError })
     const MergedFault = merge(AppFault, DbFault)
@@ -59,7 +56,7 @@ describe("merge", () => {
     expect(restored).toBeInstanceOf(DatabaseError)
   })
 
-  test("should keep type-safe create inference for 3+ merged modules", () => {
+  it("keeps type-safe create inference for three or more merged modules", () => {
     const AppFault = registry({ NotFoundError, TimeoutError })
     const DbFault = registry({ DatabaseError })
     const BillingFault = registry({ PaymentError })
