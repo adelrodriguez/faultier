@@ -1,4 +1,3 @@
-import type { SerializableCause, SerializableFault } from "./fault"
 import { Fault } from "./fault"
 import {
   collectPayloadFields,
@@ -6,6 +5,33 @@ import {
   RESERVED_FROM_SERIALIZABLE_KEYS,
   RESERVED_KEYS,
 } from "./utils"
+
+export type SerializableCause =
+  | { kind: "fault"; value: SerializableFault }
+  | { kind: "error"; name: string; message: string; stack?: string }
+  | { kind: "thrown"; value: unknown }
+
+export type SerializableFault = {
+  __faultier: true
+  _tag: string
+  name: string
+  message?: string
+  details?: string
+  meta?: Record<string, unknown>
+  stack?: string
+  cause?: SerializableCause
+  [key: string]: unknown
+}
+
+export type FaultResolver = (tag: string, payload: Record<string, unknown>) => Fault | undefined
+
+type PreparedPayload = {
+  collisionPayload: Record<string, unknown>
+  constructorPayload: Record<string, unknown>
+  restoredPayload: Record<string, unknown>
+}
+
+const PAYLOAD_PREFIX = "__payload_"
 
 class DeserializedFault extends Fault {
   static create(tag: string): DeserializedFault {
@@ -17,8 +43,27 @@ class DeserializedFault extends Fault {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
+function assertSerializableFault(value: unknown): asserts value is SerializableFault {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("__faultier" in value) ||
+    value.__faultier !== true
+  ) {
+    throw new Error("Invalid Faultier payload: expected __faultier: true")
+  }
+
+  if (!("_tag" in value) || typeof value._tag !== "string") {
+    throw new Error("Invalid Faultier payload: _tag must be a string")
+  }
+
+  if (
+    "meta" in value &&
+    value.meta !== undefined &&
+    (typeof value.meta !== "object" || value.meta === null)
+  ) {
+    throw new Error("Invalid Faultier payload: meta must be an object")
+  }
 }
 
 function createDeserializedError(name: string, message: string, stack?: string): Error {
@@ -28,19 +73,71 @@ function createDeserializedError(name: string, message: string, stack?: string):
   return error
 }
 
-export function extractPayloadFields(json: SerializableFault): Record<string, unknown> {
+function extractPayloadFields(json: SerializableFault): Record<string, unknown> {
   return collectPayloadFields(json, RESERVED_FROM_SERIALIZABLE_KEYS)
 }
 
-export function deserializeCause(
+function definePayloadField(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  })
+}
+
+function isReservedPayloadKey(key: string): boolean {
+  return RESERVED_KEYS.has(key) || key in Fault.prototype
+}
+
+function preparePayload(payload: Record<string, unknown>): PreparedPayload {
+  const collisionPayload: Record<string, unknown> = {}
+  const constructorPayload: Record<string, unknown> = {}
+  const restoredPayload: Record<string, unknown> = {}
+  const rawKeys = new Set(Object.keys(payload))
+  const assignedKeys = new Set<string>()
+
+  for (const [key, value] of Object.entries(payload)) {
+    let targetKey = key
+
+    while (
+      isReservedPayloadKey(targetKey) ||
+      assignedKeys.has(targetKey) ||
+      (targetKey !== key && rawKeys.has(targetKey))
+    ) {
+      targetKey = `${PAYLOAD_PREFIX}${targetKey}`
+    }
+
+    assignedKeys.add(targetKey)
+    definePayloadField(restoredPayload, targetKey, value)
+
+    if (targetKey === key) {
+      definePayloadField(constructorPayload, key, value)
+    } else {
+      definePayloadField(collisionPayload, targetKey, value)
+    }
+  }
+
+  return { collisionPayload, constructorPayload, restoredPayload }
+}
+
+function restorePayloadFields(fault: Fault, payload: Record<string, unknown>): void {
+  const target = fault as unknown as Record<string, unknown>
+
+  for (const [key, value] of Object.entries(payload)) {
+    definePayloadField(target, key, value)
+  }
+}
+
+function deserializeCause(
   cause: SerializableCause,
-  resolveFaultCause: (json: SerializableFault) => unknown,
+  resolveFault: FaultResolver | undefined,
   depth: number
 ): unknown {
   if (cause.kind === "fault") {
     // Invariant: allow at most MAX_CAUSE_DEPTH nested fault edges.
     if (depth >= MAX_CAUSE_DEPTH) return undefined
-    return resolveFaultCause(cause.value)
+    return deserializeFaultInternal(cause.value, resolveFault, depth + 1)
   }
 
   if (cause.kind === "error") {
@@ -50,7 +147,7 @@ export function deserializeCause(
   return cause.value
 }
 
-export function restoreDeserializedFields(fault: Fault, json: SerializableFault): void {
+function restoreDeserializedFields(fault: Fault, json: SerializableFault): void {
   const target = fault
 
   if (typeof json.name === "string") {
@@ -66,9 +163,6 @@ export function restoreDeserializedFields(fault: Fault, json: SerializableFault)
   }
 
   if (json.meta !== undefined) {
-    if (!isRecord(json.meta)) {
-      throw new Error("Invalid Faultier payload: meta must be an object")
-    }
     target.meta = json.meta
   }
 
@@ -78,38 +172,61 @@ export function restoreDeserializedFields(fault: Fault, json: SerializableFault)
 }
 
 export function fromSerializable(json: SerializableFault): Fault {
-  return fromSerializableInternal(json, 0)
+  return deserializeFault(json)
 }
 
-function fromSerializableInternal(json: SerializableFault, depth: number): Fault {
-  // Runtime callers may pass parsed input that does not match the static type.
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (!isRecord(json) || !json.__faultier) {
-    throw new Error("Invalid Faultier payload: expected __faultier: true")
-  }
+export function deserializeFault(json: SerializableFault, resolveFault?: FaultResolver): Fault {
+  return deserializeFaultInternal(json, resolveFault, 0)
+}
 
-  if (typeof json._tag !== "string") {
-    throw new Error("Invalid Faultier payload: _tag must be a string")
-  }
+function deserializeFaultInternal(
+  json: unknown,
+  resolveFault: FaultResolver | undefined,
+  depth: number
+): Fault {
+  assertSerializableFault(json)
 
-  const fault = DeserializedFault.create(json._tag)
-  const payload = extractPayloadFields(json)
+  const payload = preparePayload(extractPayloadFields(json))
+  const resolvedFault = resolveFault?.(json._tag, payload.constructorPayload)
+  const fault = resolvedFault ?? DeserializedFault.create(json._tag)
 
-  for (const key of Object.keys(payload)) {
-    const targetKey = RESERVED_KEYS.has(key) ? `__payload_${key}` : key
-    ;(fault as unknown as Record<string, unknown>)[targetKey] = payload[key]
-  }
+  restorePayloadFields(fault, resolvedFault ? payload.collisionPayload : payload.restoredPayload)
   restoreDeserializedFields(fault, json)
 
   if (json.cause) {
     // Intentionally assign cause directly instead of withCause().
     // Serialized stacks already contain any prior "Caused by:" enhancement.
-    fault.cause = deserializeCause(
-      json.cause,
-      (value) => fromSerializableInternal(value, depth + 1),
-      depth
-    )
+    fault.cause = deserializeCause(json.cause, resolveFault, depth)
   }
 
   return fault
+}
+
+export function toSerializableValue(value: unknown): SerializableFault {
+  if (value instanceof Fault) {
+    return value.toSerializable()
+  }
+
+  if (value instanceof Error) {
+    return {
+      __faultier: true,
+      _tag: "UnknownError",
+      cause: {
+        kind: "error",
+        message: value.message,
+        name: value.name,
+        stack: value.stack,
+      },
+      message: value.message,
+      name: "UnknownError",
+    }
+  }
+
+  return {
+    __faultier: true,
+    _tag: "UnknownThrown",
+    cause: { kind: "thrown", value },
+    message: "UnknownThrown",
+    name: "UnknownThrown",
+  }
 }

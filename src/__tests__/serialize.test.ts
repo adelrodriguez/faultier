@@ -86,6 +86,39 @@ describe("fromSerializable", () => {
     expect(value.withCause).not.toBe("payload-value")
   })
 
+  it("preserves existing keys that use the collision prefix", () => {
+    const deserialized = fromSerializable({
+      __faultier: true,
+      __payload_withCause: "existing-value",
+      _tag: "CollisionError",
+      name: "CollisionError",
+      withCause: "reserved-value",
+    } as unknown as SerializableFault)
+
+    const value = deserialized as unknown as Record<string, unknown>
+
+    expect(value.__payload_withCause).toBe("existing-value")
+    expect(value.__payload___payload_withCause).toBe("reserved-value")
+  })
+
+  it("preserves prototype-sensitive payload keys without changing the prototype", () => {
+    const payload = JSON.parse(
+      '{"__faultier":true,"_tag":"PrototypeError","name":"PrototypeError","__proto__":"payload-value"}'
+    ) as SerializableFault
+
+    const deserialized = fromSerializable(payload)
+    const baseline = fromSerializable({
+      __faultier: true,
+      _tag: "PrototypeError",
+      name: "PrototypeError",
+    })
+    const value = deserialized as unknown as Record<string, unknown>
+
+    expect(Object.getPrototypeOf(deserialized)).toBe(Object.getPrototypeOf(baseline))
+    expect(value.__payload___proto__).toBe("payload-value")
+    expect(Object.hasOwn(deserialized, "__proto__")).toBe(false)
+  })
+
   it("deserializes thrown causes", () => {
     const deserialized = fromSerializable({
       __faultier: true,

@@ -1,3 +1,4 @@
+import type { SerializableCause, SerializableFault } from "./serialize"
 import {
   collectPayloadFields,
   defaultTrimFormatter,
@@ -12,23 +13,6 @@ export type FlattenOptions = {
   field?: FlattenField
   separator?: string
   formatter?: (value: string) => string
-}
-
-export type SerializableCause =
-  | { kind: "fault"; value: SerializableFault }
-  | { kind: "error"; name: string; message: string; stack?: string }
-  | { kind: "thrown"; value: unknown }
-
-export type SerializableFault = {
-  __faultier: true
-  _tag: string
-  name: string
-  message?: string
-  details?: string
-  meta?: Record<string, unknown>
-  stack?: string
-  cause?: SerializableCause
-  [key: string]: unknown
 }
 
 const FAULT_METHOD_KEY_SET = new Set<string>(FAULT_METHOD_KEYS)
