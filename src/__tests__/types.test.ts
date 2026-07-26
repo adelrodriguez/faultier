@@ -1,8 +1,16 @@
 // Type assertions are enforced by `bun run check` and `bun run typecheck`, not `bun test`.
 import { describe, it } from "bun:test"
 
-import type { Fault } from "../index"
-import { matchTag, matchTags, merge, registry, Tagged } from "../index"
+import type {
+  ByTag,
+  FaultRegistry,
+  FlattenField,
+  FlattenOptions,
+  SerializableCause,
+  SerializableFault,
+  TagOf,
+} from "../types"
+import { type Fault, matchTag, matchTags, merge, registry, Tagged } from "../index"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 type Equal<A, B> =
@@ -39,6 +47,23 @@ describe("type-level inference", () => {
     const fault = new NotFoundError({ id: "123" })
 
     type _ExtendsFault = Expect<Equal<typeof fault extends Fault ? true : false, true>>
+  })
+
+  it("exports public contracts from the types entrypoint", () => {
+    type _Registry = Expect<
+      typeof AppFault extends FaultRegistry<{
+        NotFoundError: typeof NotFoundError
+        TimeoutError: typeof TimeoutError
+      }>
+        ? true
+        : false
+    >
+    type _FlattenField = Expect<Equal<FlattenField, "details" | "message">>
+    type _FlattenOptions = Expect<Equal<FlattenOptions["field"], FlattenField | undefined>>
+    type _Tags = Expect<Equal<TagOf<AppError>, "NotFoundError" | "PaymentError" | "TimeoutError">>
+    type _ByTag = Expect<Equal<ByTag<AppError, "PaymentError">, PaymentError>>
+    type _SerializableMarker = Expect<Equal<SerializableFault["__faultier"], true>>
+    type _CauseKinds = Expect<Equal<SerializableCause["kind"], "error" | "fault" | "thrown">>
   })
 
   it("infers the correct registry.create instance type", () => {

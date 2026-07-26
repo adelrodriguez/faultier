@@ -158,6 +158,10 @@ class TimeoutError extends Faultier.Tagged("TimeoutError")() {}
 const t = new TimeoutError()
 ```
 
+`Tagged("Tag")<Fields>()` uses two calls because TypeScript cannot partially infer generic
+arguments: the first call infers the tag literal, and the second accepts an optional field type.
+The empty second call creates a fault without custom fields.
+
 All tagged faults extend `Fault` and support fluent setters:
 
 ```ts
@@ -232,7 +236,8 @@ Merge registries into a larger union:
 const AppFault = Faultier.merge(AuthFault, BillingFault)
 ```
 
-Conflicting duplicate tags (same tag, different constructor) throw `RegistryMergeConflictError`.
+Conflicting duplicate tags (same tag, different constructor) throw
+`RegistryMergeConflictError`, available from `faultier/errors`.
 
 ### Handling Faults
 
@@ -343,9 +348,16 @@ overwriting an existing payload field.
 
 ### Exports
 
-**Runtime:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `fromSerializable`, `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
+**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `fromSerializable`
 
-**Types:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `TagOf`, `ByTag`, `SerializableFault`, `SerializableCause`
+**`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
+
+**`faultier/types`:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `TagOf`, `ByTag`, `SerializableFault`, `SerializableCause`
+
+```ts
+import { RegistryMergeConflictError } from "faultier/errors"
+import type { FaultRegistry, SerializableFault } from "faultier/types"
+```
 
 ## Common Recipes
 
@@ -391,7 +403,7 @@ fault instanceof NotFoundError // true (if registered)
 ## Notes
 
 - Cause chains are capped at 100 levels (`MAX_CAUSE_DEPTH`) in traversal, serialization, and deserialization to prevent stack overflow.
-- Reserved constructor field names in `Tagged` throw `ReservedFieldError`.
+- Reserved constructor field names in `Tagged` throw `ReservedFieldError` from `faultier/errors`.
 
 ## When not to use Faultier
 

@@ -16,6 +16,8 @@ export { isFault } from "./lib/fault"
 /**
  * Factory for creating tagged Fault subclasses.
  *
+ * The two calls allow the tag and field types to be inferred independently.
+ *
  * @example
  * ```ts
  * import * as Faultier from "faultier"
@@ -47,7 +49,8 @@ export { registry } from "./lib/registry"
 /**
  * Merges multiple fault registries into one.
  *
- * Throws {@link RegistryMergeConflictError} when duplicate tags map to different constructors.
+ * Throws `RegistryMergeConflictError` from `faultier/errors` when duplicate tags map to
+ * different constructors.
  */
 export { merge } from "./lib/merge"
 
@@ -67,53 +70,3 @@ export { matchTags } from "./lib/match"
  * Use `registry.fromSerializable` when you want subclass reconstruction for registered tags.
  */
 export { fromSerializable } from "./lib/serialize"
-
-/**
- * Thrown when Tagged constructor fields include a reserved property/method name.
- */
-export { ReservedFieldError } from "./lib/errors"
-
-/**
- * Thrown when a registry key does not match a constructor's static `_tag`.
- */
-export { RegistryTagMismatchError } from "./lib/errors"
-
-/**
- * Thrown when merging registries that share a tag but have different constructors.
- */
-export { RegistryMergeConflictError } from "./lib/errors"
-
-/**
- * Type-only API for registry instances created by {@link registry}.
- */
-export type { FaultRegistry } from "./lib/registry"
-
-/**
- * Field selector for `flatten`.
- */
-export type { FlattenField } from "./lib/fault"
-
-/**
- * Options shared by `flatten`.
- */
-export type { FlattenOptions } from "./lib/fault"
-
-/**
- * Tag discriminant extracted from a Fault union.
- */
-export type { TagOf } from "./lib/match"
-
-/**
- * Extracts the member of a Fault union for a specific tag.
- */
-export type { ByTag } from "./lib/match"
-
-/**
- * Serializable fault payload shape.
- */
-export type { SerializableFault } from "./lib/serialize"
-
-/**
- * Serializable cause union for nested fault/error/thrown values.
- */
-export type { SerializableCause } from "./lib/serialize"

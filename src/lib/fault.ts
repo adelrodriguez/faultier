@@ -20,6 +20,7 @@ const SERIALIZE_EXCLUDED_KEYS = new Set<string>([
   ...RESERVED_SERIALIZE_KEYS,
   ...FAULT_METHOD_KEY_SET,
 ])
+const originalStacks = new WeakMap<Fault, string | undefined>()
 
 function toCause(cause: unknown, depth: number): SerializableCause {
   if (cause instanceof Fault) {
@@ -94,13 +95,12 @@ export abstract class Fault extends Error {
   override cause?: unknown
   meta?: Record<string, unknown>
   details?: string
-  #originalStack?: string
 
   protected constructor(tag: string, message?: string) {
     super(message ?? tag)
     this._tag = tag
     this.name = tag
-    this.#originalStack = this.stack
+    originalStacks.set(this, this.stack)
   }
 
   withMeta(meta: Record<string, unknown>): this {
@@ -128,14 +128,15 @@ export abstract class Fault extends Error {
 
   withCause(cause: unknown): this {
     this.cause = cause
+    const originalStack = originalStacks.get(this)
 
     // Rebuild stack from the original (pre-cause) stack on every call,
     // so replacing a cause doesn't leave stale "Caused by:" blocks.
-    if (cause instanceof Error && cause.stack && this.#originalStack) {
+    if (cause instanceof Error && cause.stack && originalStack) {
       const indented = cause.stack.replaceAll("\n", "\n  ")
-      this.stack = `${this.#originalStack}\nCaused by: ${indented}`
+      this.stack = `${originalStack}\nCaused by: ${indented}`
     } else {
-      this.stack = this.#originalStack
+      this.stack = originalStack
     }
 
     return this
