@@ -26,15 +26,23 @@ Thank you for your interest in contributing to Faultier! This document provides 
 
 ```
 src/
-├── index.ts          # Main entry point (re-exports from lib)
-├── extend.ts         # Extend entry point (re-exports from lib)
-└── lib/
-    ├── index.ts      # Core Fault classes
-    ├── extend.ts     # Error class extension utilities
-    ├── types.ts      # TypeScript types and interfaces
-    ├── utils.ts      # Internal utilities
-    └── __tests__/    # Test files
+├── index.ts          # Core runtime entry point
+├── errors.ts         # faultier/errors entry point
+├── types.ts          # faultier/types entry point
+├── __tests__/        # Public API and type-level tests
+└── lib/              # Internal implementation modules
+    ├── fault.ts
+    ├── tagged.ts
+    ├── registry.ts
+    ├── merge.ts
+    ├── match.ts
+    ├── serialize.ts
+    ├── internal.ts
+    ├── errors.ts
+    └── utils.ts
 ```
+
+See [`CONTEXT.md`](CONTEXT.md) for the domain glossary, behavioral model, and detailed module responsibilities.
 
 ## Development Workflow
 
@@ -45,10 +53,10 @@ src/
 bun test
 
 # Watch mode for development
-bun test:watch
+bun run test:watch
 
 # With coverage
-bun test:coverage
+bun run test:coverage
 ```
 
 ### Code Quality
@@ -57,11 +65,17 @@ bun test:coverage
 # Check linting and formatting
 bun run check
 
+# Format files
+bun run format
+
 # Auto-fix linting issues
 bun run fix
 
 # Type checking
 bun run typecheck
+
+# Find unused code and dependencies
+bun run analyze
 ```
 
 All checks must pass before submitting a PR.
@@ -74,6 +88,9 @@ bun run build
 
 # Watch mode
 bun run dev
+
+# Build and verify all published entry points
+bun run test:package
 ```
 
 ## Making Changes
@@ -100,15 +117,19 @@ Allows users to define custom serialization logic for context objects.
 - Follow TypeScript best practices
 - Use meaningful variable and function names
 - Add JSDoc comments for public APIs
-- Format code using Biome (via `bun run fix`)
-- Ensure type safety - avoid `any` types
+- Use the configured Adamantite, Oxfmt, and Oxlint tooling
+- Prefer `unknown` and narrowing over `any`
+- Keep justified suppressions as narrow as possible
 
 ### Testing
 
 - Add tests for new features
 - Update tests when modifying existing functionality
 - Ensure all tests pass before submitting
-- Test files live in `__tests__` directories alongside source files
+- Public tests live in `src/__tests__/` and import only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`
+- Public API type changes require coverage in `src/__tests__/types.test.ts`
+- Type assertions are checked by `bun run check` and `bun run typecheck`, not `bun test`
+- Internal tests are appropriate only when behavior cannot be reached through a public entry point
 
 ## Changesets Workflow
 
@@ -148,6 +169,8 @@ The changeset file will be created in `.changeset/` and should be committed with
 - **Minor** (new features): Backwards-compatible new functionality
 - **Patch** (bug fixes): Backwards-compatible bug fixes
 
+Choose a major bump only when the breaking release has been explicitly planned and approved.
+
 ## Submitting a Pull Request
 
 ### Before Submitting
@@ -155,9 +178,11 @@ The changeset file will be created in `.changeset/` and should be committed with
 Ensure your PR meets these requirements:
 
 - [ ] Code follows the project's style guidelines
+- [ ] Formatting passes (`bun run format`)
 - [ ] All tests pass (`bun test`)
 - [ ] Type checking passes (`bun run typecheck`)
 - [ ] Linting passes (`bun run check`)
+- [ ] Package verification passes for entrypoint/build changes (`bun run test:package`)
 - [ ] Changeset added (if applicable)
 - [ ] Documentation updated (if needed)
 
@@ -180,6 +205,7 @@ Pull requests must pass:
 - **Lint** - Code style and formatting
 - **Typecheck** - TypeScript compilation
 - **Test** - All test suites
+- **Package verification** - Built entrypoints and declarations resolve for consumers
 
 ## Getting Help
 

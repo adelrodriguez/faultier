@@ -10,7 +10,15 @@ import type {
   SerializableFault,
   TagOf,
 } from "../types"
-import { type Fault, matchTag, matchTags, merge, registry, Tagged } from "../index"
+import {
+  type Fault,
+  fromSerializable,
+  matchTag,
+  matchTags,
+  merge,
+  registry,
+  Tagged,
+} from "../index"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 type Equal<A, B> =
@@ -78,6 +86,26 @@ describe("type-level inference", () => {
 
     type _IsNotFound = Expect<Equal<typeof fault, NotFoundError>>
     type _HasId = Expect<Equal<typeof fault.id, string>>
+  })
+
+  it("types registry guards, tags, and serialization contracts", () => {
+    const value: unknown = AppFault.create("TimeoutError")
+    const tags = AppFault.tags
+    const fault = AppFault.create("NotFoundError", { id: "123" })
+    const serialized = fault.toSerializable()
+    const registrySerialized = AppFault.toSerializable(fault)
+    const generic = fromSerializable(serialized)
+    const restored = AppFault.fromSerializable(serialized)
+
+    if (AppFault.is(value)) {
+      type _Narrowed = Expect<Equal<typeof value, NotFoundError | TimeoutError>>
+    }
+
+    type _Tags = Expect<Equal<typeof tags, ReadonlyArray<"NotFoundError" | "TimeoutError">>>
+    type _Serialized = Expect<Equal<typeof serialized, SerializableFault>>
+    type _RegistrySerialized = Expect<Equal<typeof registrySerialized, SerializableFault>>
+    type _Generic = Expect<Equal<typeof generic, Fault>>
+    type _Restored = Expect<Equal<typeof restored, Fault | NotFoundError | TimeoutError>>
   })
 
   it("types the registry.matchTag handler instance", () => {
