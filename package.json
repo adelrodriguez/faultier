@@ -3,9 +3,11 @@
   "version": "2.2.2",
   "description": "Extensible error handling for TypeScript",
   "keywords": [
-    "bun",
-    "library",
-    "template"
+    "error-handling",
+    "errors",
+    "faults",
+    "tagged-errors",
+    "typescript"
   ],
   "homepage": "https://github.com/adelrodriguez/faultier#readme",
   "bugs": {
@@ -39,7 +41,6 @@
     "fix": "adamantite fix",
     "format": "adamantite format",
     "release": "changeset publish --use-npmrc .npmrc",
-    "template": "bun run --bun scripts/template.ts",
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "test:watch": "bun test --watch",

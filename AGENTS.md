@@ -27,14 +27,14 @@ Default to using Bun instead of Node.js.
 
 ## Testing
 
-Use `bun test` to run tests. Use `describe` to group tests by function or feature. Write tests using "should" statements for the test descriptions.
+Use `bun test` to run tests. Use `describe` to group tests by function or feature. Write test descriptions as present-tense behavioral sentences without "should" (for example: `it("returns value when function succeeds")`, `it("throws Panic when catch throws")`).
 
 - `describe` labels should be the exact function or class being tested (for example: `describe("Fault")`, `describe("withCause")`).
 
 ```ts#index.test.ts
-import { test, expect } from "bun:test";
+import { it, expect } from "bun:test";
 
-test("hello world", () => {
+it("returns the expected value", () => {
   expect(1).toBe(1);
 });
 ```
