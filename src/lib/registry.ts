@@ -1,13 +1,7 @@
-import type { SerializableFault } from "./fault"
+import type { SerializableFault } from "./serialize"
 import { RegistryTagMismatchError } from "./errors"
 import { Fault } from "./fault"
-import {
-  deserializeCause,
-  extractPayloadFields,
-  fromSerializable as fromSerializableBase,
-  restoreDeserializedFields,
-} from "./serialize"
-import { RESERVED_KEYS } from "./utils"
+import { deserializeFault, toSerializableValue } from "./serialize"
 
 type AnyFaultCtor = new (...args: never[]) => Fault
 
@@ -29,31 +23,6 @@ function instantiate<Ctor extends AnyFaultCtor>(ctor: Ctor, args: unknown[]): In
   // The generic cast bridges Reflect.construct to the caller's ctor instance type.
   // oxlint-disable-next-line typescript/no-unsafe-return
   return value as InstanceType<Ctor>
-}
-
-function toUnknownErrorSerializable(error: Error): SerializableFault {
-  return {
-    __faultier: true,
-    _tag: "UnknownError",
-    cause: {
-      kind: "error",
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-    },
-    message: error.message,
-    name: "UnknownError",
-  }
-}
-
-function toUnknownThrownSerializable(value: unknown): SerializableFault {
-  return {
-    __faultier: true,
-    _tag: "UnknownThrown",
-    cause: { kind: "thrown", value },
-    message: "UnknownThrown",
-    name: "UnknownThrown",
-  }
 }
 
 export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
@@ -201,60 +170,22 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M)
     matchTags,
 
     toSerializable(err: unknown): SerializableFault {
-      if (err instanceof Fault) {
-        return err.toSerializable()
-      }
-
-      if (err instanceof Error) {
-        return toUnknownErrorSerializable(err)
-      }
-
-      return toUnknownThrownSerializable(err)
+      return toSerializableValue(err)
     },
 
     fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault {
-      // Safe: fromSerializableInternal enforces the same return contract.
-      // oxlint-disable-next-line typescript/no-unsafe-return
-      return fromSerializableInternal(json, 0)
+      return deserializeFault(json, (tag, payload) => {
+        const ctor = tagToCtor.get(tag)
+        // Safe: instantiate() validates that registered constructors return Fault instances.
+        // oxlint-disable-next-line typescript/no-unsafe-return
+        return ctor ? instantiate(ctor, [payload]) : undefined
+      })
     },
 
     __faultier: {
       tagToCtor,
       tags,
     },
-  }
-
-  function fromSerializableInternal(
-    json: SerializableFault,
-    depth: number
-  ): InstanceType<M[keyof M]> | Fault {
-    const ctor = tagToCtor.get(json._tag)
-
-    if (!ctor) {
-      return fromSerializableBase(json)
-    }
-
-    const rawPayload = extractPayloadFields(json)
-    const payload: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(rawPayload)) {
-      if (!RESERVED_KEYS.has(key)) payload[key] = value
-    }
-    const created = instantiate(ctor, [payload]) as Fault
-    restoreDeserializedFields(created, json)
-
-    if (json.cause) {
-      // Intentionally assign cause directly instead of withCause().
-      // Serialized stacks already contain any prior "Caused by:" enhancement.
-      created.cause = deserializeCause(
-        json.cause,
-        (value) => fromSerializableInternal(value, depth + 1),
-        depth
-      )
-    }
-
-    // Safe: `created` comes from the registered ctor for `json._tag`, so it matches registry union.
-    // oxlint-disable-next-line typescript/no-unsafe-return
-    return created
   }
 
   return instance

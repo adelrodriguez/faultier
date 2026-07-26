@@ -115,6 +115,103 @@ describe("registry", () => {
     expect((restored.cause as TimeoutError).message).toBe("Timed out")
   })
 
+  it("restores registered causes beneath unregistered faults", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+
+    const restored = Faults.fromSerializable({
+      __faultier: true,
+      _tag: "OtherError",
+      cause: {
+        kind: "fault",
+        value: {
+          __faultier: true,
+          _tag: "TimeoutError",
+          name: "TimeoutError",
+        },
+      },
+      name: "OtherError",
+    })
+
+    expect(restored).toBeInstanceOf(Fault)
+    expect(restored.cause).toBeInstanceOf(TimeoutError)
+  })
+
+  it("preserves reserved payload collisions during registry deserialization", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+
+    const restored = Faults.fromSerializable({
+      __faultier: true,
+      __payload_withCause: "existing-value",
+      _tag: "TimeoutError",
+      name: "TimeoutError",
+      withCause: "reserved-value",
+    } as unknown as SerializableFault)
+
+    const value = restored as unknown as Record<string, unknown>
+
+    expect(restored).toBeInstanceOf(TimeoutError)
+    expect(typeof restored.withCause).toBe("function")
+    expect(value.__payload_withCause).toBe("existing-value")
+    expect(value.__payload___payload_withCause).toBe("reserved-value")
+  })
+
+  it("validates registered payloads before reconstruction", () => {
+    let constructorCalls = 0
+
+    class ValidatedError extends Fault {
+      static readonly _tag = "ValidatedError"
+
+      constructor() {
+        super(ValidatedError._tag)
+        constructorCalls += 1
+      }
+    }
+
+    const Faults = registry({ ValidatedError })
+
+    expect(() =>
+      Faults.fromSerializable({
+        __faultier: false,
+        _tag: "ValidatedError",
+        name: "ValidatedError",
+      } as unknown as SerializableFault)
+    ).toThrow("Invalid Faultier payload")
+
+    expect(() =>
+      Faults.fromSerializable({
+        __faultier: true,
+        _tag: "ValidatedError",
+        meta: "not-an-object" as unknown as Record<string, unknown>,
+        name: "ValidatedError",
+      })
+    ).toThrow("meta must be an object")
+
+    expect(constructorCalls).toBe(0)
+  })
+
+  it("preserves constructor normalization during registry deserialization", () => {
+    class NormalizedError extends Fault {
+      static readonly _tag = "NormalizedError"
+      readonly value: number
+
+      constructor(args: { value: string }) {
+        super(NormalizedError._tag)
+        this.value = Number(args.value)
+      }
+    }
+
+    const Faults = registry({ NormalizedError })
+    const restored = Faults.fromSerializable({
+      __faultier: true,
+      _tag: "NormalizedError",
+      name: "NormalizedError",
+      value: "42",
+    })
+
+    expect(restored).toBeInstanceOf(NormalizedError)
+    expect((restored as NormalizedError).value).toBe(42)
+  })
+
   it("serializes unknown errors as UnknownError", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 

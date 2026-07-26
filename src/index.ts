@@ -111,9 +111,9 @@ export type { ByTag } from "./lib/match"
 /**
  * Serializable fault payload shape.
  */
-export type { SerializableFault } from "./lib/fault"
+export type { SerializableFault } from "./lib/serialize"
 
 /**
  * Serializable cause union for nested fault/error/thrown values.
  */
-export type { SerializableCause } from "./lib/fault"
+export type { SerializableCause } from "./lib/serialize"

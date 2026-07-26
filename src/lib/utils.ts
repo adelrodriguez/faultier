@@ -54,7 +54,12 @@ export function collectPayloadFields(
     const value = source[key]
     if (excludeFunctionValues && typeof value === "function") continue
 
-    payload[key] = value
+    Object.defineProperty(payload, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    })
   }
 
   return payload

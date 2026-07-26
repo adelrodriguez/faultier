@@ -274,6 +274,10 @@ const restored = AuthFault.fromSerializable(json)
 
 `registry.toSerializable(err)` supports Fault instances, native `Error`, and non-Error thrown values (serialized as `UnknownThrown`).
 
+Payload fields that collide with Fault properties or methods are preserved with a
+`__payload_` prefix during deserialization. The prefix repeats when needed to avoid
+overwriting an existing payload field.
+
 ## API Reference
 
 ### Fault Instance
