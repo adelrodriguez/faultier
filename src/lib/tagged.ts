@@ -1,6 +1,6 @@
 import { ReservedFieldError } from "./errors"
 import { Fault } from "./fault"
-import { RESERVED_KEYS } from "./utils"
+import { RESERVED_KEYS } from "./wire"
 
 type TaggedArgs<Fields extends object> = keyof Fields extends never
   ? [fields?: Record<string, never>]

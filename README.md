@@ -326,6 +326,7 @@ overwriting an existing payload field.
 
 | Method                                     | Description                                                 |
 | ------------------------------------------ | ----------------------------------------------------------- |
+| `tags`                                     | Registered tags in deterministic order                      |
 | `create(tag, fields?)`                     | Create a fault by tag                                       |
 | `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                    |
 | `is(error)`                                | Type guard for any fault in the registry                    |

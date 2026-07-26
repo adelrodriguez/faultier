@@ -2,26 +2,12 @@ import { Fault } from "./fault"
 import {
   collectPayloadFields,
   MAX_CAUSE_DEPTH,
+  PAYLOAD_PREFIX,
   RESERVED_FROM_SERIALIZABLE_KEYS,
   RESERVED_KEYS,
-} from "./utils"
-
-export type SerializableCause =
-  | { kind: "fault"; value: SerializableFault }
-  | { kind: "error"; name: string; message: string; stack?: string }
-  | { kind: "thrown"; value: unknown }
-
-export type SerializableFault = {
-  __faultier: true
-  _tag: string
-  name: string
-  message?: string
-  details?: string
-  meta?: Record<string, unknown>
-  stack?: string
-  cause?: SerializableCause
-  [key: string]: unknown
-}
+  type SerializableCause,
+  type SerializableFault,
+} from "./wire"
 
 export type FaultResolver = (tag: string, payload: Record<string, unknown>) => Fault | undefined
 
@@ -30,8 +16,6 @@ type PreparedPayload = {
   constructorPayload: Record<string, unknown>
   restoredPayload: Record<string, unknown>
 }
-
-const PAYLOAD_PREFIX = "__payload_"
 
 class DeserializedFault extends Fault {
   static create(tag: string): DeserializedFault {
@@ -197,33 +181,4 @@ function deserializeFaultInternal(
   }
 
   return fault
-}
-
-export function toSerializableValue(value: unknown): SerializableFault {
-  if (value instanceof Fault) {
-    return value.toSerializable()
-  }
-
-  if (value instanceof Error) {
-    return {
-      __faultier: true,
-      _tag: "UnknownError",
-      cause: {
-        kind: "error",
-        message: value.message,
-        name: value.name,
-        stack: value.stack,
-      },
-      message: value.message,
-      name: "UnknownError",
-    }
-  }
-
-  return {
-    __faultier: true,
-    _tag: "UnknownThrown",
-    cause: { kind: "thrown", value },
-    message: "UnknownThrown",
-    name: "UnknownThrown",
-  }
 }
