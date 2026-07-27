@@ -8,6 +8,7 @@ import type {
   FlattenOptions,
   SerializableCause,
   SerializableFault,
+  SerializableValue,
   TagOf,
 } from "../types"
 import {
@@ -25,6 +26,15 @@ type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
 
 type Expect<T extends true> = T
+
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue }
 
 // ── Test fixtures ────────────────────────────────────────────────────────────
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
@@ -72,6 +82,13 @@ describe("type-level inference", () => {
     type _ByTag = Expect<Equal<ByTag<AppError, "PaymentError">, PaymentError>>
     type _SerializableMarker = Expect<Equal<SerializableFault["__faultier"], true>>
     type _CauseKinds = Expect<Equal<SerializableCause["kind"], "error" | "fault" | "thrown">>
+    type _SerializableFaultIsJsonValue = Expect<SerializableFault extends JsonValue ? true : false>
+    type _ThrownValueIsSerializable = Expect<
+      Equal<Extract<SerializableCause, { kind: "thrown" }>["value"], SerializableValue>
+    >
+
+    const value: SerializableValue = { nested: ["value", null] }
+    void value
   })
 
   it("infers the correct registry.create instance type", () => {
@@ -368,6 +385,16 @@ function _negativeTypeTests() {
 
   // @ts-expect-error -- flatten field must be "message" | "details"
   fault.flatten({ field: "bad-field" })
+
+  // @ts-expect-error -- metadata values must be JSON-safe SerializableValue values
+  fault.withMeta({ createdAt: new Date() })
+
+  // @ts-expect-error -- Tagged fields must contain only JSON-safe SerializableValue values
+  class NonSerializableFieldsError extends Tagged("NonSerializableFieldsError")<{
+    createdAt: Date
+  }>() {}
+
+  void NonSerializableFieldsError
 }
 
 // Suppress unused function warning — this exists only for type checking
