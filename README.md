@@ -299,6 +299,14 @@ const restored = AuthFault.fromSerializable(json)
 
 `registry.toSerializable(err)` supports Fault instances, native `Error`, and non-Error thrown values (serialized as `UnknownThrown`).
 
+The wire format uses the JSON-safe `SerializableValue` type. `withMeta` and `Tagged`
+payload fields are type-constrained at construction; thrown causes are normalized to
+JSON-safe values during serialization. Meta and payload values are not deep runtime
+validated: their serializability is a documented type contract. `undefined` values are
+preserved in the wire object itself; JSON transports drop `undefined` object properties
+and convert `undefined` array elements to `null`, while structured-clone-style transports
+preserve them.
+
 Payload fields that collide with Fault properties or methods are preserved with a
 `__payload_` prefix during deserialization. The prefix repeats when needed to avoid
 overwriting an existing payload field.
@@ -353,7 +361,7 @@ overwriting an existing payload field.
 
 **`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
 
-**`faultier/types`:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `TagOf`, `ByTag`, `SerializableFault`, `SerializableCause`
+**`faultier/types`:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `TagOf`, `ByTag`, `SerializableValue`, `SerializableFault`, `SerializableCause`
 
 ```ts
 import { RegistryMergeConflictError } from "faultier/errors"

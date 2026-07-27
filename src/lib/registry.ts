@@ -1,9 +1,9 @@
-import type { SerializableFault } from "./wire"
 import { RegistryTagMismatchError } from "./errors"
 import { Fault } from "./fault"
 import { dispatchTag, dispatchTags, type HandlerResult } from "./match"
 import { type AnyFaultCtor, setRegistryState } from "./registry-state"
 import { deserializeFault } from "./reviver"
+import { normalizeThrown, type SerializableFault } from "./wire"
 
 type FaultCtorEntry = readonly [string, AnyFaultCtor]
 
@@ -43,7 +43,7 @@ function toSerializableValue(value: unknown): SerializableFault {
   return {
     __faultier: true,
     _tag: "UnknownThrown",
-    cause: { kind: "thrown", value },
+    cause: { kind: "thrown", value: normalizeThrown(value) },
     message: "UnknownThrown",
     name: "UnknownThrown",
   }

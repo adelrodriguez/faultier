@@ -2,9 +2,11 @@ import {
   collectPayloadFields,
   FAULT_METHOD_KEYS,
   MAX_CAUSE_DEPTH,
+  normalizeThrown,
   RESERVED_SERIALIZE_KEYS,
   type SerializableCause,
   type SerializableFault,
+  type SerializableValue,
 } from "./wire"
 
 export type FlattenField = "message" | "details"
@@ -40,7 +42,7 @@ function toCause(cause: unknown, depth: number): SerializableCause {
     }
   }
 
-  return { kind: "thrown", value: cause }
+  return { kind: "thrown", value: normalizeThrown(cause) }
 }
 
 function serializeFault(fault: Fault, depth: number): SerializableFault {
@@ -51,10 +53,13 @@ function serializeFault(fault: Fault, depth: number): SerializableFault {
       excludeFunctionValues: true,
     }
   )
+  // Guaranteed by the Tagged Fields constraint; function values are stripped above.
+  // Deep serializability is a documented contract, not runtime-validated.
+  const serializablePayload = payload as Record<string, SerializableValue>
 
   const serialized: SerializableFault = {
     __faultier: true,
-    ...payload,
+    ...serializablePayload,
     _tag: fault._tag,
     message: fault.message,
     name: fault.name,
@@ -97,7 +102,7 @@ function valueToMessage(value: unknown): string {
 export abstract class Fault extends Error {
   readonly _tag: string
   override cause?: unknown
-  meta?: Record<string, unknown>
+  meta?: Record<string, SerializableValue>
   details?: string
 
   protected constructor(tag: string, message?: string) {
@@ -107,7 +112,7 @@ export abstract class Fault extends Error {
     originalStacks.set(this, this.stack)
   }
 
-  withMeta(meta: Record<string, unknown>): this {
+  withMeta(meta: Record<string, SerializableValue>): this {
     this.meta = { ...this.meta, ...meta }
     return this
   }

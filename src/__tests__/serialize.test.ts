@@ -22,6 +22,92 @@ describe("toSerializable", () => {
     expect(serialized.details).toBe("lookup failed")
     expect(serialized.meta).toEqual({ requestId: "req-1" })
   })
+
+  it("preserves undefined values in the wire object while JSON applies standard semantics", () => {
+    class UndefinedValueError extends Tagged("UndefinedValueError")() {}
+
+    const serialized = new UndefinedValueError()
+      .withMeta({ items: [1, undefined, 2], missing: undefined })
+      .toSerializable()
+
+    expect(Object.hasOwn(serialized.meta ?? {}, "missing")).toBe(true)
+    expect(serialized.meta?.missing).toBeUndefined()
+    expect(serialized.meta?.items).toEqual([1, undefined, 2])
+
+    // Intentionally use a JSON round-trip to validate JSON transport semantics.
+    // oxlint-disable-next-line unicorn/prefer-structured-clone
+    const json = JSON.parse(JSON.stringify(serialized)) as { meta: Record<string, unknown> }
+
+    expect(Object.hasOwn(json.meta, "missing")).toBe(false)
+    expect(json.meta.items).toEqual([1, null, 2])
+  })
+
+  it("normalizes thrown functions", () => {
+    class FunctionCauseError extends Tagged("FunctionCauseError")() {}
+
+    const serialized = new FunctionCauseError().withCause(() => "ignored").toSerializable()
+
+    expect(serialized.cause).toEqual({ kind: "thrown", value: "[Function]" })
+  })
+
+  it("normalizes thrown symbols", () => {
+    class SymbolCauseError extends Tagged("SymbolCauseError")() {}
+
+    const serialized = new SymbolCauseError().withCause(Symbol("reason")).toSerializable()
+
+    expect(serialized.cause).toEqual({ kind: "thrown", value: "reason" })
+  })
+
+  it("normalizes thrown bigints", () => {
+    class BigIntCauseError extends Tagged("BigIntCauseError")() {}
+
+    const serialized = new BigIntCauseError().withCause(42n).toSerializable()
+
+    expect(serialized.cause).toEqual({ kind: "thrown", value: "42" })
+  })
+
+  it("normalizes non-finite thrown numbers to null", () => {
+    class NumberCauseError extends Tagged("NumberCauseError")() {}
+
+    for (const nonFinite of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const serialized = new NumberCauseError().withCause(nonFinite).toSerializable()
+
+      expect(serialized.cause).toEqual({ kind: "thrown", value: null })
+    }
+
+    const finite = new NumberCauseError().withCause(42).toSerializable()
+
+    expect(finite.cause).toEqual({ kind: "thrown", value: 42 })
+  })
+
+  it("normalizes thrown objects through JSON", () => {
+    class ObjectCauseError extends Tagged("ObjectCauseError")() {}
+    const date = new Date("2026-01-02T03:04:05.000Z")
+
+    const plainObject = new ObjectCauseError().withCause({ code: 42, nested: { retry: true } })
+    const dateObject = new ObjectCauseError().withCause(date)
+
+    expect(plainObject.toSerializable().cause).toEqual({
+      kind: "thrown",
+      value: { code: 42, nested: { retry: true } },
+    })
+    expect(dateObject.toSerializable().cause).toEqual({ kind: "thrown", value: date.toJSON() })
+  })
+
+  it("normalizes cyclic thrown causes for JSON round-trips", () => {
+    class CyclicCauseError extends Tagged("CyclicCauseError")() {}
+    const cyclic: { self?: unknown } = {}
+    cyclic.self = cyclic
+    const fault = new CyclicCauseError().withCause(cyclic)
+
+    expect(fault.toSerializable().cause).toEqual({ kind: "thrown", value: "[object Object]" })
+
+    // Intentionally stringify the Fault instance to exercise its toJSON wire format.
+    // oxlint-disable-next-line unicorn/prefer-structured-clone
+    const restored = fromSerializable(JSON.parse(JSON.stringify(fault)) as SerializableFault)
+
+    expect(restored.cause).toBe("[object Object]")
+  })
 })
 
 describe("fromSerializable", () => {
@@ -194,9 +280,9 @@ describe("fromSerializable", () => {
       fromSerializable({
         __faultier: true,
         _tag: "TestError",
-        meta: "not-an-object" as unknown as Record<string, unknown>,
+        meta: "not-an-object",
         name: "TestError",
-      })
+      } as unknown as SerializableFault)
     ).toThrow("meta must be an object")
   })
 })

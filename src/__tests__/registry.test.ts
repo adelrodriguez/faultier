@@ -209,9 +209,9 @@ describe("registry", () => {
       Faults.fromSerializable({
         __faultier: true,
         _tag: "ValidatedError",
-        meta: "not-an-object" as unknown as Record<string, unknown>,
+        meta: "not-an-object",
         name: "ValidatedError",
-      })
+      } as unknown as SerializableFault)
     ).toThrow("meta must be an object")
 
     expect(constructorCalls).toBe(0)
@@ -260,6 +260,16 @@ describe("registry", () => {
     expect(serializedString.cause).toEqual({ kind: "thrown", value: "boom" })
     expect(serializedNumber.cause).toEqual({ kind: "thrown", value: 42 })
     expect(serializedNull.cause).toEqual({ kind: "thrown", value: null })
+  })
+
+  it("normalizes non-serializable UnknownThrown values", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+    const cyclic: { self?: unknown } = {}
+    cyclic.self = cyclic
+
+    const serialized = Faults.toSerializable(cyclic)
+
+    expect(serialized.cause).toEqual({ kind: "thrown", value: "[object Object]" })
   })
 
   it("identifies members with registry.is", () => {

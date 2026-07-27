@@ -2,10 +2,19 @@
 // decoding (reviver.ts). This module must stay dependency-free so the
 // lib import graph remains a DAG.
 
+export type SerializableValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly SerializableValue[]
+  | { readonly [key: string]: SerializableValue }
+
 export type SerializableCause =
   | { kind: "fault"; value: SerializableFault }
   | { kind: "error"; name: string; message: string; stack?: string }
-  | { kind: "thrown"; value: unknown }
+  | { kind: "thrown"; value: SerializableValue }
 
 export type SerializableFault = {
   __faultier: true
@@ -13,10 +22,48 @@ export type SerializableFault = {
   name: string
   message?: string
   details?: string
-  meta?: Record<string, unknown>
+  meta?: Record<string, SerializableValue>
   stack?: string
   cause?: SerializableCause
-  [key: string]: unknown
+  [key: string]: SerializableValue | SerializableCause | undefined
+}
+
+function stringifyFallback(value: object): string {
+  try {
+    // oxlint-disable-next-line typescript/no-base-to-string -- thrown objects may only have a default string representation.
+    return String(value)
+  } catch {
+    return "[Unserializable]"
+  }
+}
+
+export function normalizeThrown(value: unknown): SerializableValue {
+  // Non-finite numbers become null, matching JSON.stringify's behavior for nested values.
+  if (typeof value === "number") return Number.isFinite(value) ? value : null
+
+  if (
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    value === null ||
+    value === undefined
+  ) {
+    return value
+  }
+
+  if (typeof value === "bigint") return `${value}`
+  if (typeof value === "symbol") return value.description ?? value.toString()
+  if (typeof value === "function") return "[Function]"
+
+  try {
+    const serialized = JSON.stringify(value) as string | undefined
+    if (serialized === undefined) return stringifyFallback(value)
+
+    const parsed: unknown = JSON.parse(serialized)
+    // JSON.parse only produces JSON-safe primitives, arrays, and objects.
+    return parsed as SerializableValue
+  } catch {
+    return stringifyFallback(value)
+  }
 }
 
 export const MAX_CAUSE_DEPTH = 100
