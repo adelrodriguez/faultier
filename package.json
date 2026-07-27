@@ -54,7 +54,7 @@
     "test:package": "bun run build && bun scripts/verify-package.ts",
     "test:watch": "bun test --watch",
     "typecheck": "adamantite check",
-    "version": "changeset version"
+    "version": "changeset version && bun run format"
   },
   "devDependencies": {
     "@changesets/cli": "2.29.8",
