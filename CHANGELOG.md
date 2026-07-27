@@ -56,7 +56,6 @@
 - 73087f0: Complete v2 rewrite. The v1 top-level API (`define`, `wrap`, `create`, `handle`, `assert`, `IS_FAULT`, `NO_FAULT_TAG`, `UNKNOWN`) is fully removed. `matchTag` and `matchTags` are now scoped to registry instances rather than standalone exports.
 
   ### New API
-
   - **`Fault`** — abstract base class with fluent `.withMessage()`, `.withDetails()`, `.withDescription()`, `.withMeta()`, `.withCause()` methods
   - **`Tagged(tag)<Fields>()`** — curried factory for creating typed Fault subclasses with a `_tag` discriminant
   - **`registry({ ...ctors })`** — creates scoped fault registries with `create`, `wrap().as`, `is`, `matchTag`, `matchTags`, `toSerializable`, `fromSerializable`
@@ -65,7 +64,6 @@
   - **`fromSerializable`** — top-level generic deserialization
 
   ### Fault methods
-
   - **`withDescription(message, details?)`** — convenience setter for user-facing message and optional technical details in one call
   - **`flatten(options?)`** — configurable chain-to-string with `field: "message" | "details"` support. Replaces the removed `getIssue()` and `getDetails()` methods.
   - **`getContext()`** — merged metadata from the cause chain (head wins on conflicts). Renamed from `getFullMeta()`.
@@ -73,26 +71,22 @@
   - **`getTags()`** — `_tag` values from the cause chain
 
   ### Removed methods
-
   - `getIssue()` — use `flatten()` instead
   - `getDetails()` — use `flatten({ field: "details" })` instead
   - `getFullMeta()` — renamed to `getContext()`
 
   ### Serialization
-
   - Full round-trip serialization/deserialization with `__faultier: true` wire format
   - Nested Fault cause recursion, Error cause preservation, thrown value passthrough
   - Payload key collision handling (`__payload_` prefix for reserved key conflicts)
   - Depth guard on deserialization matching serialization (`MAX_CAUSE_DEPTH = 100`)
 
   ### Runtime safety
-
   - Max-depth guard (`MAX_CAUSE_DEPTH = 100`) on cause chain traversal in `unwrap()`, preventing stack overflow on circular causes
   - Same depth guard on `toSerializable()` and `fromSerializable()` paths
   - Safe `JSON.stringify` with try/catch fallback for circular objects
 
   ### Internal errors
-
   - `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError` — all extend Fault with static `_tag`
 
 ## 2.0.0
@@ -114,30 +108,28 @@
 
   ```ts
   // Before
-  import Fault from "faultier";
+  import Fault from "faultier"
 
   declare module "faultier" {
     interface FaultRegistry {
-      DATABASE_ERROR: { query: string };
-      GENERIC_ERROR: never;
+      DATABASE_ERROR: { query: string }
+      GENERIC_ERROR: never
     }
   }
 
-  throw Fault.wrap(err)
-    .withTag("DATABASE_ERROR")
-    .withContext({ query: "SELECT 1" });
+  throw Fault.wrap(err).withTag("DATABASE_ERROR").withContext({ query: "SELECT 1" })
 
   // After
-  import { define } from "faultier";
+  import { define } from "faultier"
 
   type AppErrors = {
-    DATABASE_ERROR: { query: string };
-    GENERIC_ERROR: never;
-  };
+    DATABASE_ERROR: { query: string }
+    GENERIC_ERROR: never
+  }
 
   export class Fault extends define<AppErrors>() {}
 
-  throw Fault.wrap(err).withTag("DATABASE_ERROR", { query: "SELECT 1" });
+  throw Fault.wrap(err).withTag("DATABASE_ERROR", { query: "SELECT 1" })
   ```
 
 ### Minor Changes
@@ -158,11 +150,11 @@
 
   ```ts
   // Before
-  import Faultier from "faultier";
+  import Faultier from "faultier"
   export class Fault extends Faultier.define<AppErrors>() {}
 
   // After
-  import { define } from "faultier";
+  import { define } from "faultier"
   export class Fault extends define<AppErrors>() {}
   ```
 
@@ -170,13 +162,13 @@
 
   ```ts
   // Before
-  import { BaseFault } from "faultier";
-  const isFault = BaseFault.isFault(error);
+  import { BaseFault } from "faultier"
+  const isFault = BaseFault.isFault(error)
 
   // After
-  import { define } from "faultier";
-  const BaseFault = define();
-  const isFault = BaseFault.isFault(error);
+  import { define } from "faultier"
+  const BaseFault = define()
+  const isFault = BaseFault.isFault(error)
   ```
 
 ## 1.1.1
@@ -213,16 +205,16 @@
   ```typescript
   // Single tag matching
   const result = Fault.matchTag(error, "DATABASE_ERROR", (fault) => {
-    logger.error("DB error", fault.context.query);
-    return { status: 500 };
-  });
+    logger.error("DB error", fault.context.query)
+    return { status: 500 }
+  })
 
   // Multiple tag matching (partial)
   const result = Fault.matchTags(error, {
     NOT_FOUND: (fault) => ({ status: 404 }),
     AUTH_ERROR: (fault) => ({ status: 401 }),
     // Don't need handlers for all registered tags
-  });
+  })
 
   // Type-safe result checking
   if (Fault.isUnknown(result)) {
@@ -288,11 +280,11 @@
   **After:**
 
   ```typescript
-  const fault = Fault.create("MY_TAG");
+  const fault = Fault.create("MY_TAG")
   // No error: context is correctly typed as Partial<{ requestId: string }>
   if ("requestId" in fault.context) {
     // TypeScript knows fault.context.requestId is string | undefined
-    console.log(fault.context.requestId);
+    console.log(fault.context.requestId)
   }
   ```
 
@@ -348,11 +340,11 @@
      ```ts
      declare module "faultier" {
        interface FaultRegistry {
-         tags: "DATABASE_ERROR" | "AUTH_ERROR";
+         tags: "DATABASE_ERROR" | "AUTH_ERROR"
          context: {
-           DATABASE_ERROR: { query: string };
-           AUTH_ERROR: { userId: string };
-         };
+           DATABASE_ERROR: { query: string }
+           AUTH_ERROR: { userId: string }
+         }
        }
      }
      ```
@@ -362,9 +354,9 @@
      ```ts
      declare module "faultier" {
        interface FaultRegistry {
-         DATABASE_ERROR: { query: string };
-         AUTH_ERROR: { userId: string };
-         GENERIC_ERROR: never; // Use 'never' to prevent withContext()
+         DATABASE_ERROR: { query: string }
+         AUTH_ERROR: { userId: string }
+         GENERIC_ERROR: never // Use 'never' to prevent withContext()
        }
      }
      ```
@@ -398,19 +390,19 @@
   // Old format (0.3.x and earlier)
   declare module "faultier" {
     interface FaultRegistry {
-      tags: "MY_TAG" | "OTHER_TAG";
+      tags: "MY_TAG" | "OTHER_TAG"
       context: {
-        MY_TAG: { foo: string };
-        OTHER_TAG: { bar: number };
-      };
+        MY_TAG: { foo: string }
+        OTHER_TAG: { bar: number }
+      }
     }
   }
 
   // New format (0.4.x and later)
   declare module "faultier" {
     interface FaultRegistry {
-      MY_TAG: { foo: string };
-      OTHER_TAG: { bar: number };
+      MY_TAG: { foo: string }
+      OTHER_TAG: { bar: number }
     }
   }
   ```
@@ -420,8 +412,8 @@
   ```ts
   declare module "faultier" {
     interface FaultRegistry {
-      WITH_CONTEXT: { data: string };
-      NO_CONTEXT: never; // TypeScript will prevent .withContext() calls
+      WITH_CONTEXT: { data: string }
+      NO_CONTEXT: never // TypeScript will prevent .withContext() calls
     }
   }
   ```
@@ -430,18 +422,18 @@
 
   ```ts
   type DatabaseErrors = {
-    DB_CONNECTION_ERROR: { host: string; port: number };
-    DB_QUERY_ERROR: { query: string; table: string };
-  };
+    DB_CONNECTION_ERROR: { host: string; port: number }
+    DB_QUERY_ERROR: { query: string; table: string }
+  }
 
   type AuthErrors = {
-    AUTH_INVALID_TOKEN: { token: string };
-    AUTH_EXPIRED_SESSION: { sessionId: string };
-  };
+    AUTH_INVALID_TOKEN: { token: string }
+    AUTH_EXPIRED_SESSION: { sessionId: string }
+  }
 
   declare module "faultier" {
     interface FaultRegistry extends DatabaseErrors, AuthErrors {
-      GENERIC_ERROR: never;
+      GENERIC_ERROR: never
     }
   }
   ```
@@ -457,15 +449,18 @@
   You can now import `extend()` directly from `faultier/extend`:
 
   ```ts
-  import { extend } from "faultier/extend";
+  import { extend } from "faultier/extend"
 
   class HttpError extends Error {
-    constructor(message: string, public statusCode: number) {
-      super(message);
+    constructor(
+      message: string,
+      public statusCode: number
+    ) {
+      super(message)
     }
   }
 
-  const HttpFault = extend(HttpError);
+  const HttpFault = extend(HttpError)
   ```
 
   **New Features**
@@ -536,21 +531,21 @@
   Before:
 
   ```ts
-  import { getIssue, getDebug } from "faultier";
+  import { getIssue, getDebug } from "faultier"
 
-  const issue = getIssue(fault);
-  const debug = getDebug(fault, " | ");
-  const flat = fault.flatten(" -> ");
+  const issue = getIssue(fault)
+  const debug = getDebug(fault, " | ")
+  const flat = fault.flatten(" -> ")
   ```
 
   After:
 
   ```ts
-  import { BaseFault } from "faultier";
+  import { BaseFault } from "faultier"
 
-  const issue = BaseFault.getIssue(fault);
-  const debug = BaseFault.getDebug(fault, { separator: " | " });
-  const flat = fault.flatten({ separator: " -> " });
+  const issue = BaseFault.getIssue(fault)
+  const debug = BaseFault.getDebug(fault, { separator: " | " })
+  const flat = fault.flatten({ separator: " -> " })
   ```
 
   **New Features**
@@ -565,19 +560,19 @@
 
   ```ts
   // Default formatting (adds periods)
-  BaseFault.getIssue(fault);
+  BaseFault.getIssue(fault)
   // "Service unavailable. Database connection failed."
 
   // Custom separator
-  BaseFault.getIssue(fault, { separator: " | " });
+  BaseFault.getIssue(fault, { separator: " | " })
   // "Service unavailable. | Database connection failed."
 
   // Custom formatter
-  BaseFault.getDebug(fault, { formatter: (msg) => msg.toUpperCase() });
+  BaseFault.getDebug(fault, { formatter: (msg) => msg.toUpperCase() })
   // "DEBUG MESSAGE ANOTHER DEBUG MESSAGE"
 
   // Flatten with custom options
-  fault.flatten({ separator: " → ", formatter: (msg) => `[${msg}]` });
+  fault.flatten({ separator: " → ", formatter: (msg) => `[${msg}]` })
   // "[Message 1] → [Message 2]"
   ```
 
@@ -609,15 +604,15 @@
   ```ts
   const original = Fault.wrap(networkError)
     .withTag("API_ERROR")
-    .withContext({ endpoint: "/users", status: 500 });
+    .withContext({ endpoint: "/users", status: 500 })
 
   // Serialize for transmission
-  const serialized = BaseFault.toSerializable(original);
-  const json = JSON.stringify(serialized);
+  const serialized = BaseFault.toSerializable(original)
+  const json = JSON.stringify(serialized)
 
   // Deserialize on the other side
-  const parsed = JSON.parse(json);
-  const restored = Fault.fromSerializable(parsed);
+  const parsed = JSON.parse(json)
+  const restored = Fault.fromSerializable(parsed)
 
   // restored preserves all chain properties:
   // - tag, message, debug, context
