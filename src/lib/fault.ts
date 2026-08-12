@@ -1,9 +1,8 @@
 import {
   collectPayloadFields,
-  FAULT_METHOD_KEYS,
   MAX_CAUSE_DEPTH,
   normalizeThrown,
-  RESERVED_SERIALIZE_KEYS,
+  RESERVED_FAULT_KEYS,
   type SerializableCause,
   type SerializableFault,
   type SerializableValue,
@@ -16,13 +15,6 @@ export type FlattenOptions = {
   separator?: string
   formatter?: (value: string) => string
 }
-
-const FAULT_METHOD_KEY_SET = new Set<string>(FAULT_METHOD_KEYS)
-const SERIALIZE_EXCLUDED_KEYS = new Set<string>([
-  ...RESERVED_SERIALIZE_KEYS,
-  ...FAULT_METHOD_KEY_SET,
-])
-const originalStacks = new WeakMap<Fault, string | undefined>()
 
 function defaultTrimFormatter(value: string): string {
   return value.trim()
@@ -46,13 +38,7 @@ function toCause(cause: unknown, depth: number): SerializableCause {
 }
 
 function serializeFault(fault: Fault, depth: number): SerializableFault {
-  const payload = collectPayloadFields(
-    fault as unknown as Record<string, unknown>,
-    SERIALIZE_EXCLUDED_KEYS,
-    {
-      excludeFunctionValues: true,
-    }
-  )
+  const payload = collectPayloadFields(fault as unknown as Record<string, unknown>, isReservedKey)
   // Guaranteed by the Tagged Fields constraint; function values are stripped above.
   // Deep serializability is a documented contract, not runtime-validated.
   const serializablePayload = payload as Record<string, SerializableValue>
@@ -104,12 +90,15 @@ export abstract class Fault extends Error {
   override cause?: unknown
   meta?: Record<string, SerializableValue>
   details?: string
+  // Private field: invisible to Object.keys, so it can never leak into
+  // payload collection and needs no reserved-key entry.
+  #originalStack?: string
 
   protected constructor(tag: string, message?: string) {
     super(message ?? tag)
     this._tag = tag
     this.name = tag
-    originalStacks.set(this, this.stack)
+    this.#originalStack = this.stack
   }
 
   withMeta(meta: Record<string, SerializableValue>): this {
@@ -137,15 +126,14 @@ export abstract class Fault extends Error {
 
   withCause(cause: unknown): this {
     this.cause = cause
-    const originalStack = originalStacks.get(this)
 
     // Rebuild stack from the original (pre-cause) stack on every call,
     // so replacing a cause doesn't leave stale "Caused by:" blocks.
-    if (cause instanceof Error && cause.stack && originalStack) {
+    if (cause instanceof Error && cause.stack && this.#originalStack) {
       const indented = cause.stack.replaceAll("\n", "\n  ")
-      this.stack = `${originalStack}\nCaused by: ${indented}`
+      this.stack = `${this.#originalStack}\nCaused by: ${indented}`
     } else {
-      this.stack = originalStack
+      this.stack = this.#originalStack
     }
 
     return this
@@ -238,4 +226,15 @@ export abstract class Fault extends Error {
 
 export function isFault(value: unknown): value is Fault {
   return value instanceof Fault
+}
+
+/**
+ * The single reserved-key rule, shared by construction (reject), serialization
+ * (exclude), and deserialization (rename): a key is reserved when it is a wire
+ * envelope key or would shadow anything reachable through Fault's prototype
+ * chain (Fault methods, Error/Object built-ins like toString, and the
+ * `__proto__` accessor).
+ */
+export function isReservedKey(key: string): boolean {
+  return RESERVED_FAULT_KEYS.has(key) || key in Fault.prototype
 }

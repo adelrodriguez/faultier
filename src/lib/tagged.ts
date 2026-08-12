@@ -1,6 +1,6 @@
+import type { SerializableValue } from "./wire"
 import { ReservedFieldError } from "./errors"
-import { Fault } from "./fault"
-import { RESERVED_KEYS, type SerializableValue } from "./wire"
+import { Fault, isReservedKey } from "./fault"
 
 type TaggedArgs<Fields extends Record<string, SerializableValue>> = keyof Fields extends never
   ? [fields?: Record<string, never>]
@@ -36,7 +36,7 @@ export function Tagged<const Tag extends string>(tag: Tag) {
         const fields = (args[0] ?? {}) as Record<string, SerializableValue>
 
         for (const key of Object.keys(fields)) {
-          if (RESERVED_KEYS.has(key)) {
+          if (isReservedKey(key)) {
             throw new ReservedFieldError({ field: key })
           }
         }

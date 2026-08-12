@@ -7,7 +7,7 @@
 - **Tagged fault**: A `Fault` subclass created by `Tagged(tag)<Fields>()`. Its constructor fields become typed payload fields.
 - **Registry**: A constructor-identity-scoped collection created by `registry()`. It creates, wraps, matches, serializes, and reconstructs its registered fault union.
 - **Payload field**: A user-defined own property outside the canonical Fault fields and methods.
-- **Reserved key**: A canonical field or Fault method name that payload data cannot overwrite directly.
+- **Reserved key**: A key payload data cannot use directly: a wire envelope key or anything reachable through Fault's prototype chain (methods, inherited built-ins, `__proto__`). One predicate (`isReservedKey`) defines this for construction, serialization, and deserialization.
 - **Wire format**: A plain `SerializableFault` object marked with `__faultier: true`. The marker belongs to serialized data, not registry objects.
 - **Cause chain**: The sequence from the current fault (head) toward the original cause (leaf).
 
@@ -18,7 +18,7 @@
 - Standalone matching accepts a typed Fault union. Registry matching accepts `unknown`, checks membership, then uses the same tag dispatch.
 - `Fault.toSerializable()` encodes a fault. `fromSerializable()` reconstructs a generic Fault, while `registry.fromSerializable()` restores registered subclasses when possible.
 - Generic and registry reconstruction share validation, payload restoration, cause recursion, and depth accounting.
-- Payload keys that collide with Fault properties or methods receive repeated `__payload_` prefixes until they are safe and unique.
+- Reserved keys follow one rule with two policies: `Tagged` construction rejects them (`ReservedFieldError`), while deserialization renames colliding wire keys with repeated `__payload_` prefixes until safe and unique (wire data must not be dropped).
 - Cause traversal, serialization, and deserialization stop after 100 nested fault edges.
 - `unwrap()` and related helpers order chains from head to leaf. Metadata merging gives the head precedence.
 
