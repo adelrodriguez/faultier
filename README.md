@@ -1,4 +1,4 @@
-![Faultier Banner](./assets/banner.webp)
+![Faultier Banner](./.github/assets/banner.webp)
 
 <div align="center">
   <h1 align="center">🦥 faultier</h1>
