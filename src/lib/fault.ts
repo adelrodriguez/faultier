@@ -16,6 +16,12 @@ export type FlattenOptions = {
   formatter?: (value: string) => string
 }
 
+// A WeakMap rather than a #private field: bunup's declaration emitter turns
+// native private fields into a bare `private;` member that breaks consumer
+// typechecking (see scripts/verify-package.ts). Side benefit: invisible to
+// Object.keys, so it needs no reserved-key entry.
+const originalStacks = new WeakMap<Fault, string | undefined>()
+
 function defaultTrimFormatter(value: string): string {
   return value.trim()
 }
@@ -90,15 +96,12 @@ export abstract class Fault extends Error {
   override cause?: unknown
   meta?: Record<string, SerializableValue>
   details?: string
-  // Private field: invisible to Object.keys, so it can never leak into
-  // payload collection and needs no reserved-key entry.
-  #originalStack?: string
 
   protected constructor(tag: string, message?: string) {
     super(message ?? tag)
     this._tag = tag
     this.name = tag
-    this.#originalStack = this.stack
+    originalStacks.set(this, this.stack)
   }
 
   withMeta(meta: Record<string, SerializableValue>): this {
@@ -126,14 +129,15 @@ export abstract class Fault extends Error {
 
   withCause(cause: unknown): this {
     this.cause = cause
+    const originalStack = originalStacks.get(this)
 
     // Rebuild stack from the original (pre-cause) stack on every call,
     // so replacing a cause doesn't leave stale "Caused by:" blocks.
-    if (cause instanceof Error && cause.stack && this.#originalStack) {
+    if (cause instanceof Error && cause.stack && originalStack) {
       const indented = cause.stack.replaceAll("\n", "\n  ")
-      this.stack = `${this.#originalStack}\nCaused by: ${indented}`
+      this.stack = `${originalStack}\nCaused by: ${indented}`
     } else {
-      this.stack = this.#originalStack
+      this.stack = originalStack
     }
 
     return this
