@@ -1,9 +1,8 @@
 import {
   collectPayloadFields,
-  FAULT_METHOD_KEYS,
   MAX_CAUSE_DEPTH,
   normalizeThrown,
-  RESERVED_SERIALIZE_KEYS,
+  RESERVED_FAULT_KEYS,
   type SerializableCause,
   type SerializableFault,
   type SerializableValue,
@@ -17,11 +16,10 @@ export type FlattenOptions = {
   formatter?: (value: string) => string
 }
 
-const FAULT_METHOD_KEY_SET = new Set<string>(FAULT_METHOD_KEYS)
-const SERIALIZE_EXCLUDED_KEYS = new Set<string>([
-  ...RESERVED_SERIALIZE_KEYS,
-  ...FAULT_METHOD_KEY_SET,
-])
+// A WeakMap rather than a #private field: bunup's declaration emitter turns
+// native private fields into a bare `private;` member that breaks consumer
+// typechecking (see scripts/verify-package.ts). Side benefit: invisible to
+// Object.keys, so it needs no reserved-key entry.
 const originalStacks = new WeakMap<Fault, string | undefined>()
 
 function defaultTrimFormatter(value: string): string {
@@ -46,13 +44,7 @@ function toCause(cause: unknown, depth: number): SerializableCause {
 }
 
 function serializeFault(fault: Fault, depth: number): SerializableFault {
-  const payload = collectPayloadFields(
-    fault as unknown as Record<string, unknown>,
-    SERIALIZE_EXCLUDED_KEYS,
-    {
-      excludeFunctionValues: true,
-    }
-  )
+  const payload = collectPayloadFields(fault as unknown as Record<string, unknown>, isReservedKey)
   // Guaranteed by the Tagged Fields constraint; function values are stripped above.
   // Deep serializability is a documented contract, not runtime-validated.
   const serializablePayload = payload as Record<string, SerializableValue>
@@ -238,4 +230,15 @@ export abstract class Fault extends Error {
 
 export function isFault(value: unknown): value is Fault {
   return value instanceof Fault
+}
+
+/**
+ * The single reserved-key rule, shared by construction (reject), serialization
+ * (exclude), and deserialization (rename): a key is reserved when it is a wire
+ * envelope key or would shadow anything reachable through Fault's prototype
+ * chain (Fault methods, Error/Object built-ins like toString, and the
+ * `__proto__` accessor).
+ */
+export function isReservedKey(key: string): boolean {
+  return RESERVED_FAULT_KEYS.has(key) || key in Fault.prototype
 }

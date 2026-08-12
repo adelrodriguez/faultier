@@ -1,23 +1,26 @@
-import { Fault } from "./fault"
+import { Fault, isReservedKey } from "./fault"
 import {
   collectPayloadFields,
   MAX_CAUSE_DEPTH,
-  PAYLOAD_PREFIX,
-  RESERVED_FROM_SERIALIZABLE_KEYS,
-  RESERVED_KEYS,
+  RESERVED_FAULT_KEYS,
   type SerializableCause,
   type SerializableFault,
 } from "./wire"
 
 export type FaultResolver = (tag: string, payload: Record<string, unknown>) => Fault | undefined
 
+// Prefix applied (repeatedly, until unique) to payload keys that would
+// collide with reserved Fault keys during deserialization.
+const PAYLOAD_PREFIX = "__payload_"
+
 type PreparedPayload = {
   collisionPayload: Record<string, unknown>
   constructorPayload: Record<string, unknown>
-  restoredPayload: Record<string, unknown>
 }
 
 class DeserializedFault extends Fault {
+  // Static factory because Fault's constructor is protected; a bare public
+  // constructor would be flagged as useless.
   static create(tag: string): DeserializedFault {
     return new DeserializedFault(tag)
   }
@@ -58,7 +61,9 @@ function createDeserializedError(name: string, message: string, stack?: string):
 }
 
 function extractPayloadFields(json: SerializableFault): Record<string, unknown> {
-  return collectPayloadFields(json, RESERVED_FROM_SERIALIZABLE_KEYS)
+  // Exclude only envelope keys here (not the full reserved rule): a wire key
+  // that shadows a Fault method must be renamed by preparePayload, not dropped.
+  return collectPayloadFields(json, (key) => RESERVED_FAULT_KEYS.has(key))
 }
 
 function definePayloadField(target: Record<string, unknown>, key: string, value: unknown): void {
@@ -73,7 +78,6 @@ function definePayloadField(target: Record<string, unknown>, key: string, value:
 function preparePayload(payload: Record<string, unknown>): PreparedPayload {
   const collisionPayload: Record<string, unknown> = {}
   const constructorPayload: Record<string, unknown> = {}
-  const restoredPayload: Record<string, unknown> = {}
   const rawKeys = new Set(Object.keys(payload))
   const assignedKeys = new Set<string>()
 
@@ -81,8 +85,7 @@ function preparePayload(payload: Record<string, unknown>): PreparedPayload {
     let targetKey = key
 
     while (
-      RESERVED_KEYS.has(targetKey) ||
-      targetKey in Fault.prototype ||
+      isReservedKey(targetKey) ||
       assignedKeys.has(targetKey) ||
       (targetKey !== key && rawKeys.has(targetKey))
     ) {
@@ -90,7 +93,6 @@ function preparePayload(payload: Record<string, unknown>): PreparedPayload {
     }
 
     assignedKeys.add(targetKey)
-    definePayloadField(restoredPayload, targetKey, value)
 
     if (targetKey === key) {
       definePayloadField(constructorPayload, key, value)
@@ -99,7 +101,7 @@ function preparePayload(payload: Record<string, unknown>): PreparedPayload {
     }
   }
 
-  return { collisionPayload, constructorPayload, restoredPayload }
+  return { collisionPayload, constructorPayload }
 }
 
 function restorePayloadFields(fault: Fault, payload: Record<string, unknown>): void {
@@ -171,7 +173,12 @@ function deserializeFaultInternal(
   const resolvedFault = resolveFault?.(json._tag, payload.constructorPayload)
   const fault = resolvedFault ?? DeserializedFault.create(json._tag)
 
-  restorePayloadFields(fault, resolvedFault ? payload.collisionPayload : payload.restoredPayload)
+  // A resolved constructor already applied constructorPayload; the generic
+  // fallback needs both buckets restored directly.
+  if (!resolvedFault) {
+    restorePayloadFields(fault, payload.constructorPayload)
+  }
+  restorePayloadFields(fault, payload.collisionPayload)
   restoreDeserializedFields(fault, json)
 
   if (json.cause) {

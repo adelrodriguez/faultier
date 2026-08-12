@@ -68,11 +68,11 @@ export function normalizeThrown(value: unknown): SerializableValue {
 
 export const MAX_CAUSE_DEPTH = 100
 
-// Prefix applied (repeatedly, until unique) to payload keys that would
-// collide with reserved Fault fields during deserialization.
-export const PAYLOAD_PREFIX = "__payload_"
-
-export const FAULT_INSTANCE_RESERVED_KEYS = [
+// The canonical wire envelope keys. Everything else on a SerializableFault
+// is user payload. Fault methods are not listed here: they live on the
+// prototype, so isReservedKey (fault.ts) covers them via a prototype check.
+export const RESERVED_FAULT_KEYS: ReadonlySet<string> = new Set<string>([
+  "__faultier",
   "_tag",
   "cause",
   "name",
@@ -80,49 +80,22 @@ export const FAULT_INSTANCE_RESERVED_KEYS = [
   "stack",
   "meta",
   "details",
-] as const
-
-export const FAULT_METHOD_KEYS = [
-  "toJSON",
-  "toSerializable",
-  "withMeta",
-  "withMessage",
-  "withDetails",
-  "withDescription",
-  "withCause",
-  "unwrap",
-  "getTags",
-  "getContext",
-  "flatten",
-] as const
-
-export const RESERVED_KEYS: ReadonlySet<string> = new Set<string>([
-  ...FAULT_INSTANCE_RESERVED_KEYS,
-  ...FAULT_METHOD_KEYS,
 ])
 
-export const RESERVED_SERIALIZE_KEYS: ReadonlySet<string> = new Set<string>(
-  FAULT_INSTANCE_RESERVED_KEYS
-)
-
-export const RESERVED_FROM_SERIALIZABLE_KEYS: ReadonlySet<string> = new Set<string>([
-  "__faultier",
-  ...FAULT_INSTANCE_RESERVED_KEYS,
-])
-
+// Collects own payload fields, skipping excluded keys and function values.
+// defineProperty (not assignment) so a "__proto__" key becomes an own data
+// property instead of triggering the Object.prototype.__proto__ setter.
 export function collectPayloadFields(
   source: Record<string, unknown>,
-  excludedKeys: ReadonlySet<string>,
-  options?: { excludeFunctionValues?: boolean }
+  isExcluded: (key: string) => boolean
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {}
-  const excludeFunctionValues = options?.excludeFunctionValues ?? false
 
   for (const key of Object.keys(source)) {
-    if (excludedKeys.has(key)) continue
+    if (isExcluded(key)) continue
 
     const value = source[key]
-    if (excludeFunctionValues && typeof value === "function") continue
+    if (typeof value === "function") continue
 
     Object.defineProperty(payload, key, {
       configurable: true,

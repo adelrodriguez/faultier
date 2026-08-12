@@ -307,9 +307,17 @@ preserved in the wire object itself; JSON transports drop `undefined` object pro
 and convert `undefined` array elements to `null`, while structured-clone-style transports
 preserve them.
 
-Payload fields that collide with Fault properties or methods are preserved with a
-`__payload_` prefix during deserialization. The prefix repeats when needed to avoid
-overwriting an existing payload field.
+A single reserved-key rule applies everywhere: a key is reserved when it is a wire
+envelope key (`__faultier`, `_tag`, `name`, `message`, `details`, `meta`, `stack`,
+`cause`) or would shadow anything on Fault's prototype chain — Fault methods
+(`withMeta`, `withCause`, `unwrap`, `flatten`, ...) and inherited built-ins
+(`constructor`, `toString`, `toLocaleString`, `valueOf`, `hasOwnProperty`,
+`isPrototypeOf`, `propertyIsEnumerable`, `__proto__`, `__defineGetter__`,
+`__defineSetter__`, `__lookupGetter__`, `__lookupSetter__`). `Tagged` constructors
+reject reserved field names with `ReservedFieldError`; deserialization preserves
+colliding wire keys with a `__payload_` prefix instead (repeated when needed to
+avoid overwriting an existing payload field), since wire data from other sources
+must not be dropped.
 
 ## API Reference
 
@@ -412,7 +420,7 @@ fault instanceof NotFoundError // true (if registered)
 ## Notes
 
 - Cause chains are capped at 100 levels (`MAX_CAUSE_DEPTH`) in traversal, serialization, and deserialization to prevent stack overflow.
-- Reserved constructor field names in `Tagged` throw `ReservedFieldError` from `faultier/errors`.
+- Reserved constructor field names in `Tagged` throw `ReservedFieldError` from `faultier/errors`. This covers wire envelope keys, Fault methods, and inherited prototype members (`constructor`, `toString`, `__proto__`, ...) — see [Serialization](#serialization) for the full rule.
 
 ## When not to use Faultier
 

@@ -30,6 +30,32 @@ describe("Tagged", () => {
     expect(() => new InvalidFieldError({ message: "nope" })).toThrow("Reserved field key: message")
   })
 
+  it("throws ReservedFieldError for Fault method names", () => {
+    class InvalidFieldError extends Tagged("InvalidFieldError")<{ unwrap: string }>() {}
+
+    expect(() => new InvalidFieldError({ unwrap: "nope" })).toThrow(ReservedFieldError)
+  })
+
+  it("throws ReservedFieldError for inherited prototype member names", () => {
+    class InvalidFieldError extends Tagged("InvalidFieldError")<{ toString: string }>() {}
+
+    expect(() => new InvalidFieldError({ toString: "nope" })).toThrow(ReservedFieldError)
+  })
+
+  it("throws ReservedFieldError for the __proto__ key", () => {
+    class InvalidFieldError extends Tagged("InvalidFieldError")() {}
+
+    const fields = JSON.parse('{"__proto__": {"polluted": true}}') as Record<string, never>
+
+    expect(() => new InvalidFieldError(fields)).toThrow(ReservedFieldError)
+  })
+
+  it("throws ReservedFieldError for the __faultier marker key", () => {
+    class InvalidFieldError extends Tagged("InvalidFieldError")<{ __faultier: boolean }>() {}
+
+    expect(() => new InvalidFieldError({ __faultier: false })).toThrow(ReservedFieldError)
+  })
+
   it("accepts no constructor arguments for empty fields", () => {
     class TimeoutError extends Tagged("TimeoutError")() {}
 
