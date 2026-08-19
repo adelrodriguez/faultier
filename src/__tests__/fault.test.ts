@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import fc from "fast-check"
 
 import { Fault, isFault, Tagged } from "../index"
 
@@ -284,6 +285,36 @@ describe("Fault", () => {
 
     expect(() => fault.flatten()).not.toThrow()
     expect(fault.flatten()).toBe("top -> [object Object]")
+  })
+
+  it("flattens any chain to the exact join of trimmed, consecutively-deduped messages", () => {
+    const separator = " | "
+
+    fc.assert(
+      fc.property(
+        fc.array(fc.string({ minLength: 1 }), { maxLength: 8, minLength: 1 }),
+        (messages) => {
+          class LayerError extends Tagged("LayerError")() {}
+
+          let fault: Fault | undefined
+          for (const message of messages) {
+            const layer = new LayerError().withMessage(message)
+            if (fault !== undefined) layer.withCause(fault)
+            fault = layer
+          }
+          if (fault === undefined) throw new Error("unreachable: minLength is 1")
+
+          // flatten() walks head to leaf (the reverse of construction order),
+          // trims each message, drops empties, and dedupes consecutive repeats.
+          const expected: string[] = []
+          for (const message of messages.toReversed().map((value) => value.trim())) {
+            if (message !== "" && message !== expected.at(-1)) expected.push(message)
+          }
+
+          expect(fault.flatten({ separator })).toBe(expected.join(separator))
+        }
+      )
+    )
   })
 
   it("excludes method keys from serialized payload", () => {

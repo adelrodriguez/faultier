@@ -31,7 +31,8 @@ Default to using Bun instead of Node.js.
 Use `bun test` to run tests. Use `describe` to group tests by function or feature. Write test descriptions as present-tense behavioral sentences without "should" (for example: `it("returns value when function succeeds")`, `it("throws Panic when catch throws")`).
 
 - `describe` labels should be the exact function or class being tested (for example: `describe("Fault")`, `describe("withCause")`).
-- Public API tests live in `src/__tests__/` and import only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`.
+- A `__tests__/` directory tests only the files it is a sibling of: tests import only from modules in their `__tests__/` directory's parent directory, never from directories outside that scope.
+- `src/__tests__/` therefore holds the public API tests (importing only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`), and internal `src/lib/` modules get colocated suites in `src/lib/__tests__/`.
 - Public API type changes must be covered in `src/__tests__/types.test.ts`.
 - Type assertions are enforced by `bun run check` and `bun run typecheck`, not `bun test`.
 

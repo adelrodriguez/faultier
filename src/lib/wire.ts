@@ -38,8 +38,12 @@ function stringifyFallback(value: object): string {
 }
 
 export function normalizeThrown(value: unknown): SerializableValue {
-  // Non-finite numbers become null, matching JSON.stringify's behavior for nested values.
-  if (typeof value === "number") return Number.isFinite(value) ? value : null
+  // Match JSON.stringify's number semantics: non-finite numbers become null
+  // and -0 canonicalizes to 0, so the output survives transport identically.
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null
+    return value === 0 ? 0 : value
+  }
 
   if (
     typeof value === "string" ||
