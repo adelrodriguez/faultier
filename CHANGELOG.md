@@ -1,5 +1,15 @@
 # faultier
 
+## 3.1.1
+
+### Patch Changes
+
+- 768405f: Normalize a thrown `-0` cause to `0` during serialization, matching JSON transport semantics
+
+  `normalizeThrown` already canonicalizes non-finite numbers to `null` the way `JSON.stringify` does, but it let `-0` through untouched — so the in-memory wire object differed from what a consumer got back after `JSON.parse(JSON.stringify(...))`. Serialized thrown causes now survive the wire identically.
+
+  This covers thrown causes only, the one path the library normalizes. Payload and `meta` values are passed through verbatim as ever: deep JSON serializability of those values (including `-0` becoming `0` in transport) remains the consumer's documented contract.
+
 ## 3.1.0
 
 ### Minor Changes
