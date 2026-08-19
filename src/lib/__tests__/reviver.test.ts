@@ -23,7 +23,34 @@ const wireKeyArb = fc
   )
   .filter((key) => !RESERVED_FAULT_KEYS.has(key))
 
-const wirePayloadArb = fc.dictionary(wireKeyArb, fc.jsonValue({ maxDepth: 2 }), { maxKeys: 6 })
+// A reserved key together with its own __payload_-prefixed twin forces two
+// wire keys to rename onto the same target, exercising the collision-dedup
+// guard in preparePayload (a random dictionary almost never produces this).
+const collisionPairArb = fc
+  .constantFrom("toString", "unwrap", "withMeta", "flatten", "__proto__")
+  .map((key) => ({ [key]: "reserved-value", [`__payload_${key}`]: "prefixed-value" }))
+
+const wirePayloadArb = fc
+  .tuple(
+    fc.dictionary(wireKeyArb, fc.jsonValue({ maxDepth: 2 }), { maxKeys: 6 }),
+    fc.option(collisionPairArb, { nil: undefined })
+  )
+  .map(([payload, collisionPair]) => {
+    if (collisionPair === undefined) return payload
+
+    // defineProperty (not assignment or Object.assign) so a "__proto__" key
+    // lands as an own data property instead of triggering the setter.
+    for (const [key, value] of Object.entries(collisionPair)) {
+      Object.defineProperty(payload, key, {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      })
+    }
+
+    return payload
+  })
 
 function buildWire(payload: Record<string, unknown>): SerializableFault {
   const wire = {

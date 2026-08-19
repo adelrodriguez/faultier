@@ -80,8 +80,23 @@ describe("Tagged", () => {
     ])
     class ProbeError extends Tagged("ProbeError")<Record<string, string>>() {}
 
+    // Random strings almost never land on a reserved key, so mix them in
+    // explicitly to make the rejection branch reliable in every run.
+    const keyArb = fc.oneof(
+      fc.string({ maxLength: 30, minLength: 1 }),
+      fc.constantFrom(
+        ...wireEnvelopeKeys,
+        "toString",
+        "valueOf",
+        "constructor",
+        "__proto__",
+        "unwrap",
+        "withMeta"
+      )
+    )
+
     fc.assert(
-      fc.property(fc.string({ maxLength: 30, minLength: 1 }), (key) => {
+      fc.property(keyArb, (key) => {
         const construct = () => new ProbeError({ [key]: "value" })
 
         if (wireEnvelopeKeys.has(key) || key in Fault.prototype) {

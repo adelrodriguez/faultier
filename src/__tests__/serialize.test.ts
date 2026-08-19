@@ -24,9 +24,11 @@ function isReservedMirror(key: string): boolean {
 }
 
 // Canonicalized through one JSON round trip because the wire itself is JSON:
-// fc.jsonValue() can generate -0, which JSON.stringify canonicalizes to 0 (a
-// documented transport semantic, not a faultier defect), and deep equality
-// distinguishes -0 from 0.
+// fc.jsonValue() can generate -0, which JSON.stringify canonicalizes to 0 and
+// deep equality distinguishes from 0. Payload and meta values are passed
+// through verbatim by design — deep serializability is the consumer's
+// documented contract — so unlike thrown causes (which normalizeThrown
+// canonicalizes), a -0 here is expected to change across transport.
 const jsonValueArb = fc
   .jsonValue({ maxDepth: 3 })
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- structuredClone preserves -0; the point is JSON's canonicalization.
