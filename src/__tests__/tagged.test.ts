@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import fc from "fast-check"
 
 import { ReservedFieldError } from "../errors"
 import { Fault, Tagged } from "../index"
@@ -62,5 +63,34 @@ describe("Tagged", () => {
     const fault = new TimeoutError()
 
     expect(fault._tag).toBe("TimeoutError")
+  })
+
+  it("rejects a field key exactly when it collides with the wire envelope or Fault prototype", () => {
+    // Test-side mirror of the internal isReservedKey rule; if the library's
+    // rule ever drifts from this, the property fails.
+    const wireEnvelopeKeys = new Set([
+      "__faultier",
+      "_tag",
+      "cause",
+      "name",
+      "message",
+      "stack",
+      "meta",
+      "details",
+    ])
+    class ProbeError extends Tagged("ProbeError")<Record<string, string>>() {}
+
+    fc.assert(
+      fc.property(fc.string({ maxLength: 30, minLength: 1 }), (key) => {
+        const construct = () => new ProbeError({ [key]: "value" })
+
+        if (wireEnvelopeKeys.has(key) || key in Fault.prototype) {
+          expect(construct).toThrow(ReservedFieldError)
+        } else {
+          const fault = construct() as unknown as Record<string, unknown>
+          expect(fault[key]).toBe("value")
+        }
+      })
+    )
   })
 })

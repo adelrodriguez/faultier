@@ -1,7 +1,101 @@
 import { describe, expect, it } from "bun:test"
+import fc from "fast-check"
 
-import type { SerializableFault } from "../types"
+import type { SerializableFault, SerializableValue } from "../types"
 import { Fault, fromSerializable, Tagged } from "../index"
+
+// Test-side mirror of the internal isReservedKey rule: wire envelope keys
+// (documented in CONTEXT.md) plus anything reachable through Fault's
+// prototype chain. The reserved-key properties below keep this mirror honest —
+// if the library's rule drifts, they fail.
+const WIRE_ENVELOPE_KEYS = new Set([
+  "__faultier",
+  "_tag",
+  "cause",
+  "name",
+  "message",
+  "stack",
+  "meta",
+  "details",
+])
+
+function isReservedMirror(key: string): boolean {
+  return WIRE_ENVELOPE_KEYS.has(key) || key in Fault.prototype
+}
+
+// Canonicalized through one JSON round trip because the wire itself is JSON:
+// fc.jsonValue() can generate -0, which JSON.stringify canonicalizes to 0 (a
+// documented transport semantic, not a faultier defect), and deep equality
+// distinguishes -0 from 0.
+const jsonValueArb = fc
+  .jsonValue({ maxDepth: 3 })
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- structuredClone preserves -0; the point is JSON's canonicalization.
+  .map((value) => JSON.parse(JSON.stringify(value)) as SerializableValue)
+
+const payloadKeyArb = fc
+  .string({ maxLength: 25, minLength: 1 })
+  .filter((key) => !isReservedMirror(key))
+
+const payloadArb = fc.dictionary(payloadKeyArb, jsonValueArb, { maxKeys: 5 })
+
+const metaArb = fc.dictionary(payloadKeyArb, jsonValueArb, { maxKeys: 3 })
+
+const tagArb = fc.string({ maxLength: 30, minLength: 1 })
+
+type FaultSpec = {
+  tag: string
+  message: string | undefined
+  details: string | undefined
+  meta: Record<string, SerializableValue> | undefined
+  payload: Record<string, SerializableValue>
+  cause: CauseSpec | undefined
+}
+
+type CauseSpec =
+  | { kind: "fault"; value: FaultSpec }
+  | { kind: "error"; message: string }
+  | { kind: "thrown"; value: SerializableValue }
+
+const { faultSpecArb } = fc.letrec<{ faultSpecArb: FaultSpec; causeSpecArb: CauseSpec }>((tie) => ({
+  causeSpecArb: fc.oneof(
+    { depthSize: "small" },
+    fc.record({ kind: fc.constant("thrown" as const), value: jsonValueArb }),
+    fc.record({ kind: fc.constant("error" as const), message: fc.string() }),
+    fc.record({ kind: fc.constant("fault" as const), value: tie("faultSpecArb") })
+  ),
+  faultSpecArb: fc.record({
+    cause: fc.option(tie("causeSpecArb"), { nil: undefined }),
+    details: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+    message: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+    meta: fc.option(metaArb, { nil: undefined }),
+    payload: payloadArb,
+    tag: tagArb,
+  }),
+}))
+
+function buildFault(spec: FaultSpec): Fault {
+  class GeneratedFault extends Tagged(spec.tag)<Record<string, SerializableValue>>() {}
+  const fault = new GeneratedFault(spec.payload)
+
+  if (spec.message !== undefined) fault.withMessage(spec.message)
+  if (spec.details !== undefined) fault.withDetails(spec.details)
+  if (spec.meta !== undefined) fault.withMeta(spec.meta)
+
+  if (spec.cause !== undefined) {
+    if (spec.cause.kind === "fault") fault.withCause(buildFault(spec.cause.value))
+    else if (spec.cause.kind === "error") fault.withCause(new Error(spec.cause.message))
+    else fault.withCause(spec.cause.value)
+  }
+
+  return fault
+}
+
+function transport(value: Fault | SerializableFault): SerializableFault {
+  // Intentionally a JSON round-trip: the properties under test cover transport
+  // over a real wire, not structuredClone semantics.
+  // oxlint-disable-next-line unicorn/prefer-structured-clone
+  return JSON.parse(JSON.stringify(value)) as SerializableFault
+}
 
 describe("toSerializable", () => {
   it("serializes own payload fields alongside reserved fields", () => {
@@ -107,6 +201,31 @@ describe("toSerializable", () => {
     const restored = fromSerializable(JSON.parse(JSON.stringify(fault)) as SerializableFault)
 
     expect(restored.cause).toBe("[object Object]")
+  })
+
+  it("survives any thrown cause, and the result always revives", () => {
+    class SurvivorError extends Tagged("SurvivorError")() {}
+
+    fc.assert(
+      fc.property(
+        fc.anything({
+          withBigInt: true,
+          withDate: true,
+          withMap: true,
+          withNullPrototype: true,
+          withObjectString: true,
+          withSet: true,
+          withSparseArray: true,
+          withTypedArray: true,
+        }),
+        (thrown) => {
+          const fault = new SurvivorError().withCause(thrown)
+          const revived = fromSerializable(transport(fault))
+
+          expect(revived._tag).toBe("SurvivorError")
+        }
+      )
+    )
   })
 })
 
@@ -284,5 +403,100 @@ describe("fromSerializable", () => {
         name: "TestError",
       } as unknown as SerializableFault)
     ).toThrow("meta must be an object")
+  })
+
+  it("preserves tag, message, details, meta, and payload across any JSON transport round trip", () => {
+    fc.assert(
+      fc.property(faultSpecArb, (spec) => {
+        const fault = buildFault(spec)
+        const revived = fromSerializable(transport(fault))
+
+        expect(revived._tag).toBe(fault._tag)
+        expect(revived.message).toBe(fault.message)
+        expect(revived.details).toEqual(fault.details)
+        expect(revived.meta).toEqual(fault.meta)
+
+        const revivedRecord = revived as unknown as Record<string, unknown>
+        for (const [key, value] of Object.entries(spec.payload)) {
+          expect(revivedRecord[key]).toEqual(value)
+        }
+      })
+    )
+  })
+
+  it("preserves the tag chain and merged context for any cause chain", () => {
+    fc.assert(
+      fc.property(faultSpecArb, (spec) => {
+        const fault = buildFault(spec)
+        const revived = fromSerializable(transport(fault))
+
+        expect(revived.getTags()).toEqual(fault.getTags())
+        expect(revived.getContext()).toEqual(fault.getContext())
+      })
+    )
+  })
+
+  it("re-serializes a revived fault to the same wire object", () => {
+    fc.assert(
+      fc.property(faultSpecArb, (spec) => {
+        const fault = buildFault(spec)
+        const wire = transport(fault)
+        const revived = fromSerializable(wire)
+
+        expect(transport(revived)).toEqual(wire)
+      })
+    )
+  })
+
+  it("caps revived cause chains at the documented depth of 100", () => {
+    fc.assert(
+      fc.property(fc.integer({ max: 150, min: 0 }), (edges) => {
+        class LinkError extends Tagged("LinkError")<{ index: number }>() {}
+
+        let fault: Fault = new LinkError({ index: 0 })
+        for (let index = 1; index <= edges; index += 1) {
+          fault = new LinkError({ index }).withCause(fault)
+        }
+
+        const revived = fromSerializable(transport(fault))
+
+        expect(revived.getTags()).toEqual(fault.getTags())
+        expect(revived.unwrap().length).toBe(Math.min(edges + 1, 101))
+      }),
+      { numRuns: 30 }
+    )
+  })
+
+  it("renames hostile wire keys instead of dropping their values", () => {
+    const hostileKeyArb = fc
+      .oneof(
+        fc.string({ maxLength: 25, minLength: 1 }),
+        fc.constantFrom("toString", "unwrap", "withMeta", "__proto__", "constructor"),
+        fc.string({ maxLength: 15, minLength: 1 }).map((key) => `__payload_${key}`)
+      )
+      .filter((key) => !WIRE_ENVELOPE_KEYS.has(key))
+
+    fc.assert(
+      fc.property(hostileKeyArb, jsonValueArb, (key, value) => {
+        const wire = {
+          __faultier: true,
+          _tag: "HostileError",
+          message: "hostile payload",
+          name: "HostileError",
+        } as SerializableFault
+        Object.defineProperty(wire, key, { enumerable: true, value })
+
+        const revived = fromSerializable(transport(wire))
+        const restored = Object.entries(revived).filter(
+          ([revivedKey]) => revivedKey === key || /^(?:__payload_)+/.test(revivedKey)
+        )
+
+        // The value must be reachable under the original key or a
+        // __payload_-prefixed rename — never silently dropped.
+        expect(restored.some(([, restoredValue]) => Bun.deepEquals(restoredValue, value))).toBe(
+          true
+        )
+      })
+    )
   })
 })
