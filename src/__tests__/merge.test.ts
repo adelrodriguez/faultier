@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test"
+import fc from "fast-check"
 
+import type { Fault } from "../index"
 import { RegistryMergeConflictError } from "../errors"
 import { merge, registry, Tagged } from "../index"
 
@@ -8,6 +10,28 @@ class TimeoutError extends Tagged("TimeoutError")() {}
 class DatabaseError extends Tagged("DatabaseError")<{ query: string }>() {}
 class PaymentError extends Tagged("PaymentError")<{ invoiceId: string }>() {}
 class TimeoutConflictError extends Tagged("TimeoutError")<{ retryable: boolean }>() {}
+
+// The registry/merge generics are designed around literal tag maps; the
+// property tests below build registries from generated tags, so they go
+// through this deliberately loosened surface. Runtime behavior is what's
+// under test.
+type DynamicRegistry = {
+  readonly tags: readonly string[]
+  create: (tag: string) => Fault
+}
+
+function dynamicRegistry(
+  tags: readonly string[],
+  ctors: ReadonlyMap<string, unknown>
+): DynamicRegistry {
+  const entries = Object.fromEntries(tags.map((tag) => [tag, ctors.get(tag)]))
+
+  return registry(entries as Parameters<typeof registry>[0]) as unknown as DynamicRegistry
+}
+
+const mergeDynamic = merge as unknown as (
+  ...registries: readonly DynamicRegistry[]
+) => DynamicRegistry
 
 describe("merge", () => {
   it("throws for conflicting duplicate tags", () => {
@@ -90,5 +114,87 @@ describe("merge", () => {
 
     const appFault = MergedFault.create("NotFoundError", { id: "123" })
     expect(appFault.id).toBe("123")
+  })
+
+  it("keeps first-seen tag order for any sequence of compatible registries", () => {
+    const registriesArb = fc
+      .uniqueArray(fc.string({ maxLength: 12, minLength: 1 }), { maxLength: 8, minLength: 3 })
+      .chain((pool) =>
+        fc
+          .array(fc.subarray(pool, { minLength: 1 }), { maxLength: 3, minLength: 2 })
+          .map((picks) => {
+            const ctors = new Map(pool.map((tag) => [tag, class extends Tagged(tag)() {}]))
+            return picks.map((tags) => dynamicRegistry(tags, ctors))
+          })
+      )
+
+    fc.assert(
+      fc.property(registriesArb, (registries) => {
+        const merged = mergeDynamic(...registries)
+
+        const expected: string[] = []
+        for (const reg of registries) {
+          for (const tag of reg.tags) {
+            if (!expected.includes(tag)) expected.push(tag)
+          }
+        }
+
+        expect(merged.tags).toEqual(expected)
+      })
+    )
+  })
+
+  it("is associative over compatible registries", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.string({ maxLength: 12, minLength: 1 }), { maxLength: 6, minLength: 3 }),
+        fc.infiniteStream(fc.integer({ max: 2, min: 0 })),
+        (pool, assignments) => {
+          const ctors = new Map(pool.map((tag) => [tag, class extends Tagged(tag)() {}]))
+          const groups: string[][] = [[], [], []]
+          for (const tag of pool) {
+            const group = groups[assignments.next().value as number]
+            group?.push(tag)
+          }
+
+          const [a, b, c] = groups.map((tags) => dynamicRegistry(tags, ctors))
+          if (a === undefined || b === undefined || c === undefined) {
+            throw new Error("unreachable: three groups are always created")
+          }
+
+          const left = mergeDynamic(mergeDynamic(a, b), c)
+          const right = mergeDynamic(a, mergeDynamic(b, c))
+
+          expect(left.tags).toEqual(right.tags)
+
+          for (const tag of left.tags) {
+            const expectedCtor = ctors.get(tag)
+            if (expectedCtor === undefined) throw new Error("unreachable: tag comes from pool")
+
+            expect(left.create(tag)).toBeInstanceOf(expectedCtor)
+            expect(right.create(tag)).toBeInstanceOf(expectedCtor)
+          }
+        }
+      ),
+      { numRuns: 50 }
+    )
+  })
+
+  it("is idempotent and throws only when a shared tag maps to a different constructor", () => {
+    fc.assert(
+      fc.property(fc.string({ maxLength: 12, minLength: 1 }), (tag) => {
+        class FirstError extends Tagged(tag)() {}
+        class SecondError extends Tagged(tag)() {}
+
+        const first = dynamicRegistry([tag], new Map([[tag, FirstError]]))
+        const alias = dynamicRegistry([tag], new Map([[tag, FirstError]]))
+        const conflicting = dynamicRegistry([tag], new Map([[tag, SecondError]]))
+
+        expect(mergeDynamic(first, first).tags).toEqual([tag])
+        expect(mergeDynamic(first, alias).tags).toEqual([tag])
+        expect(() => mergeDynamic(first, conflicting)).toThrow(RegistryMergeConflictError)
+      }),
+      { numRuns: 50 }
+    )
   })
 })
