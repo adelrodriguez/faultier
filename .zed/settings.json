@@ -108,11 +108,8 @@
     "oxfmt": {
       "initialization_options": {
         "settings": {
-          "configPath": null,
-          "fmt.experimental": true,
-          "run": "onSave",
-          "typeAware": false,
-          "unusedDisableDirectives": false
+          "fmt.configPath": null,
+          "run": "onSave"
         }
       }
     },
