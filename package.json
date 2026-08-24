@@ -48,7 +48,7 @@
     "dev": "tsdown --watch",
     "fix": "adamantite fix",
     "format": "adamantite format",
-    "release": "npm publish && changeset tag",
+    "release": "node scripts/release.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:package": "pnpm run build && node scripts/verify-package.ts",

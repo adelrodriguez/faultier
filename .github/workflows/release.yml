@@ -25,11 +25,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Setup Node.js to enable trusted publishing with OIDC authentication.
-      # The registry-url configures npm to use GitHub Actions OIDC tokens for
-      # authentication, eliminating the need for NPM_TOKEN secrets. When
-      # changeset publish runs npm publish, it will automatically use OIDC
-      # and generate provenance attestations.
+      # Setup Node.js for the build and release scripts.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
@@ -45,7 +41,7 @@ jobs:
       - name: Build project
         run: pnpm run build
 
-      # Configure npm authentication immediately before publishing.
+      # Configure npm's OIDC authentication immediately before publishing.
       - name: Setup npm registry
         uses: actions/setup-node@v7
         with:

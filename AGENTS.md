@@ -13,6 +13,7 @@
 
 Use pnpm for package management and package scripts, and Node.js for standalone scripts.
 
+- Use the Node.js version declared in `.node-version`.
 - Use `node <file>` for standalone scripts.
 - Use `pnpm test` to run Vitest.
 - Use `pnpm install` to install dependencies.
