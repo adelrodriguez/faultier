@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process"
+import { existsSync, rmSync, writeFileSync } from "node:fs"
 import type * as FaultierErrorsContract from "../src/errors"
 import type * as FaultierContract from "../src/index"
 
@@ -54,16 +56,12 @@ const outputPaths = [
   "dist/types.js",
 ] as const
 
-const outputResults = await Promise.all(
-  outputPaths.map(async (path) => ({ exists: await Bun.file(path).exists(), path }))
-)
-
-for (const { exists, path } of outputResults) {
-  if (!exists) throw new Error(`Missing package output: ${path}`)
+for (const path of outputPaths) {
+  if (!existsSync(path)) throw new Error(`Missing package output: ${path}`)
 }
 
 const consumerPath = "dist/node-next-consumer.ts"
-await Bun.write(
+writeFileSync(
   consumerPath,
   `import { Tagged, registry } from "faultier"
 import { ReservedFieldError } from "faultier/errors"
@@ -81,28 +79,26 @@ void ReservedFieldError
 `
 )
 
-const consumerCheck = Bun.spawn(
-  [
-    "bunx",
-    "tsc",
-    "--ignoreConfig",
-    "--noEmit",
-    "--strict",
-    "--skipLibCheck",
-    "false",
-    "--module",
-    "NodeNext",
-    "--moduleResolution",
-    "NodeNext",
-    "--target",
-    "ESNext",
-    consumerPath,
-  ],
-  { stderr: "inherit", stdout: "inherit" }
-)
-const consumerExitCode = await consumerCheck.exited
-await Bun.file(consumerPath).delete()
-
-if (consumerExitCode !== 0) {
-  throw new Error("NodeNext package consumer typecheck failed")
+try {
+  execFileSync(
+    process.execPath,
+    [
+      "node_modules/typescript/bin/tsc",
+      "--ignoreConfig",
+      "--noEmit",
+      "--strict",
+      "--skipLibCheck",
+      "false",
+      "--module",
+      "NodeNext",
+      "--moduleResolution",
+      "NodeNext",
+      "--target",
+      "ESNext",
+      consumerPath,
+    ],
+    { stdio: "inherit" }
+  )
+} finally {
+  rmSync(consumerPath, { force: true })
 }

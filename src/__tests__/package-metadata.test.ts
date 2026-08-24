@@ -1,10 +1,11 @@
-import { describe, expect, it } from "bun:test"
+import { readFile } from "node:fs/promises"
+import { describe, expect, it } from "vitest"
 
 describe("package metadata", () => {
   it("publishes the root, errors, and types entrypoints", async () => {
-    const packageJson: unknown = await Bun.file(
-      new URL("../../package.json", import.meta.url)
-    ).json()
+    const packageJson: unknown = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8")
+    )
 
     expect(packageJson).toHaveProperty("exports", {
       ".": {

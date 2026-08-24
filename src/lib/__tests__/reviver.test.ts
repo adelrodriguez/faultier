@@ -1,5 +1,6 @@
-import { describe, expect, it } from "bun:test"
+import { isDeepStrictEqual } from "node:util"
 import fc from "fast-check"
+import { describe, expect, it } from "vitest"
 
 import { Fault, isReservedKey } from "../fault"
 import { fromSerializable } from "../reviver"
@@ -97,7 +98,7 @@ describe("fromSerializable", () => {
             (candidate) =>
               (candidate === key ||
                 (PAYLOAD_PREFIX_PATTERN.test(candidate) && candidate.endsWith(key))) &&
-              Bun.deepEquals(revivedRecord[candidate], value)
+              isDeepStrictEqual(revivedRecord[candidate], value)
           )
 
           expect(matches.length).toBeGreaterThan(0)
@@ -123,8 +124,8 @@ describe("fromSerializable", () => {
         try {
           expect(fromSerializable(input as SerializableFault)).toBeInstanceOf(Fault)
         } catch (error) {
-          expect(error).toBeInstanceOf(Error)
-          expect((error as Error).message).toStartWith("Invalid Faultier payload")
+          if (!(error instanceof Error)) throw error
+          expect(error.message).toMatch(/^Invalid Faultier payload/)
         }
       })
     )

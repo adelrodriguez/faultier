@@ -6,7 +6,8 @@ Thank you for your interest in contributing to Faultier! This document provides 
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) 1.3.0 or higher
+- [Node.js](https://nodejs.org) 24 or higher
+- [pnpm](https://pnpm.io) 12 or higher
 - TypeScript 5.4 or higher
 
 ### Installation
@@ -19,7 +20,7 @@ Thank you for your interest in contributing to Faultier! This document provides 
    ```
 3. Install dependencies:
    ```bash
-   bun install
+   pnpm install
    ```
 
 ## Project Structure
@@ -50,32 +51,32 @@ See [`CONTEXT.md`](CONTEXT.md) for the domain glossary, behavioral model, and de
 
 ```bash
 # Run all tests
-bun test
+pnpm test
 
 # Watch mode for development
-bun run test:watch
+pnpm run test:watch
 
 # With coverage
-bun run test:coverage
+pnpm run test:coverage
 ```
 
 ### Code Quality
 
 ```bash
 # Check linting and formatting
-bun run check
+pnpm run check
 
 # Format files
-bun run format
+pnpm run format
 
 # Auto-fix linting issues
-bun run fix
+pnpm run fix
 
 # Type checking
-bun run typecheck
+pnpm run typecheck
 
 # Find unused code and dependencies
-bun run analyze
+pnpm run analyze
 ```
 
 All checks must pass before submitting a PR.
@@ -84,13 +85,13 @@ All checks must pass before submitting a PR.
 
 ```bash
 # Build the package
-bun run build
+pnpm run build
 
 # Watch mode
-bun run dev
+pnpm run dev
 
 # Build and verify all published entry points
-bun run test:package
+pnpm run test:package
 ```
 
 ## Making Changes
@@ -128,7 +129,7 @@ Allows users to define custom serialization logic for context objects.
 - Ensure all tests pass before submitting
 - Public tests live in `src/__tests__/` and import only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`
 - Public API type changes require coverage in `src/__tests__/types.test.ts`
-- Type assertions are checked by `bun run check` and `bun run typecheck`, not `bun test`
+- Type assertions are checked by `pnpm run check` and `pnpm run typecheck`, not Vitest
 - Internal tests are appropriate only when behavior cannot be reached through a public entry point
 
 ## Changesets Workflow
@@ -153,7 +154,7 @@ Skip changesets for:
 ### Creating a Changeset
 
 ```bash
-bunx changeset
+pnpm exec changeset
 ```
 
 Follow the prompts to:
@@ -178,11 +179,11 @@ Choose a major bump only when the breaking release has been explicitly planned a
 Ensure your PR meets these requirements:
 
 - [ ] Code follows the project's style guidelines
-- [ ] Formatting passes (`bun run format`)
-- [ ] All tests pass (`bun test`)
-- [ ] Type checking passes (`bun run typecheck`)
-- [ ] Linting passes (`bun run check`)
-- [ ] Package verification passes for entrypoint/build changes (`bun run test:package`)
+- [ ] Formatting passes (`pnpm run format`)
+- [ ] All tests pass (`pnpm test`)
+- [ ] Type checking passes (`pnpm run typecheck`)
+- [ ] Linting passes (`pnpm run check`)
+- [ ] Package verification passes for entrypoint/build changes (`pnpm run test:package`)
 - [ ] Changeset added (if applicable)
 - [ ] Documentation updated (if needed)
 

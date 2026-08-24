@@ -16,7 +16,7 @@ export type FlattenOptions = {
   formatter?: (value: string) => string
 }
 
-// A WeakMap rather than a #private field: bunup's declaration emitter turns
+// A WeakMap rather than a #private field: the declaration emitter turns
 // native private fields into a bare `private;` member that breaks consumer
 // typechecking (see scripts/verify-package.ts). Side benefit: invisible to
 // Object.keys, so it needs no reserved-key entry.

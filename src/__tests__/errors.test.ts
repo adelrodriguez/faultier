@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "vitest"
 
 import { RegistryMergeConflictError, RegistryTagMismatchError, ReservedFieldError } from "../errors"
 import { merge, registry, Tagged } from "../index"
