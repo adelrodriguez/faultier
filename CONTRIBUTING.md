@@ -7,7 +7,7 @@ Thank you for your interest in contributing to Faultier! This document provides 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org) 24 or higher
-- [pnpm](https://pnpm.io) 12 or higher
+- [pnpm](https://pnpm.io) 11 or higher
 - TypeScript 5.4 or higher
 
 ### Installation

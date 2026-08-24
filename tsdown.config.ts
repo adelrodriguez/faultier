@@ -5,9 +5,9 @@ export default defineConfig({
   dts: true,
   entry: ["src/index.ts", "src/errors.ts", "src/types.ts"],
   fixedExtension: false,
-  minify: true,
   outDir: "dist",
   platform: "node",
   sourcemap: true,
+  target: "node18",
   tsconfig: "tsconfig.build.json",
 })
