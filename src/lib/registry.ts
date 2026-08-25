@@ -109,7 +109,12 @@ export function registryFromEntries(
 ): FaultRegistry<Record<string, AnyFaultCtor>> {
   const ctors: Record<string, AnyFaultCtor> = {}
   for (const [tag, ctor] of entries) {
-    ctors[tag] = ctor
+    Object.defineProperty(ctors, tag, {
+      configurable: true,
+      enumerable: true,
+      value: ctor,
+      writable: true,
+    })
   }
   return createRegistry(ctors, entries)
 }

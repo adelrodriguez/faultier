@@ -72,6 +72,20 @@ describe("merge", () => {
     expect(merge(SecondFault, FirstFault).tags).toEqual(["2", "1"])
   })
 
+  it("creates faults whose tags collide with object and constructor properties after merging", () => {
+    class PrototypeError extends Tagged("__proto__")() {}
+    class LengthError extends Tagged("length")() {}
+
+    const PrototypeFault = registry({ ["__proto__"]: PrototypeError })
+    const LengthFault = registry({ length: LengthError })
+
+    const MergedFault = merge(PrototypeFault, LengthFault)
+
+    expect(MergedFault.tags).toEqual(["__proto__", "length"])
+    expect(MergedFault.create("__proto__")).toBeInstanceOf(PrototypeError)
+    expect(MergedFault.create("length")).toBeInstanceOf(LengthError)
+  })
+
   it("rejects registry objects without internal state", () => {
     const AppFault = registry({ NotFoundError, TimeoutError })
     const DbFault = registry({ DatabaseError })
