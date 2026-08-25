@@ -1,5 +1,5 @@
 # PULLFROG ACTION — DO NOT EDIT EXCEPT WHERE INDICATED
-name: pullfrog
+name: Pullfrog
 run-name: ${{ inputs.name || github.workflow }}
 on:
   workflow_dispatch:
@@ -21,11 +21,11 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: checkout code
+      - name: Checkout code
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
-      - name: run agent
+      - name: Run agent
         uses: pullfrog/pullfrog@v0
         with:
           prompt: ${{ inputs.prompt }}
