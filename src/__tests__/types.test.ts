@@ -1,5 +1,5 @@
-// Type assertions are enforced by `bun run check` and `bun run typecheck`, not `bun test`.
-import { describe, it } from "bun:test"
+// Type assertions are enforced by `pnpm run check` and `pnpm run typecheck`, not Vitest.
+import { describe, it } from "vitest"
 
 import type {
   ByTag,

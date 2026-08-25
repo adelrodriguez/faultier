@@ -1,5 +1,6 @@
-import { describe, expect, it } from "bun:test"
+import { isDeepStrictEqual } from "node:util"
 import fc from "fast-check"
+import { describe, expect, it } from "vitest"
 
 import type { SerializableFault, SerializableValue } from "../types"
 import { Fault, fromSerializable, Tagged } from "../index"
@@ -495,7 +496,7 @@ describe("fromSerializable", () => {
 
         // The value must be reachable under the original key or a
         // __payload_-prefixed rename — never silently dropped.
-        expect(restored.some(([, restoredValue]) => Bun.deepEquals(restoredValue, value))).toBe(
+        expect(restored.some(([, restoredValue]) => isDeepStrictEqual(restoredValue, value))).toBe(
           true
         )
       })

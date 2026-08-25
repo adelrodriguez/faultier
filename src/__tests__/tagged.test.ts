@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test"
 import fc from "fast-check"
+import { describe, expect, it } from "vitest"
 
 import { ReservedFieldError } from "../errors"
 import { Fault, Tagged } from "../index"

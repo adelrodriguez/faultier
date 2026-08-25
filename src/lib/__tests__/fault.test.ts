@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test"
 import fc from "fast-check"
+import { describe, expect, it } from "vitest"
 
 import { Fault, isReservedKey } from "../fault"
 import { RESERVED_FAULT_KEYS } from "../wire"
@@ -50,7 +50,7 @@ describe("isReservedKey", () => {
 
           if (!isReservedKey(key)) {
             expect(Object.hasOwn(serialized, key)).toBe(true)
-            expect(serialized[key]).toEqual(value as (typeof serialized)[string])
+            expect(serialized[key]).toEqual(value)
           } else if (!RESERVED_FAULT_KEYS.has(key)) {
             // Prototype-derived reserved keys (Fault methods, Error/Object
             // built-ins) must never leak into the wire object; envelope keys
