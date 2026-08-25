@@ -1,5 +1,5 @@
 // Type assertions are enforced by `pnpm run check` and `pnpm run typecheck`, not Vitest.
-import { describe, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import type {
   ByTag,
@@ -20,6 +20,7 @@ import {
   registry,
   Tagged,
 } from "../index"
+import * as FaultierTypes from "../types"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 type Equal<A, B> =
@@ -49,6 +50,10 @@ type AppError = NotFoundError | TimeoutError | PaymentError
 
 // ── Positive type-level tests ────────────────────────────────────────────────
 describe("type-level inference", () => {
+  it("has no runtime exports from the types entrypoint", () => {
+    expect(Object.keys(FaultierTypes)).toEqual([])
+  })
+
   it("gives Tagged instances the correct _tag literal type", () => {
     const fault = new NotFoundError({ id: "123" })
 

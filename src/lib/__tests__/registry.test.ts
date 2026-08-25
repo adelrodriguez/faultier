@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import type { SerializableFault } from "../types"
+import type { SerializableFault } from "../wire"
 import { RegistryTagMismatchError } from "../errors"
-import { Fault, registry, Tagged } from "../index"
+import { Fault } from "../fault"
+import { registry } from "../registry"
+import { Tagged } from "../tagged"
 
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}
