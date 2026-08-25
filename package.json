@@ -48,16 +48,16 @@
     "dev": "tsdown --watch",
     "fix": "adamantite fix",
     "format": "adamantite format",
-    "release": "node scripts/release.ts",
+    "release": "changeset publish",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:package": "pnpm run build && node scripts/verify-package.ts",
     "test:watch": "vitest",
     "typecheck": "adamantite check",
-    "version": "changeset version && pnpm run format"
+    "version": "changeset version"
   },
   "devDependencies": {
-    "@changesets/cli": "2.29.8",
+    "@changesets/cli": "3.0.0",
     "@types/node": "24.13.3",
     "@vitest/coverage-v8": "4.1.11",
     "adamantite": "0.37.0",

@@ -1,11 +1,8 @@
-name: release
+name: Release
 
 on:
-  workflow_run:
-    workflows: ["tests"]
+  push:
     branches: [main]
-    types:
-      - completed
 
 permissions:
   contents: write
@@ -18,21 +15,23 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      # Setup Node.js for the build and release scripts.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
+      # Setup Node.js configures the npm registry. Changesets uses pnpm publish
+      # in this workspace. pnpm uses the OIDC permission for trusted publishing
+      # and generates provenance attestations when the registry enables it.
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: ".node-version"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install dependencies
@@ -41,20 +40,12 @@ jobs:
       - name: Build project
         run: pnpm run build
 
-      # Configure npm's OIDC authentication immediately before publishing.
-      - name: Setup npm registry
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ".node-version"
-          registry-url: "https://registry.npmjs.org"
-
       - name: Create Release Pull Request or Publish to npm
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          publish: pnpm run release
-          version: pnpm run version
-          title: "chore: release"
+          publish-script: pnpm run release
+          version-script: pnpm run version
+          pr-title: "chore: release"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOME: ${{ github.workspace }}
