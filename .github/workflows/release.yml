@@ -1,4 +1,4 @@
-name: Release
+name: release
 
 on:
   workflow_run:
@@ -19,32 +19,32 @@ jobs:
     timeout-minutes: 15
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Checkout code
+      - name: checkout code
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Setup pnpm
+      - name: setup pnpm
         uses: pnpm/action-setup@v6
 
       # Setup Node.js configures the npm registry. Changesets uses pnpm publish
       # in this workspace. pnpm uses the OIDC permission for trusted publishing
       # and generates provenance attestations when the registry enables it.
-      - name: Setup Node.js
+      - name: setup node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: ".node-version"
           registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
-      - name: Install dependencies
+      - name: install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build project
+      - name: build project
         run: pnpm run build
 
-      - name: Create Release Pull Request or Publish to npm
+      - name: create release pull request or publish to npm
         id: changesets
         uses: changesets/action@v2
         with:

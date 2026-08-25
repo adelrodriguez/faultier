@@ -31,20 +31,20 @@ jobs:
             command: pnpm run analyze
 
     steps:
-      - name: Checkout
+      - name: checkout
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
+      - name: setup pnpm
         uses: pnpm/action-setup@v6
 
-      - name: Setup Node.js
+      - name: setup node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: ".node-version"
           cache: pnpm
 
-      - name: Install dependencies
+      - name: install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run ${{ matrix.name }}
+      - name: run ${{ matrix.name }}
         run: ${{ matrix.command }}
