@@ -1,9 +1,11 @@
 import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
-import type { Fault } from "../index"
+import type { Fault } from "../fault"
 import { RegistryMergeConflictError } from "../errors"
-import { merge, registry, Tagged } from "../index"
+import { merge } from "../merge"
+import { registry } from "../registry"
+import { Tagged } from "../tagged"
 
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}

@@ -30,8 +30,9 @@ src/
 ├── index.ts          # Core runtime entry point
 ├── errors.ts         # faultier/errors entry point
 ├── types.ts          # faultier/types entry point
-├── __tests__/        # Public API and type-level tests
+├── __tests__/        # Public entry-point and type-contract tests
 └── lib/              # Internal implementation modules
+    ├── __tests__/    # Unit tests for the sibling implementation modules
     ├── fault.ts
     ├── tagged.ts
     ├── registry.ts
@@ -127,10 +128,11 @@ Allows users to define custom serialization logic for context objects.
 - Add tests for new features
 - Update tests when modifying existing functionality
 - Ensure all tests pass before submitting
+- A `__tests__/` directory tests only the files in its parent directory
 - Public tests live in `src/__tests__/` and import only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`
+- Unit tests for `src/lib/` modules live in `src/lib/__tests__/` and import only from `src/lib/`
 - Public API type changes require coverage in `src/__tests__/types.test.ts`
 - Type assertions are checked by `pnpm run check` and `pnpm run typecheck`, not Vitest
-- Internal tests are appropriate only when behavior cannot be reached through a public entry point
 
 ## Changesets Workflow
 

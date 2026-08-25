@@ -1,5 +1,5 @@
 // Type assertions are enforced by `pnpm run check` and `pnpm run typecheck`, not Vitest.
-import { describe, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import type {
   ByTag,
@@ -20,6 +20,13 @@ import {
   registry,
   Tagged,
 } from "../index"
+import * as FaultierTypes from "../types"
+
+describe("types", () => {
+  it("has no runtime exports from the types entrypoint", () => {
+    expect(Object.keys(FaultierTypes)).toEqual([])
+  })
+})
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 type Equal<A, B> =
