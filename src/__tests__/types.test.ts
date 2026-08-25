@@ -22,6 +22,12 @@ import {
 } from "../index"
 import * as FaultierTypes from "../types"
 
+describe("types", () => {
+  it("has no runtime exports from the types entrypoint", () => {
+    expect(Object.keys(FaultierTypes)).toEqual([])
+  })
+})
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
@@ -50,10 +56,6 @@ type AppError = NotFoundError | TimeoutError | PaymentError
 
 // ── Positive type-level tests ────────────────────────────────────────────────
 describe("type-level inference", () => {
-  it("has no runtime exports from the types entrypoint", () => {
-    expect(Object.keys(FaultierTypes)).toEqual([])
-  })
-
   it("gives Tagged instances the correct _tag literal type", () => {
     const fault = new NotFoundError({ id: "123" })
 
