@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Faultier! This document provides 
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) 24 or higher
+- [Node.js](https://nodejs.org) 26 or higher
 - [pnpm](https://pnpm.io) 11 or higher
 - TypeScript 5.4 or higher
 
@@ -67,10 +67,7 @@ pnpm run test:coverage
 # Check linting and formatting
 pnpm run check
 
-# Format files
-pnpm run format
-
-# Auto-fix linting issues
+# Apply formatting and auto-fix linting issues
 pnpm run fix
 
 # Type checking
@@ -181,10 +178,9 @@ Choose a major bump only when the breaking release has been explicitly planned a
 Ensure your PR meets these requirements:
 
 - [ ] Code follows the project's style guidelines
-- [ ] Formatting passes (`pnpm run format`)
 - [ ] All tests pass (`pnpm test`)
 - [ ] Type checking passes (`pnpm run typecheck`)
-- [ ] Linting passes (`pnpm run check`)
+- [ ] Linting and formatting pass (`pnpm run check`)
 - [ ] Package verification passes for entrypoint/build changes (`pnpm run test:package`)
 - [ ] Changeset added (if applicable)
 - [ ] Documentation updated (if needed)

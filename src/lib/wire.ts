@@ -46,10 +46,10 @@ export function normalizeThrown(value: unknown): SerializableValue {
   }
 
   if (
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    value === null ||
-    value === undefined
+    typeof value === "string"
+    || typeof value === "boolean"
+    || value === null
+    || value === undefined
   ) {
     return value
   }

@@ -9,8 +9,8 @@ type TaggedArgs<Fields extends Record<string, SerializableValue>> = keyof Fields
 export type TaggedInstance<
   Tag extends string,
   Fields extends Record<string, SerializableValue>,
-> = Fault &
-  Readonly<Fields> & {
+> = Fault
+  & Readonly<Fields> & {
     readonly _tag: Tag
   }
 

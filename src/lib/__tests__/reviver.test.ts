@@ -96,9 +96,9 @@ describe("fromSerializable", () => {
         for (const [key, value] of Object.entries(payload)) {
           const matches = payloadOwnKeys.filter(
             (candidate) =>
-              (candidate === key ||
-                (PAYLOAD_PREFIX_PATTERN.test(candidate) && candidate.endsWith(key))) &&
-              isDeepStrictEqual(revivedRecord[candidate], value)
+              (candidate === key
+                || (PAYLOAD_PREFIX_PATTERN.test(candidate) && candidate.endsWith(key)))
+              && isDeepStrictEqual(revivedRecord[candidate], value)
           )
 
           expect(matches.length).toBeGreaterThan(0)
