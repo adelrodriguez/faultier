@@ -47,7 +47,6 @@
     "check": "adamantite check",
     "dev": "tsdown --watch",
     "fix": "adamantite fix",
-    "format": "adamantite format",
     "release": "changeset publish",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -57,18 +56,18 @@
     "version": "changeset version"
   },
   "devDependencies": {
-    "@changesets/cli": "3.0.0",
-    "@types/node": "24.13.3",
-    "@vitest/coverage-v8": "4.1.11",
-    "adamantite": "0.37.0",
-    "fast-check": "4.9.0",
+    "@changesets/cli": "3.0.3",
+    "@types/node": "26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
+    "adamantite": "0.41.0",
+    "fast-check": "4.10.2",
     "knip": "6.32.2",
-    "oxfmt": "0.63.0",
-    "oxlint": "1.79.0",
+    "oxfmt": "0.65.0",
+    "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2001",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.1"
   },
   "packageManager": "pnpm@11.23.0"
 }

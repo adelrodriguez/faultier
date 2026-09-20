@@ -32,10 +32,10 @@ class DeserializedFault extends Fault {
 
 function assertSerializableFault(value: unknown): asserts value is SerializableFault {
   if (
-    typeof value !== "object" ||
-    value === null ||
-    !("__faultier" in value) ||
-    value.__faultier !== true
+    typeof value !== "object"
+    || value === null
+    || !("__faultier" in value)
+    || value.__faultier !== true
   ) {
     throw new Error("Invalid Faultier payload: expected __faultier: true")
   }
@@ -45,9 +45,9 @@ function assertSerializableFault(value: unknown): asserts value is SerializableF
   }
 
   if (
-    "meta" in value &&
-    value.meta !== undefined &&
-    (typeof value.meta !== "object" || value.meta === null)
+    "meta" in value
+    && value.meta !== undefined
+    && (typeof value.meta !== "object" || value.meta === null)
   ) {
     throw new Error("Invalid Faultier payload: meta must be an object")
   }
@@ -85,9 +85,9 @@ function preparePayload(payload: Record<string, unknown>): PreparedPayload {
     let targetKey = key
 
     while (
-      isReservedKey(targetKey) ||
-      assignedKeys.has(targetKey) ||
-      (targetKey !== key && rawKeys.has(targetKey))
+      isReservedKey(targetKey)
+      || assignedKeys.has(targetKey)
+      || (targetKey !== key && rawKeys.has(targetKey))
     ) {
       targetKey = `${PAYLOAD_PREFIX}${targetKey}`
     }
