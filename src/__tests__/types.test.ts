@@ -371,6 +371,23 @@ class DerivedMessageError extends Tagged("DerivedMessageError")<{ id: string }>(
   }
 }
 
+class FabricatedFieldsError extends Tagged("FabricatedFieldsError")<{ id: string }>() {
+  constructor() {
+    super({ id: "fabricated" })
+  }
+}
+
+class FieldlessDefaultsError extends Tagged("FieldlessDefaultsError")() {
+  constructor() {
+    super()
+    this.message = "Timed out"
+  }
+
+  isRetryable(): boolean {
+    return true
+  }
+}
+
 function _registeredConstructorContract() {
   // @ts-expect-error -- positional constructors cannot be revived from payload fields
   registry({ PositionalError })
@@ -381,7 +398,15 @@ function _registeredConstructorContract() {
   // @ts-expect-error -- one invalid entry rejects the call even next to valid ones
   registry({ DerivedMessageError, PositionalError })
 
-  const Valid = registry({ DerivedMessageError, NotFoundError, TimeoutError })
+  // @ts-expect-error -- a parameterless constructor would drop the wire payload fields
+  registry({ FabricatedFieldsError })
+
+  const Valid = registry({
+    DerivedMessageError,
+    FieldlessDefaultsError,
+    NotFoundError,
+    TimeoutError,
+  })
   type _KeepsInference = Expect<
     Equal<ReturnType<typeof Valid.create<"DerivedMessageError">>, DerivedMessageError>
   >

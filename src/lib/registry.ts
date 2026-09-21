@@ -98,10 +98,25 @@ export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
 // fromSerializable revives a registered fault with `new Ctor(payloadFields)`,
 // so a registered constructor must take the fields object as its only
 // parameter. Anything else fails here instead of corrupting fields on revive.
+type ConstructorContractError =
+  "Registered constructors must take the fields object as their only parameter"
+
+// Own data fields a revived instance must get back from the wire.
+type PayloadKey<Instance> = {
+  [K in Exclude<keyof Instance, keyof Fault>]: Instance[K] extends (...args: never[]) => unknown
+    ? never
+    : K
+}[Exclude<keyof Instance, keyof Fault>]
+
+// A parameterless constructor is only safe when there is no payload to drop.
 type RevivableCtor<Ctor extends AnyFaultCtor> =
-  ConstructorParameters<Ctor> extends [fields?: object]
-    ? Ctor
-    : "Registered constructors must take the fields object as their only parameter"
+  ConstructorParameters<Ctor> extends []
+    ? [PayloadKey<InstanceType<Ctor>>] extends [never]
+      ? Ctor
+      : ConstructorContractError
+    : ConstructorParameters<Ctor> extends [fields?: object]
+      ? Ctor
+      : ConstructorContractError
 
 type RevivableCtors<M extends Record<string, AnyFaultCtor>> = {
   [K in keyof M]: RevivableCtor<M[K]>
