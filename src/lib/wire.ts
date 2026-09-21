@@ -13,7 +13,7 @@ export type SerializableValue =
 
 export type SerializableCause =
   | { kind: "fault"; value: SerializableFault }
-  | { kind: "error"; name: string; message: string; stack?: string }
+  | { kind: "error"; name: string; message: string; stack?: string; cause?: SerializableCause }
   | { kind: "thrown"; value: SerializableValue }
 
 export type SerializableFault = {

@@ -124,7 +124,13 @@ function deserializeCause(
   }
 
   if (cause.kind === "error") {
-    return createDeserializedError(cause.name, cause.message, cause.stack)
+    const error = createDeserializedError(cause.name, cause.message, cause.stack)
+
+    if (cause.cause && depth < MAX_CAUSE_DEPTH) {
+      error.cause = deserializeCause(cause.cause, resolveFault, depth + 1)
+    }
+
+    return error
   }
 
   return cause.value

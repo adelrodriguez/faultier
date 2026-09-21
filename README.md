@@ -189,6 +189,8 @@ outer.getTags() // ["NotFoundError", "TimeoutError"] — all tags in chain
 outer.getContext() // merged metadata from all faults (head wins on conflicts)
 ```
 
+The chain follows native `Error.cause` links too, so a root cause nested inside a plain `Error` is still reachable.
+
 Use `flatten()` to convert a cause chain to a string:
 
 ```ts
