@@ -320,9 +320,11 @@ class UserNotFound extends Faultier.Tagged("UserNotFound")<{ id: string }>() {
 }
 ```
 
-The check covers the signature only. A constructor that takes an object but stores it
-under different field names still revives incorrectly, so keep constructor input and
-stored fields the same shape.
+The check covers the signature only. On revive an instance holds exactly what its
+constructor builds from the payload fields, so state the constructor does not receive is
+not restored: fields stored under different names, fields a parameterless constructor
+fills in itself, and class fields initialised outside the constructor argument. Keep
+constructor input and stored fields the same shape.
 
 The wire format uses the JSON-safe `SerializableValue` type. `withMeta` and `Tagged`
 payload fields are type-constrained at construction; thrown causes are normalized to

@@ -371,12 +371,6 @@ class DerivedMessageError extends Tagged("DerivedMessageError")<{ id: string }>(
   }
 }
 
-class FabricatedFieldsError extends Tagged("FabricatedFieldsError")<{ id: string }>() {
-  constructor() {
-    super({ id: "fabricated" })
-  }
-}
-
 class FieldlessDefaultsError extends Tagged("FieldlessDefaultsError")() {
   constructor() {
     super()
@@ -385,6 +379,10 @@ class FieldlessDefaultsError extends Tagged("FieldlessDefaultsError")() {
 
   isRetryable(): boolean {
     return true
+  }
+
+  get summary(): string {
+    return `${this._tag}: ${this.message}`
   }
 }
 
@@ -397,9 +395,6 @@ function _registeredConstructorContract() {
 
   // @ts-expect-error -- one invalid entry rejects the call even next to valid ones
   registry({ DerivedMessageError, PositionalError })
-
-  // @ts-expect-error -- a parameterless constructor would drop the wire payload fields
-  registry({ FabricatedFieldsError })
 
   const Valid = registry({
     DerivedMessageError,
