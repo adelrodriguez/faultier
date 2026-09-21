@@ -1,0 +1,27 @@
+{
+  "packages": [
+    {
+      "name": "effect",
+      "registry": "npm",
+      "source": {
+        "directory": "packages/effect",
+        "host": "github.com",
+        "type": "repository",
+        "url": "https://github.com/Effect-TS/effect"
+      },
+      "tracking": "manual",
+      "version": "3.22.2"
+    },
+    {
+      "name": "better-result",
+      "registry": "npm",
+      "source": {
+        "host": "github.com",
+        "type": "repository",
+        "url": "https://github.com/dmmulroy/better-result"
+      },
+      "tracking": "manual",
+      "version": "3.0.1"
+    }
+  ]
+}
