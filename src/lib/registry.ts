@@ -95,7 +95,21 @@ export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
   fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault
 }
 
-export function registry<const M extends Record<string, AnyFaultCtor>>(ctors: M): FaultRegistry<M> {
+// fromSerializable revives a registered fault with `new Ctor(payloadFields)`,
+// so a registered constructor must take the fields object as its only
+// parameter. Anything else fails here instead of corrupting fields on revive.
+type RevivableCtor<Ctor extends AnyFaultCtor> =
+  ConstructorParameters<Ctor> extends [fields?: object]
+    ? Ctor
+    : "Registered constructors must take the fields object as their only parameter"
+
+type RevivableCtors<M extends Record<string, AnyFaultCtor>> = {
+  [K in keyof M]: RevivableCtor<M[K]>
+}
+
+export function registry<const M extends Record<string, AnyFaultCtor>>(
+  ctors: M & RevivableCtors<M>
+): FaultRegistry<M> {
   return createRegistry(ctors, Object.entries(ctors))
 }
 

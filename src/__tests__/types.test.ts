@@ -348,6 +348,45 @@ describe("type-level inference", () => {
 // These verify that invalid usage produces compile-time errors.
 // The function bodies never execute — only the type checker matters.
 
+// ── Registered constructor contract (#66) ────────────────────────────────────
+// registry.fromSerializable revives through `new Class(payloadFields)`, so a
+// registered constructor must take the fields object as its only parameter.
+
+class PositionalError extends Tagged("PositionalError")<{ id: string }>() {
+  constructor(id: string) {
+    super({ id })
+  }
+}
+
+class ExtraParamError extends Tagged("ExtraParamError")<{ id: string }>() {
+  constructor(fields: { id: string }, _retryable: boolean) {
+    super(fields)
+  }
+}
+
+class DerivedMessageError extends Tagged("DerivedMessageError")<{ id: string }>() {
+  constructor(fields: { id: string }) {
+    super(fields)
+    this.message = `Missing ${fields.id}`
+  }
+}
+
+function _registeredConstructorContract() {
+  // @ts-expect-error -- positional constructors cannot be revived from payload fields
+  registry({ PositionalError })
+
+  // @ts-expect-error -- a second constructor parameter cannot be supplied on revive
+  registry({ ExtraParamError })
+
+  // @ts-expect-error -- one invalid entry rejects the call even next to valid ones
+  registry({ DerivedMessageError, PositionalError })
+
+  const Valid = registry({ DerivedMessageError, NotFoundError, TimeoutError })
+  type _KeepsInference = Expect<
+    Equal<ReturnType<typeof Valid.create<"DerivedMessageError">>, DerivedMessageError>
+  >
+}
+
 function _negativeTypeTests() {
   // @ts-expect-error -- registry state is internal
   void AppFault.__faultier
