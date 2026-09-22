@@ -301,6 +301,31 @@ const restored = AuthFault.fromSerializable(json)
 
 `registry.toSerializable(err)` supports Fault instances, native `Error`, and non-Error thrown values (serialized as `UnknownThrown`).
 
+Registry reconstruction calls `new Class(payloadFields)`, so a registered class's
+constructor must take its fields object as its only parameter. `registry()` rejects other
+signatures at compile time. A constructor with that signature can still derive a default
+message or normalize fields, and both run again on revive. For call-site sugar, add a
+static factory instead of changing the constructor:
+
+```ts
+class UserNotFound extends Faultier.Tagged("UserNotFound")<{ id: string }>() {
+  constructor(fields: { id: string }) {
+    super(fields)
+    this.message = `User ${fields.id} not found`
+  }
+
+  static forId(id: string) {
+    return new UserNotFound({ id })
+  }
+}
+```
+
+The check covers the signature only. On revive an instance holds exactly what its
+constructor builds from the payload fields, so state the constructor does not receive is
+not restored: fields stored under different names, fields a parameterless constructor
+fills in itself, and class fields initialised outside the constructor argument. Keep
+constructor input and stored fields the same shape.
+
 The wire format uses the JSON-safe `SerializableValue` type. `withMeta` and `Tagged`
 payload fields are type-constrained at construction; thrown causes are normalized to
 JSON-safe values during serialization. Meta and payload values are not deep runtime

@@ -83,3 +83,32 @@ describe("#65 native Error.cause chains survive traversal and transport", () => 
     expect(() => fromSerializable(fault.toSerializable())).not.toThrow()
   })
 })
+
+describe("#66 registered constructors revive from their own fields object", () => {
+  class UserNotFound extends Tagged("UserNotFound")<{ id: string }>() {
+    constructor(fields: { id: string }) {
+      super(fields)
+      this.message = `User ${fields.id} not found`
+    }
+
+    static forId(id: string): UserNotFound {
+      return new UserNotFound({ id })
+    }
+  }
+
+  const AppFault = registry({ UserNotFound })
+
+  it("restores fields and the constructor-derived message", () => {
+    const restored = AppFault.fromSerializable(UserNotFound.forId("42").toSerializable())
+
+    expect(restored).toBeInstanceOf(UserNotFound)
+    expect(restored).toMatchObject({ id: "42", message: "User 42 not found" })
+  })
+
+  it("keeps a message set after construction over the derived default", () => {
+    const original = UserNotFound.forId("42").withMessage("No such user")
+    const restored = AppFault.fromSerializable(original.toSerializable())
+
+    expect(restored.message).toBe("No such user")
+  })
+})
