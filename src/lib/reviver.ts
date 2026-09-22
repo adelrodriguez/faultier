@@ -124,7 +124,14 @@ function deserializeCause(
   }
 
   if (cause.kind === "error") {
-    return createDeserializedError(cause.name, cause.message, cause.stack)
+    const error = createDeserializedError(cause.name, cause.message, cause.stack)
+
+    // Same budget as toCause (fault.ts): native errors spend fault-edge depth.
+    if (cause.cause && depth + 1 < MAX_CAUSE_DEPTH) {
+      error.cause = deserializeCause(cause.cause, resolveFault, depth + 1)
+    }
+
+    return error
   }
 
   return cause.value

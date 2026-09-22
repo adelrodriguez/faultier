@@ -26,18 +26,25 @@ function defaultTrimFormatter(value: string): string {
   return value.trim()
 }
 
-function toCause(cause: unknown, depth: number): SerializableCause {
+export function toCause(cause: unknown, depth: number): SerializableCause {
   if (cause instanceof Fault) {
     return { kind: "fault", value: serializeFault(cause, depth + 1) }
   }
 
   if (cause instanceof Error) {
-    return {
+    const serialized: SerializableCause = {
       kind: "error",
       message: cause.message,
       name: cause.name,
       stack: cause.stack,
     }
+
+    // Native errors count toward the same depth budget as fault edges.
+    if (cause.cause !== undefined && depth + 1 < MAX_CAUSE_DEPTH) {
+      serialized.cause = toCause(cause.cause, depth + 1)
+    }
+
+    return serialized
   }
 
   return { kind: "thrown", value: normalizeThrown(cause) }
@@ -152,7 +159,7 @@ export abstract class Fault extends Error {
       chain.push(current)
       depth += 1
 
-      if (current instanceof Fault) {
+      if (current instanceof Error) {
         current = current.cause
         continue
       }
@@ -171,19 +178,21 @@ export abstract class Fault extends Error {
 
   getContext(): Record<string, unknown> {
     const faults = this.unwrap().filter((item): item is Fault => item instanceof Fault)
-    const merged: Record<string, unknown> = {}
+    // A Map (not a plain object) so keys like "constructor" or "__proto__"
+    // are neither mistaken for existing entries nor routed through setters.
+    const merged = new Map<string, unknown>()
 
     for (const fault of faults) {
       const meta = fault.meta ?? {}
 
       for (const [key, value] of Object.entries(meta)) {
-        if (!(key in merged)) {
-          merged[key] = value
+        if (!merged.has(key)) {
+          merged.set(key, value)
         }
       }
     }
 
-    return merged
+    return Object.fromEntries(merged)
   }
 
   flatten(options?: FlattenOptions): string {
