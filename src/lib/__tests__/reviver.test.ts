@@ -73,6 +73,25 @@ function buildWire(payload: Record<string, unknown>): SerializableFault {
   return wire
 }
 
+// Test-side mirror of the envelope validation order, so each input has
+// exactly one expected outcome.
+function expectedRejection(input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null) return "expected __faultier: true"
+
+  const record = input as Record<string, unknown>
+  if (record.__faultier !== true) return "expected __faultier: true"
+  if (typeof record._tag !== "string") return "_tag must be a string"
+  if (
+    "meta" in record
+    && record.meta !== undefined
+    && (typeof record.meta !== "object" || record.meta === null)
+  ) {
+    return "meta must be an object"
+  }
+
+  return undefined
+}
+
 describe("fromSerializable", () => {
   it("restores every non-envelope wire key without loss or prototype shadowing", () => {
     fc.assert(
@@ -115,7 +134,7 @@ describe("fromSerializable", () => {
     )
   })
 
-  it("either revives a Fault or rejects with an invalid-payload error for any input", () => {
+  it("revives valid envelopes and rejects invalid input with the matching validation error", () => {
     const anythingArb = fc.anything({
       withBigInt: true,
       withDate: true,
@@ -141,14 +160,16 @@ describe("fromSerializable", () => {
 
     fc.assert(
       fc.property(fc.oneof(anythingArb, envelopeArb), (input) => {
-        try {
-          const revived = fromSerializable(input as SerializableFault)
+        const rejection = expectedRejection(input)
+        const revive = () => fromSerializable(input as SerializableFault)
+
+        if (rejection === undefined) {
+          const revived = revive()
 
           expect(revived).toBeInstanceOf(Fault)
           expect(revived._tag).toBe((input as SerializableFault)._tag)
-        } catch (error) {
-          if (!(error instanceof Error)) throw error
-          expect(error.message).toMatch(/^Invalid Faultier payload/)
+        } else {
+          expect(revive).toThrow(`Invalid Faultier payload: ${rejection}`)
         }
       })
     )
