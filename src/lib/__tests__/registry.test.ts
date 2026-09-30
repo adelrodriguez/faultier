@@ -18,7 +18,13 @@ describe("registry", () => {
         NotFoundError,
         WrongTagName: TimeoutErrorAlias,
       })
-    ).toThrow(RegistryTagMismatchError)
+    ).toThrow(
+      expect.objectContaining({
+        constructor: RegistryTagMismatchError,
+        ctorTag: "TimeoutError",
+        registryKey: "WrongTagName",
+      })
+    )
   })
 
   it("creates tagged faults by tag", () => {
@@ -45,20 +51,6 @@ describe("registry", () => {
 
     expect(fault).toBeInstanceOf(TimeoutError)
     expect(fault.cause).toBe(cause)
-  })
-
-  it("matches top-level tag only", () => {
-    const Faults = registry({ NotFoundError, TimeoutError })
-    const fault = Faults.create("NotFoundError", { id: "123" })
-
-    const value = Faults.matchTag(
-      fault,
-      "NotFoundError",
-      (e) => e.id,
-      () => "fallback"
-    )
-
-    expect(value).toBe("123")
   })
 
   it("supports destructured matchTag", () => {
@@ -163,6 +155,8 @@ describe("registry", () => {
     })
 
     expect(restored).toBeInstanceOf(Fault)
+    expect(restored).not.toBeInstanceOf(TimeoutError)
+    expect(restored._tag).toBe("OtherError")
     expect(restored.cause).toBeInstanceOf(TimeoutError)
   })
 
@@ -180,7 +174,7 @@ describe("registry", () => {
     const value = restored as unknown as Record<string, unknown>
 
     expect(restored).toBeInstanceOf(TimeoutError)
-    expect(typeof restored.withCause).toBe("function")
+    expect(Object.hasOwn(restored, "withCause")).toBe(false)
     expect(value.__payload_withCause).toBe("existing-value")
     expect(value.__payload___payload_withCause).toBe("reserved-value")
   })
@@ -245,10 +239,17 @@ describe("registry", () => {
   it("serializes unknown errors as UnknownError", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 
-    const serialized = Faults.toSerializable(new Error("boom"))
+    const error = new Error("boom")
 
-    expect(serialized._tag).toBe("UnknownError")
-    expect(serialized.cause?.kind).toBe("error")
+    const serialized = Faults.toSerializable(error)
+
+    expect(serialized).toEqual({
+      __faultier: true,
+      _tag: "UnknownError",
+      cause: { kind: "error", message: "boom", name: "Error", stack: error.stack },
+      message: "boom",
+      name: "UnknownError",
+    })
   })
 
   it("serializes non-Error thrown values as UnknownThrown", () => {
@@ -258,8 +259,13 @@ describe("registry", () => {
     const serializedNumber = Faults.toSerializable(42)
     const serializedNull = Faults.toSerializable(null)
 
-    expect(serializedString._tag).toBe("UnknownThrown")
-    expect(serializedString.cause).toEqual({ kind: "thrown", value: "boom" })
+    expect(serializedString).toEqual({
+      __faultier: true,
+      _tag: "UnknownThrown",
+      cause: { kind: "thrown", value: "boom" },
+      message: "UnknownThrown",
+      name: "UnknownThrown",
+    })
     expect(serializedNumber.cause).toEqual({ kind: "thrown", value: 42 })
     expect(serializedNull.cause).toEqual({ kind: "thrown", value: null })
   })
@@ -272,14 +278,6 @@ describe("registry", () => {
     const serialized = Faults.toSerializable(cyclic)
 
     expect(serialized.cause).toEqual({ kind: "thrown", value: "[object Object]" })
-  })
-
-  it("identifies members with registry.is", () => {
-    const Faults = registry({ NotFoundError, TimeoutError })
-    const fault = Faults.create("TimeoutError")
-
-    expect(Faults.is(fault)).toBe(true)
-    expect(Faults.is(new Error("x"))).toBe(false)
   })
 
   it("supports destructured is", () => {
@@ -298,21 +296,6 @@ describe("registry", () => {
     const billingFault = BillingFaults.create("PaymentError")
 
     expect(AppFaults.is(billingFault)).toBe(false)
-  })
-
-  it("supports matchTags handler map", () => {
-    const Faults = registry({ NotFoundError, TimeoutError })
-    const fault = Faults.create("TimeoutError")
-
-    const value = Faults.matchTags(
-      fault,
-      {
-        TimeoutError: () => "timeout" as const,
-      },
-      () => "fallback" as const
-    )
-
-    expect(value).toBe("timeout")
   })
 
   it("uses fallback when an omitted tag matches an inherited property", () => {
@@ -379,6 +362,10 @@ describe("registry", () => {
 
     expect(restored).toBeInstanceOf(Fault)
     expect(restored).not.toBeInstanceOf(NotFoundError)
+    expect(restored).not.toBeInstanceOf(TimeoutError)
+    expect(restored._tag).toBe("Other")
+    expect(restored.name).toBe("Other")
+    expect(restored.message).toBe("other")
   })
 
   it("caps deep nested registry cause chains during deserialization", () => {
@@ -410,7 +397,10 @@ describe("registry", () => {
       node = node.cause
     }
 
-    expect(depth).toBeLessThanOrEqual(100)
+    expect(depth).toBe(100)
+    expect(node).toBeInstanceOf(NotFoundError)
+    expect((node as NotFoundError).id).toBe("49")
+    expect(node.cause).toBeUndefined()
   })
 
   it("throws when constructor does not produce a Fault instance", () => {

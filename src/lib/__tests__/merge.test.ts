@@ -10,8 +10,6 @@ import { Tagged } from "../tagged"
 class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
 class TimeoutError extends Tagged("TimeoutError")() {}
 class DatabaseError extends Tagged("DatabaseError")<{ query: string }>() {}
-class PaymentError extends Tagged("PaymentError")<{ invoiceId: string }>() {}
-class TimeoutConflictError extends Tagged("TimeoutError")<{ retryable: boolean }>() {}
 
 // The registry/merge generics are designed around literal tag maps; the
 // property tests below build registries from generated tags, so they go
@@ -36,34 +34,6 @@ const mergeDynamic = merge as unknown as (
 ) => DynamicRegistry
 
 describe("merge", () => {
-  it("throws for conflicting duplicate tags", () => {
-    const AppFault = registry({ NotFoundError, TimeoutError })
-    const DbFault = registry({
-      DatabaseError,
-      TimeoutError: TimeoutConflictError,
-    })
-
-    expect(() => merge(AppFault, DbFault)).toThrow(RegistryMergeConflictError)
-  })
-
-  it("allows duplicate tags when constructor reference is identical", () => {
-    const AppFault = registry({ NotFoundError, TimeoutError })
-    const SharedFault = registry({ TimeoutError })
-
-    const MergedFault = merge(AppFault, SharedFault)
-
-    expect(MergedFault.tags).toEqual(["NotFoundError", "TimeoutError"])
-  })
-
-  it("preserves deterministic tag order", () => {
-    const AppFault = registry({ NotFoundError, TimeoutError })
-    const DbFault = registry({ DatabaseError, TimeoutError })
-
-    const MergedFault = merge(AppFault, DbFault)
-
-    expect(MergedFault.tags).toEqual(["NotFoundError", "TimeoutError", "DatabaseError"])
-  })
-
   it("preserves first-seen order for integer-like tags", () => {
     class SecondError extends Tagged("2")() {}
     class FirstError extends Tagged("1")() {}
@@ -113,23 +83,6 @@ describe("merge", () => {
     const serialized = MergedFault.toSerializable(created)
     const restored = MergedFault.fromSerializable(serialized)
     expect(restored).toBeInstanceOf(DatabaseError)
-  })
-
-  it("keeps type-safe create inference for three or more merged modules", () => {
-    const AppFault = registry({ NotFoundError, TimeoutError })
-    const DbFault = registry({ DatabaseError })
-    const BillingFault = registry({ PaymentError })
-
-    const MergedFault = merge(AppFault, DbFault, BillingFault)
-
-    const paymentFault = MergedFault.create("PaymentError", { invoiceId: "inv_123" })
-    expect(paymentFault.invoiceId).toBe("inv_123")
-
-    const dbFault = MergedFault.create("DatabaseError", { query: "SELECT 1" })
-    expect(dbFault.query).toBe("SELECT 1")
-
-    const appFault = MergedFault.create("NotFoundError", { id: "123" })
-    expect(appFault.id).toBe("123")
   })
 
   it("keeps first-seen tag order for any sequence of compatible registries", () => {

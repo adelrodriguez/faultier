@@ -6,7 +6,7 @@ import { Fault, isReservedKey } from "../fault"
 import { fromSerializable } from "../reviver"
 import { RESERVED_FAULT_KEYS, type SerializableFault } from "../wire"
 
-const PAYLOAD_PREFIX_PATTERN = /^(?:__payload_)+/
+const PAYLOAD_PREFIX_PATTERN = /^(?:__payload_)+$/
 
 const wireKeyArb = fc
   .oneof(
@@ -73,6 +73,25 @@ function buildWire(payload: Record<string, unknown>): SerializableFault {
   return wire
 }
 
+// Test-side mirror of the envelope validation order, so each input has
+// exactly one expected outcome.
+function expectedRejection(input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null) return "expected __faultier: true"
+
+  const record = input as Record<string, unknown>
+  if (record.__faultier !== true) return "expected __faultier: true"
+  if (typeof record._tag !== "string") return "_tag must be a string"
+  if (
+    "meta" in record
+    && record.meta !== undefined
+    && (typeof record.meta !== "object" || record.meta === null)
+  ) {
+    return "meta must be an object"
+  }
+
+  return undefined
+}
+
 describe("fromSerializable", () => {
   it("restores every non-envelope wire key without loss or prototype shadowing", () => {
     fc.assert(
@@ -88,16 +107,24 @@ describe("fromSerializable", () => {
         }
         expect(typeof revivedRecord.unwrap).toBe("function")
 
-        // No data loss: exactly one restored key per wire payload key, each
-        // reachable under its original name or a __payload_-prefixed rename.
+        // No data loss: exactly one restored key per wire payload key.
         const payloadOwnKeys = ownKeys.filter((key) => !RESERVED_FAULT_KEYS.has(key))
         expect(payloadOwnKeys.length).toBe(Object.keys(payload).length)
 
         for (const [key, value] of Object.entries(payload)) {
+          // Renamed keys never land on a raw wire key, so a non-reserved key
+          // is always restored under its exact original name.
+          if (!isReservedKey(key)) {
+            expect(Object.hasOwn(revived, key)).toBe(true)
+            expect(isDeepStrictEqual(revivedRecord[key], value)).toBe(true)
+            continue
+          }
+
+          // Reserved keys are reachable under a __payload_-prefixed rename.
           const matches = payloadOwnKeys.filter(
             (candidate) =>
-              (candidate === key
-                || (PAYLOAD_PREFIX_PATTERN.test(candidate) && candidate.endsWith(key)))
+              candidate.endsWith(key)
+              && PAYLOAD_PREFIX_PATTERN.test(candidate.slice(0, -key.length))
               && isDeepStrictEqual(revivedRecord[candidate], value)
           )
 
@@ -107,7 +134,7 @@ describe("fromSerializable", () => {
     )
   })
 
-  it("either revives a Fault or rejects with an invalid-payload error for any input", () => {
+  it("revives valid envelopes and rejects invalid input with the matching validation error", () => {
     const anythingArb = fc.anything({
       withBigInt: true,
       withDate: true,
@@ -119,13 +146,30 @@ describe("fromSerializable", () => {
       withTypedArray: true,
     })
 
+    // Arbitrary values almost never carry `__faultier: true`, so mix in
+    // envelope-shaped objects to exercise the revive branch and each
+    // validation guard (marker, _tag, meta) in every run.
+    const envelopeArb = fc.record(
+      {
+        __faultier: fc.oneof(fc.constant(true), anythingArb),
+        _tag: fc.oneof(fc.string(), anythingArb),
+        meta: fc.oneof(fc.dictionary(fc.string(), fc.jsonValue()), anythingArb),
+      },
+      { requiredKeys: ["__faultier", "_tag"] }
+    )
+
     fc.assert(
-      fc.property(anythingArb, (input) => {
-        try {
-          expect(fromSerializable(input as SerializableFault)).toBeInstanceOf(Fault)
-        } catch (error) {
-          if (!(error instanceof Error)) throw error
-          expect(error.message).toMatch(/^Invalid Faultier payload/)
+      fc.property(fc.oneof(anythingArb, envelopeArb), (input) => {
+        const rejection = expectedRejection(input)
+        const revive = () => fromSerializable(input as SerializableFault)
+
+        if (rejection === undefined) {
+          const revived = revive()
+
+          expect(revived).toBeInstanceOf(Fault)
+          expect(revived._tag).toBe((input as SerializableFault)._tag)
+        } else {
+          expect(revive).toThrow(`Invalid Faultier payload: ${rejection}`)
         }
       })
     )

@@ -57,20 +57,33 @@ describe("#65 native Error.cause chains survive traversal and transport", () => 
   })
 
   it("keeps the root cause across a serialization round trip", () => {
-    const { fault } = wrapNativeChain()
+    const { fault, mid, root } = wrapNativeChain()
 
-    expect(fault.toSerializable()).toMatchObject({
-      cause: { cause: { kind: "error", message: "root" } },
+    expect(fault.toSerializable().cause).toStrictEqual({
+      cause: { kind: "error", message: "root", name: "Error", stack: root.stack },
+      kind: "error",
+      message: "mid",
+      name: "Error",
+      stack: mid.stack,
     })
     expect(fromSerializable(fault.toSerializable()).flatten()).toBe("svc -> mid -> root")
   })
 
   it("keeps nested native causes when a registry serializes a plain Error", () => {
-    const { mid } = wrapNativeChain()
+    const { mid, root } = wrapNativeChain()
 
-    expect(registry({ ServiceError }).toSerializable(mid)).toMatchObject({
+    expect(registry({ ServiceError }).toSerializable(mid)).toStrictEqual({
+      __faultier: true,
       _tag: "UnknownError",
-      cause: { cause: { kind: "error", message: "root" }, kind: "error", message: "mid" },
+      cause: {
+        cause: { kind: "error", message: "root", name: "Error", stack: root.stack },
+        kind: "error",
+        message: "mid",
+        name: "Error",
+        stack: mid.stack,
+      },
+      message: "mid",
+      name: "UnknownError",
     })
   })
 
@@ -80,7 +93,19 @@ describe("#65 native Error.cause chains survive traversal and transport", () => 
     const fault = new ServiceError().withCause(loop)
 
     expect(fault.unwrap()).toHaveLength(101)
-    expect(() => fromSerializable(fault.toSerializable())).not.toThrow()
+
+    // The wire spends the whole depth budget on native errors: 100 revived
+    // "loop" errors, the last one without a cause.
+    const revivedErrors: unknown[] = []
+    let node: unknown = fromSerializable(fault.toSerializable()).cause
+    while (node instanceof Error) {
+      revivedErrors.push(node)
+      node = node.cause
+    }
+
+    expect(revivedErrors).toHaveLength(100)
+    expect(revivedErrors.every((error) => (error as Error).message === "loop")).toBe(true)
+    expect(node).toBeUndefined()
   })
 })
 
