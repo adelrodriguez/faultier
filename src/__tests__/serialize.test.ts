@@ -93,6 +93,18 @@ function buildFault(spec: FaultSpec): Fault {
   return fault
 }
 
+// Walks the revived .cause chain directly, so the result reflects the reviver's
+// depth cap rather than unwrap()'s own traversal cap.
+function faultChain(head: Fault): Fault[] {
+  const chain = [head]
+  let node: unknown = head.cause
+  while (node instanceof Fault) {
+    chain.push(node)
+    node = node.cause
+  }
+  return chain
+}
+
 function transport(value: Fault | SerializableFault): SerializableFault {
   // Intentionally a JSON round-trip: the properties under test cover transport
   // over a real wire, not structuredClone semantics.
@@ -109,15 +121,17 @@ describe("toSerializable", () => {
       .withDetails("lookup failed")
       .withMeta({ requestId: "req-1" })
 
-    const serialized = fault.toSerializable()
-
-    expect(serialized.__faultier).toBe(true)
-    expect(serialized._tag).toBe("NotFoundError")
-    expect(serialized.id).toBe("123")
-    expect(serialized.resource).toBe("user")
-    expect(serialized.message).toBe("User not found")
-    expect(serialized.details).toBe("lookup failed")
-    expect(serialized.meta).toEqual({ requestId: "req-1" })
+    expect(fault.toSerializable()).toStrictEqual({
+      __faultier: true,
+      _tag: "NotFoundError",
+      details: "lookup failed",
+      id: "123",
+      message: "User not found",
+      meta: { requestId: "req-1" },
+      name: "NotFoundError",
+      resource: "user",
+      stack: fault.stack,
+    })
   })
 
   it("preserves undefined values in the wire object while JSON applies standard semantics", () => {
@@ -223,9 +237,19 @@ describe("toSerializable", () => {
         }),
         (thrown) => {
           const fault = new SurvivorError().withCause(thrown)
+          const wireCause = fault.toSerializable().cause
           const revived = fromSerializable(transport(fault))
 
           expect(revived._tag).toBe("SurvivorError")
+          if (thrown === undefined) {
+            expect(wireCause).toBeUndefined()
+          } else {
+            expect(wireCause?.kind).toBe("thrown")
+          }
+          // The normalized thrown value survives JSON transport unchanged.
+          expect(revived.cause).toStrictEqual(
+            wireCause?.kind === "thrown" ? wireCause.value : undefined
+          )
         }
       )
     )
@@ -233,46 +257,6 @@ describe("toSerializable", () => {
 })
 
 describe("fromSerializable", () => {
-  it("round-trips nested fault causes recursively", () => {
-    class DatabaseError extends Tagged("DatabaseError")<{ query: string }>() {}
-    class ServiceError extends Tagged("ServiceError")<{ endpoint: string }>() {}
-
-    const leaf = new DatabaseError({ query: "SELECT 1" }).withMessage("db failed")
-    const head = new ServiceError({ endpoint: "/users" }).withMessage("svc failed").withCause(leaf)
-
-    const serialized = head.toSerializable()
-    const deserialized = fromSerializable(serialized)
-
-    expect(deserialized._tag).toBe("ServiceError")
-    expect(deserialized.cause).toBeInstanceOf(Fault)
-
-    const cause = deserialized.cause as Fault
-    expect(cause._tag).toBe("DatabaseError")
-    expect((cause as unknown as { query: string }).query).toBe("SELECT 1")
-  })
-
-  it("deserializes a serialized Fault payload", () => {
-    class NotFoundError extends Tagged("NotFoundError")<{ id: string; resource: string }>() {}
-
-    const original = new NotFoundError({ id: "123", resource: "user" })
-      .withMessage("User not found")
-      .withDetails("db query failed")
-      .withMeta({ requestId: "req-1" })
-      .withCause(new Error("root"))
-
-    const serialized = original.toSerializable()
-    const deserialized = fromSerializable(serialized)
-
-    expect(deserialized).toBeInstanceOf(Fault)
-    expect(deserialized._tag).toBe("NotFoundError")
-    expect(deserialized.message).toBe("User not found")
-    expect(deserialized.details).toBe("db query failed")
-    expect(deserialized.meta).toEqual({ requestId: "req-1" })
-    expect((deserialized as unknown as { id: string }).id).toBe("123")
-    expect((deserialized as unknown as { resource: string }).resource).toBe("user")
-    expect(deserialized.cause).toBeInstanceOf(Error)
-  })
-
   it("throws for invalid payloads", () => {
     expect(() => fromSerializable({ __faultier: false } as unknown as SerializableFault)).toThrow(
       "Invalid Faultier payload"
@@ -290,8 +274,8 @@ describe("fromSerializable", () => {
     const value = deserialized as unknown as Record<string, unknown>
 
     expect(typeof deserialized.withCause).toBe("function")
+    expect(Object.hasOwn(deserialized, "withCause")).toBe(false)
     expect(value.__payload_withCause).toBe("payload-value")
-    expect(value.withCause).not.toBe("payload-value")
   })
 
   it("preserves existing keys that use the collision prefix", () => {
@@ -327,46 +311,9 @@ describe("fromSerializable", () => {
     expect(Object.hasOwn(deserialized, "__proto__")).toBe(false)
   })
 
-  it("deserializes thrown causes", () => {
-    const deserialized = fromSerializable({
-      __faultier: true,
-      _tag: "ThrownCauseError",
-      cause: {
-        kind: "thrown",
-        value: 42,
-      },
-      name: "ThrownCauseError",
-    })
-
-    expect(deserialized._tag).toBe("ThrownCauseError")
-    expect(deserialized.cause).toBe(42)
-  })
-
-  it("supports JSON round-trip before deserialization", () => {
-    class ApiError extends Tagged("ApiError")<{ endpoint: string }>() {}
-
-    const original = new ApiError({ endpoint: "/users" })
-      .withMessage("Request failed")
-      .withDetails("upstream timeout")
-      .withMeta({ traceId: "trace-123" })
-      .withCause(new Error("root"))
-
-    const serialized = original.toSerializable()
-    // Intentionally use JSON round-trip here to validate wire-format behavior.
-    // oxlint-disable-next-line unicorn/prefer-structured-clone
-    const jsonSafe = JSON.parse(JSON.stringify(serialized)) as SerializableFault
-    const restored = fromSerializable(jsonSafe)
-
-    expect(restored._tag).toBe("ApiError")
-    expect(restored.message).toBe("Request failed")
-    expect(restored.details).toBe("upstream timeout")
-    expect(restored.meta).toEqual({ traceId: "trace-123" })
-    expect((restored as unknown as { endpoint: string }).endpoint).toBe("/users")
-    expect(restored.cause).toBeInstanceOf(Error)
-  })
-
   it("avoids stack overflow for deeply nested cause chains", () => {
-    // Build a payload 150 levels deep — beyond MAX_CAUSE_DEPTH (100)
+    // A hand-built wire far deeper than MAX_CAUSE_DEPTH (100), so only the
+    // reviver's own cap (not the serializer's) bounds the result.
     let current: SerializableFault = {
       __faultier: true,
       _tag: "LeafError",
@@ -374,7 +321,7 @@ describe("fromSerializable", () => {
       name: "LeafError",
     }
 
-    for (let i = 0; i < 150; i += 1) {
+    for (let i = 0; i < 10_000; i += 1) {
       current = {
         __faultier: true,
         _tag: "WrapperError",
@@ -383,18 +330,11 @@ describe("fromSerializable", () => {
       }
     }
 
-    // Walk the deserialized chain — it should be capped, not 150 deep
-    const result = fromSerializable(current)
-    expect(result._tag).toBe("WrapperError")
+    const chain = faultChain(fromSerializable(current))
 
-    let node = result
-    let depth = 0
-    while (node.cause instanceof Fault) {
-      depth += 1
-      node = node.cause
-    }
-
-    expect(depth).toBeLessThanOrEqual(100)
+    expect(chain).toHaveLength(101)
+    expect(chain.every((fault) => fault._tag === "WrapperError")).toBe(true)
+    expect(chain.at(-1)?.cause).toBeUndefined()
   })
 
   it("throws when meta is not an object", () => {
@@ -452,20 +392,31 @@ describe("fromSerializable", () => {
   })
 
   it("caps revived cause chains at the documented depth of 100", () => {
+    class LinkError extends Tagged("LinkError")<{ index: number }>() {}
+
     fc.assert(
-      fc.property(fc.integer({ max: 150, min: 0 }), (edges) => {
-        class LinkError extends Tagged("LinkError")<{ index: number }>() {}
+      fc.property(
+        fc.oneof(fc.constantFrom(0, 1, 99, 100, 101, 150), fc.integer({ max: 150, min: 0 })),
+        (edges) => {
+          let fault: Fault = new LinkError({ index: 0 })
+          for (let index = 1; index <= edges; index += 1) {
+            // Assign cause directly: withCause() nests every inner stack into
+            // each outer one, which grows quadratically and times out at depth 150.
+            const link: Fault = new LinkError({ index })
+            link.cause = fault
+            fault = link
+          }
 
-        let fault: Fault = new LinkError({ index: 0 })
-        for (let index = 1; index <= edges; index += 1) {
-          fault = new LinkError({ index }).withCause(fault)
+          const chain = faultChain(fromSerializable(transport(fault)))
+          const keptEdges = Math.min(edges, 100)
+
+          // The outermost fault is kept and the innermost links are dropped.
+          expect(chain.map((link) => (link as LinkError).index)).toStrictEqual(
+            Array.from({ length: keptEdges + 1 }, (_, offset) => edges - offset)
+          )
+          expect(chain.at(-1)?.cause).toBeUndefined()
         }
-
-        const revived = fromSerializable(transport(fault))
-
-        expect(revived.getTags()).toEqual(fault.getTags())
-        expect(revived.unwrap().length).toBe(Math.min(edges + 1, 101))
-      }),
+      ),
       { numRuns: 30 }
     )
   })

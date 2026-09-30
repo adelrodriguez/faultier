@@ -15,14 +15,6 @@ const anythingArb = fc.anything({
 })
 
 describe("normalizeThrown", () => {
-  it("never throws for any input", () => {
-    fc.assert(
-      fc.property(anythingArb, (value) => {
-        expect(() => normalizeThrown(value)).not.toThrow()
-      })
-    )
-  })
-
   it("produces output that survives a JSON round trip identically", () => {
     fc.assert(
       fc.property(anythingArb, (value) => {
@@ -101,7 +93,7 @@ describe("collectPayloadFields", () => {
   it("skips function values", () => {
     const payload = collectPayloadFields({ fn: () => 1, keep: "x" }, () => false)
 
-    expect(Object.keys(payload)).toEqual(["keep"])
+    expect(payload).toEqual({ keep: "x" })
   })
 
   it("keeps a __proto__ key as an own data property without changing the prototype", () => {
@@ -113,10 +105,13 @@ describe("collectPayloadFields", () => {
     const payload = collectPayloadFields(source, () => false)
 
     expect(Object.getPrototypeOf(payload)).toBe(Object.prototype)
-    expect(Object.hasOwn(payload, "__proto__")).toBe(true)
+    expect(Object.keys(payload)).toEqual(["__proto__", "safe"])
     expect(Object.getOwnPropertyDescriptor(payload, "__proto__")?.value).toEqual({
       polluted: true,
     })
-    expect(Object.hasOwn({}, "polluted")).toBe(false)
+    expect(payload.safe).toBe(1)
+    // Pollution would land on Object.prototype, so check inherited lookup
+    // rather than own properties of a fresh object.
+    expect("polluted" in {}).toBe(false)
   })
 })

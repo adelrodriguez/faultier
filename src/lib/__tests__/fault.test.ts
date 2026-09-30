@@ -19,23 +19,15 @@ describe("Fault", () => {
     expect(fault._tag).toBe("ExampleFault")
   })
 
-  it("sets cause through withCause", () => {
-    const cause = new Error("root")
-    const fault = new ExampleFault().withCause(cause)
-
-    expect(fault.cause).toBe(cause)
-    expect(fault.unwrap().length).toBe(2)
-  })
-
   it("appends an indented caused-by stack", () => {
     const cause = new Error("root")
     cause.stack = "RootError: root\nline-1\nline-2"
 
-    const fault = new ExampleFault().withCause(cause)
+    const fault = new ExampleFault()
+    const originalStack = fault.stack
+    fault.withCause(cause)
 
-    expect(fault.stack).toContain("Caused by: RootError: root")
-    expect(fault.stack).toContain("\n  line-1")
-    expect(fault.stack).toContain("\n  line-2")
+    expect(fault.stack).toBe(`${originalStack}\nCaused by: RootError: root\n  line-1\n  line-2`)
   })
 
   it("rebuilds stack when withCause is called multiple times", () => {
@@ -44,35 +36,28 @@ describe("Fault", () => {
     const second = new Error("second")
     second.stack = "Error: second\nsecond-line"
 
-    const fault = new ExampleFault().withCause(first)
-    expect(fault.stack).toContain("Caused by: Error: first")
+    const fault = new ExampleFault()
+    const originalStack = fault.stack
+
+    fault.withCause(first)
+    expect(fault.stack).toBe(`${originalStack}\nCaused by: Error: first\n  first-line`)
 
     fault.withCause(second)
-    expect(fault.stack).toContain("Caused by: Error: second")
-    expect(fault.stack).not.toContain("Caused by: Error: first")
+    expect(fault.stack).toBe(`${originalStack}\nCaused by: Error: second\n  second-line`)
   })
 
   it("restores original stack when cause has no stack", () => {
     const cause = new Error("root")
     cause.stack = "Error: root\nroot-line"
 
-    const fault = new ExampleFault().withCause(cause)
-    expect(fault.stack).toContain("Caused by:")
+    const fault = new ExampleFault()
+    const originalStack = fault.stack
+
+    fault.withCause(cause)
+    expect(fault.stack).not.toBe(originalStack)
 
     fault.withCause("not an error")
-    expect(fault.stack).not.toContain("Caused by:")
-  })
-
-  it("returns unwrap chain in head-to-leaf order", () => {
-    class DatabaseError extends Tagged("DatabaseError")() {}
-    class ServiceError extends Tagged("ServiceError")() {}
-
-    const leaf = new DatabaseError().withMessage("db")
-    const head = new ServiceError().withMessage("svc").withCause(leaf)
-    const chain = head.unwrap()
-
-    expect(chain[0]).toBe(head)
-    expect(chain[1]).toBe(leaf)
+    expect(fault.stack).toBe(originalStack)
   })
 
   it("returns full unwrap chain from latest fault to root cause", () => {
@@ -104,6 +89,7 @@ describe("Fault", () => {
 
     expect(chain.length).toBe(101)
     expect(chain[0]).toBe(head)
+    expect((chain.at(-1) as ExampleFault).message).toBe("node-99")
   })
 
   it("stops unwrap traversal for circular cause chains", () => {
@@ -113,8 +99,7 @@ describe("Fault", () => {
     const chain = fault.unwrap()
 
     expect(chain.length).toBe(101)
-    expect(chain[0]).toBe(fault)
-    expect(chain[1]).toBe(fault)
+    expect(chain.every((item) => item === fault)).toBe(true)
   })
 
   it("avoids stack overflow when serializing circular cause chains", () => {
@@ -131,17 +116,11 @@ describe("Fault", () => {
     while (current.cause?.kind === "fault") {
       depth += 1
       current = current.cause.value
+      expect(current.message).toBe("loop")
     }
 
     expect(depth).toBe(100)
     expect(current.cause).toBeUndefined()
-  })
-
-  it("merges context with head precedence", () => {
-    const leaf = new ExampleFault().withMeta({ a: 1, b: 1 })
-    const head = new ExampleFault().withMeta({ b: 2 }).withCause(leaf)
-
-    expect(head.getContext()).toEqual({ a: 1, b: 2 })
   })
 
   it("merges full context in head-to-leaf order with head precedence", () => {
@@ -170,13 +149,6 @@ describe("Fault", () => {
     expect(fault.details).toBe("existing details")
   })
 
-  it("sets both message and details with withDescription", () => {
-    const fault = new ExampleFault().withDescription("user message", "dev details")
-
-    expect(fault.message).toBe("user message")
-    expect(fault.details).toBe("dev details")
-  })
-
   it("overwrites existing message and details with withDescription", () => {
     const fault = new ExampleFault().withMessage("old message").withDetails("old details")
 
@@ -184,15 +156,6 @@ describe("Fault", () => {
 
     expect(fault.message).toBe("new message")
     expect(fault.details).toBe("new details")
-  })
-
-  it("preserves fluent chaining subclass type with withDescription", () => {
-    class AppError extends Tagged("AppError")() {}
-
-    const fault = new AppError().withDescription("message", "details").withMeta({ code: "x" })
-
-    expect(fault).toBeInstanceOf(AppError)
-    expect(fault.message).toBe("message")
   })
 
   it("accumulates meta across multiple withMeta calls", () => {
@@ -215,26 +178,6 @@ describe("Fault", () => {
     const head = new ServiceError().withCause(leaf)
 
     expect(head.getTags()).toEqual(["ServiceError", "DatabaseError"])
-  })
-
-  it("flattens and deduplicates consecutive messages", () => {
-    class InnerError extends Tagged("InnerError")() {}
-    class OuterError extends Tagged("OuterError")() {}
-
-    const leaf = new InnerError().withMessage("same")
-    const head = new OuterError().withMessage("same").withCause(leaf)
-
-    expect(head.flatten()).toBe("same")
-  })
-
-  it("flattens in head-to-leaf order", () => {
-    class DatabaseError extends Tagged("DatabaseError")() {}
-    class ServiceError extends Tagged("ServiceError")() {}
-
-    const leaf = new DatabaseError().withMessage("db")
-    const head = new ServiceError().withMessage("svc").withCause(leaf)
-
-    expect(head.flatten()).toBe("svc -> db")
   })
 
   it("skips empty values in message flatten path", () => {
@@ -273,71 +216,46 @@ describe("Fault", () => {
     expect(head.flatten({ field: "details" })).toBe("db details")
   })
 
-  it("flattens chains with non-fault Error causes", () => {
-    const fault = new ExampleFault().withMessage("svc").withCause(new Error("db"))
-
-    expect(fault.flatten()).toBe("svc -> db")
-  })
-
   it("flattens safely when cause contains a circular object", () => {
     const circular: Record<string, unknown> = {}
     circular.self = circular
 
     const fault = new ExampleFault().withMessage("top").withCause(circular)
 
-    expect(() => fault.flatten()).not.toThrow()
     expect(fault.flatten()).toBe("top -> [object Object]")
   })
 
   it("flattens any chain to the exact join of trimmed, consecutively-deduped messages", () => {
     const separator = " | "
+    // Random strings almost never repeat or trim to empty, so mix in a small
+    // pool that reliably exercises the dedupe and empty-skip branches.
+    const messageArb = fc.oneof(
+      fc.string({ maxLength: 10 }),
+      fc.constantFrom("same", " same ", "other", "", "   ")
+    )
 
     fc.assert(
-      fc.property(
-        fc.array(fc.string({ minLength: 1 }), { maxLength: 8, minLength: 1 }),
-        (messages) => {
-          class LayerError extends Tagged("LayerError")() {}
+      fc.property(fc.array(messageArb, { maxLength: 8, minLength: 1 }), (messages) => {
+        class LayerError extends Tagged("LayerError")() {}
 
-          let fault: Fault | undefined
-          for (const message of messages) {
-            const layer = new LayerError().withMessage(message)
-            if (fault !== undefined) layer.withCause(fault)
-            fault = layer
-          }
-          if (fault === undefined) throw new Error("unreachable: minLength is 1")
-
-          // flatten() walks head to leaf (the reverse of construction order),
-          // trims each message, drops empties, and dedupes consecutive repeats.
-          const expected: string[] = []
-          for (const message of messages.toReversed().map((value) => value.trim())) {
-            if (message !== "" && message !== expected.at(-1)) expected.push(message)
-          }
-
-          expect(fault.flatten({ separator })).toBe(expected.join(separator))
+        let fault: Fault | undefined
+        for (const message of messages) {
+          const layer = new LayerError().withMessage(message)
+          if (fault !== undefined) layer.withCause(fault)
+          fault = layer
         }
-      )
+        if (fault === undefined) throw new Error("unreachable: minLength is 1")
+
+        // flatten() walks head to leaf (the reverse of construction order),
+        // trims each message, drops empties, and dedupes consecutive repeats.
+        const expected: string[] = []
+        for (const message of messages.toReversed().map((value) => value.trim())) {
+          if (message !== "" && message !== expected.at(-1)) expected.push(message)
+        }
+
+        expect(fault.flatten({ separator })).toBe(expected.join(separator))
+      })
     )
-  })
-
-  it("excludes method keys from serialized payload", () => {
-    const fault = new ExampleFault()
-      .withDescription("message", "details")
-      .withMeta({ key: "value" })
-
-    const serialized = fault.toSerializable()
-    const keys = Object.keys(serialized)
-
-    expect(keys).not.toContain("withDescription")
-    expect(keys).not.toContain("withMessage")
-    expect(keys).not.toContain("withDetails")
-    expect(keys).not.toContain("withCause")
-    expect(keys).not.toContain("withMeta")
-    expect(keys).not.toContain("getContext")
-    expect(keys).not.toContain("getTags")
-    expect(keys).not.toContain("flatten")
-    expect(keys).not.toContain("unwrap")
-    expect(keys).not.toContain("toSerializable")
-    expect(keys).not.toContain("toJSON")
   })
 
   it("serializes through toJSON when stringified", () => {
@@ -346,13 +264,17 @@ describe("Fault", () => {
       .withMeta({ key: "value" })
 
     const json = JSON.stringify(fault)
-    const parsed = JSON.parse(json) as Record<string, unknown>
+    const parsed = JSON.parse(json) as unknown
 
-    expect(parsed.__faultier).toBe(true)
-    expect(parsed._tag).toBe("ExampleFault")
-    expect(parsed.message).toBe("message")
-    expect(parsed.details).toBe("details")
-    expect(parsed.meta).toEqual({ key: "value" })
+    expect(parsed).toEqual({
+      __faultier: true,
+      _tag: "ExampleFault",
+      details: "details",
+      message: "message",
+      meta: { key: "value" },
+      name: "ExampleFault",
+      stack: fault.stack,
+    })
   })
 })
 
@@ -395,34 +317,46 @@ describe("isReservedKey", () => {
   it("controls exactly which own fields serialization includes as payload", () => {
     // oxlint-disable-next-line typescript/unbound-method -- always invoked with an explicit receiver via .call below.
     const toSerializable = Fault.prototype.toSerializable
+    // Random strings almost never land on a prototype-derived reserved key,
+    // so mix them in to make the exclusion branch reliable in every run.
+    const keyArb = fc.oneof(
+      fc.string({ maxLength: 30, minLength: 1 }),
+      fc.constantFrom(
+        "toString",
+        "valueOf",
+        "constructor",
+        "hasOwnProperty",
+        "__proto__",
+        "unwrap",
+        "withMeta",
+        "toJSON",
+        "toSerializable"
+      )
+    )
 
     fc.assert(
-      fc.property(
-        fc.string({ maxLength: 30, minLength: 1 }),
-        fc.jsonValue({ maxDepth: 2 }),
-        (key, value) => {
-          const fault = new ProbeFault()
-          Object.defineProperty(fault, key, {
-            configurable: true,
-            enumerable: true,
-            value,
-            writable: true,
-          })
+      fc.property(keyArb, fc.jsonValue({ maxDepth: 2 }), (key, value) => {
+        const fault = new ProbeFault()
+        Object.defineProperty(fault, key, {
+          configurable: true,
+          enumerable: true,
+          value,
+          writable: true,
+        })
 
-          // Call via the prototype: the generated key may shadow instance methods.
-          const serialized = toSerializable.call(fault)
+        // Call via the prototype: the generated key may shadow instance methods.
+        const serialized = toSerializable.call(fault)
 
-          if (!isReservedKey(key)) {
-            expect(Object.hasOwn(serialized, key)).toBe(true)
-            expect(serialized[key]).toEqual(value)
-          } else if (!RESERVED_FAULT_KEYS.has(key)) {
-            // Prototype-derived reserved keys (Fault methods, Error/Object
-            // built-ins) must never leak into the wire object; envelope keys
-            // are legitimately present.
-            expect(Object.hasOwn(serialized, key)).toBe(false)
-          }
+        if (!isReservedKey(key)) {
+          expect(Object.hasOwn(serialized, key)).toBe(true)
+          expect(serialized[key]).toEqual(value)
+        } else if (!RESERVED_FAULT_KEYS.has(key)) {
+          // Prototype-derived reserved keys (Fault methods, Error/Object
+          // built-ins) must never leak into the wire object; envelope keys
+          // are legitimately present.
+          expect(Object.hasOwn(serialized, key)).toBe(false)
         }
-      )
+      })
     )
   })
 })

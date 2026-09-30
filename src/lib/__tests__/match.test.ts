@@ -10,13 +10,8 @@ class TimeoutError extends Tagged("TimeoutError")() {}
 class PaymentError extends Tagged("PaymentError")<{ invoiceId: string }>() {}
 
 type AppError = NotFoundError | TimeoutError | PaymentError
-type CoreError = NotFoundError | TimeoutError
 
 function asAppError(error: AppError): AppError {
-  return error
-}
-
-function asCoreError(error: CoreError): CoreError {
   return error
 }
 
@@ -57,26 +52,6 @@ describe("matchTag", () => {
 })
 
 describe("matchTags", () => {
-  it("calls fallback when an omitted tag matches an inherited property", () => {
-    class ToStringError extends Tagged("toString")() {}
-    const error = new ToStringError()
-
-    const result = matchTags(error, {}, () => "fallback")
-
-    expect(result).toBe("fallback")
-  })
-
-  it("dispatches an own handler whose tag matches an inherited property", () => {
-    class ToStringError extends Tagged("toString")() {}
-    const error = new ToStringError()
-
-    const result = matchTags(error, {
-      toString: () => "matched",
-    })
-
-    expect(result).toBe("matched")
-  })
-
   it("dispatches to matching handler", () => {
     const error = new TimeoutError()
 
@@ -114,29 +89,6 @@ describe("matchTags", () => {
 
     expect(result).toBe("fallback")
     expect(fallbackInput).toBe(error)
-  })
-
-  it("matches a union of three members", () => {
-    const error = asAppError(new NotFoundError({ id: "abc" }))
-
-    const result = matchTags(error, {
-      NotFoundError: (e) => e.id,
-      PaymentError: (e) => e.invoiceId,
-      TimeoutError: () => "timeout",
-    })
-
-    expect(result).toBe("abc")
-  })
-
-  it("matches a union of two members", () => {
-    const error = asCoreError(new TimeoutError())
-
-    const result = matchTags(error, {
-      NotFoundError: (e) => e.id,
-      TimeoutError: () => "timeout",
-    })
-
-    expect(result).toBe("timeout")
   })
 })
 
