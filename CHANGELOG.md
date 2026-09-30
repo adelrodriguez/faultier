@@ -1,5 +1,23 @@
 # faultier
 
+## 3.1.2
+
+### Patch Changes
+
+- 29f9d7c: Fix `getContext()` dropping meta keys such as `constructor`, `toString`, or `__proto__`
+- 29f9d7c: Follow native `Error.cause` chains
+
+  `unwrap()`, `flatten()`, `getTags()`, and `getContext()` stopped at the first non-Fault error, so wrapping `new Error("mid", { cause: root })` lost `root`, along with any Faults below it. Serialization dropped it too. Traversal now continues through native errors, and the `"error"` cause in the wire format carries an optional nested `cause` that `fromSerializable` restores. Existing payloads still deserialize unchanged.
+
+- 33e6d7c: Reject registered classes whose constructor cannot be revived
+
+  `registry.fromSerializable` rebuilds a fault with `new Class(payloadFields)`. A class with a constructor like `constructor(id: string)` came back with `id` set to the whole payload object, silently. `registry()` now reports a type error for any constructor that does not take the fields object as its only parameter. Runtime behaviour is unchanged.
+
+  This is a breaking type change: code that registered such a class compiled before and no longer does. It ships as a patch because that code already corrupted data on revive.
+
+  - If this flags one of your classes, keep the constructor as `constructor(fields: { id: string })` and move the shorthand to a static factory such as `static forId(id: string) { return new UserNotFound({ id }) }`.
+  - A generic wrapper that forwards an unresolved map, such as `function make<const M extends ...>(ctors: M) { return registry(ctors) }`, no longer compiles, because the check cannot run on an unresolved type parameter. Call `registry()` with a concrete map, or cast inside the wrapper.
+
 ## 3.1.1
 
 ### Patch Changes
