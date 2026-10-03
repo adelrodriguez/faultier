@@ -61,6 +61,11 @@ function instantiate<Ctor extends AnyFaultCtor>(ctor: Ctor, args: unknown[]): In
 }
 
 export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
+  /**
+   * Type-only union of the registry's fault instances, for `typeof Registry.Type`.
+   * It is `undefined` at runtime.
+   */
+  readonly Type: InstanceType<M[keyof M]>
   readonly tags: ReadonlyArray<keyof M>
   create<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]>
   wrap(cause: unknown): {
@@ -113,7 +118,7 @@ type RevivableCtors<M extends Record<string, AnyFaultCtor>> = {
 export function registry<const M extends Record<string, AnyFaultCtor>>(
   ctors: M & RevivableCtors<M>
 ): FaultRegistry<M> {
-  return createRegistry(ctors, Object.entries(ctors))
+  return createRegistry<M>(ctors, Object.entries(ctors))
 }
 
 export function registryFromEntries(
@@ -211,7 +216,7 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
     return dispatchTags(err, handlers, fallback) as HandlerResult<H> | RF | undefined
   }
 
-  const instance: FaultRegistry<M> = {
+  const instance: Omit<FaultRegistry<M>, "Type"> = {
     tags,
 
     create,
@@ -244,7 +249,9 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
     },
   }
 
-  setRegistryState(instance, { tagToCtor })
+  // Safe: Type is a phantom member that exists only at the type level.
+  const faultRegistry = instance as FaultRegistry<M>
+  setRegistryState(faultRegistry, { tagToCtor })
 
-  return instance
+  return faultRegistry
 }

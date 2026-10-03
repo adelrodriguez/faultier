@@ -230,6 +230,9 @@ const fault = AuthFault.create("NotFoundError", { resource: "user", id: "123" })
 
 // Wrap existing errors
 const wrapped = AuthFault.wrap(new Error("connection reset")).as("TimeoutError")
+
+// Union of every fault in the registry: NotFoundError | TimeoutError
+type AuthError = typeof AuthFault.Type
 ```
 
 Merge registries into a larger union:
@@ -370,6 +373,7 @@ must not be dropped.
 | Method                                     | Description                                                 |
 | ------------------------------------------ | ----------------------------------------------------------- |
 | `tags`                                     | Registered tags in deterministic order                      |
+| `typeof registry.Type`                     | Union of the registry's fault types (type-only)             |
 | `create(tag, fields?)`                     | Create a fault by tag                                       |
 | `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                    |
 | `is(error)`                                | Type guard for any fault in the registry                    |
