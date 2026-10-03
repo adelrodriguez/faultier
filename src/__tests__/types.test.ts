@@ -132,6 +132,16 @@ describe("type-level inference", () => {
     type _Restored = Expect<Equal<typeof restored, Fault | NotFoundError | TimeoutError>>
   })
 
+  it("exposes the registry fault union as Type", () => {
+    const MergedFault = merge(AppFault, DbFault)
+
+    type _AppFault = Expect<Equal<typeof AppFault.Type, NotFoundError | TimeoutError>>
+    type _DbFault = Expect<Equal<typeof DbFault.Type, DatabaseError>>
+    type _Merged = Expect<
+      Equal<typeof MergedFault.Type, NotFoundError | TimeoutError | DatabaseError>
+    >
+  })
+
   it("types the registry.matchTag handler instance", () => {
     const fault = AppFault.create("NotFoundError", { id: "123" })
 
