@@ -6,7 +6,7 @@ import type { SerializableFault, SerializableValue } from "../types"
 import { Fault, fromSerializable, Tagged } from "../index"
 
 // Test-side mirror of the internal isReservedKey rule: wire envelope keys
-// (documented in CONTEXT.md) plus anything reachable through Fault's
+// (documented in GLOSSARY.md) plus anything reachable through Fault's
 // prototype chain. The reserved-key properties below keep this mirror honest —
 // if the library's rule drifts, they fail.
 const WIRE_ENVELOPE_KEYS = new Set([
