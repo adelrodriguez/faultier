@@ -1,0 +1,486 @@
+// Compile-time checks only: `pnpm run check` and `pnpm run typecheck` enforce this file, and Vitest never runs it.
+import type {
+  ByTag,
+  FaultRegistry,
+  FlattenField,
+  FlattenOptions,
+  SerializableCause,
+  SerializableFault,
+  SerializableValue,
+  TagOf,
+} from "../types"
+import {
+  type Fault,
+  fromSerializable,
+  matchTag,
+  matchTags,
+  merge,
+  registry,
+  Tagged,
+} from "../index"
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
+
+type Expect<T extends true> = T
+
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue }
+
+// ── Test fixtures ────────────────────────────────────────────────────────────
+class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
+class TimeoutError extends Tagged("TimeoutError")() {}
+class DatabaseError extends Tagged("DatabaseError")<{ query: string }>() {}
+class PaymentError extends Tagged("PaymentError")<{ invoiceId: string }>() {}
+
+const AppFault = registry({ NotFoundError, TimeoutError })
+const DbFault = registry({ DatabaseError })
+const BillingFault = registry({ PaymentError })
+type AppError = NotFoundError | TimeoutError | PaymentError
+
+// ── Positive type-level tests ────────────────────────────────────────────────
+// Gives Tagged instances the correct _tag literal type.
+{
+  const fault = new NotFoundError({ id: "123" })
+
+  type _TagIsLiteral = Expect<Equal<typeof fault._tag, "NotFoundError">>
+}
+
+// Exposes Tagged fields as readonly properties.
+{
+  const fault = new NotFoundError({ id: "123" })
+
+  type _IdIsString = Expect<Equal<typeof fault.id, string>>
+}
+
+// Makes Tagged instances extend Fault.
+{
+  const fault = new NotFoundError({ id: "123" })
+
+  type _ExtendsFault = Expect<Equal<typeof fault extends Fault ? true : false, true>>
+}
+
+// Exports public contracts from the types entrypoint.
+{
+  type _Registry = Expect<
+    typeof AppFault extends FaultRegistry<{
+      NotFoundError: typeof NotFoundError
+      TimeoutError: typeof TimeoutError
+    }>
+      ? true
+      : false
+  >
+  type _FlattenField = Expect<Equal<FlattenField, "details" | "message">>
+  type _FlattenOptions = Expect<Equal<FlattenOptions["field"], FlattenField | undefined>>
+  type _Tags = Expect<Equal<TagOf<AppError>, "NotFoundError" | "PaymentError" | "TimeoutError">>
+  type _ByTag = Expect<Equal<ByTag<AppError, "PaymentError">, PaymentError>>
+  type _SerializableMarker = Expect<Equal<SerializableFault["__faultier"], true>>
+  type _CauseKinds = Expect<Equal<SerializableCause["kind"], "error" | "fault" | "thrown">>
+  type _SerializableFaultIsJsonValue = Expect<SerializableFault extends JsonValue ? true : false>
+  type _ThrownValueIsSerializable = Expect<
+    Equal<Extract<SerializableCause, { kind: "thrown" }>["value"], SerializableValue>
+  >
+
+  const value: SerializableValue = { nested: ["value", null] }
+  void value
+}
+
+// Infers the correct registry.create instance type.
+{
+  const fault = AppFault.create("NotFoundError", { id: "123" })
+
+  type _IsNotFound = Expect<Equal<typeof fault, NotFoundError>>
+  type _HasId = Expect<Equal<typeof fault.id, string>>
+}
+
+// Infers the correct registry.wrap().as instance type.
+{
+  const fault = AppFault.wrap(new Error("root")).as("NotFoundError", { id: "123" })
+
+  type _IsNotFound = Expect<Equal<typeof fault, NotFoundError>>
+  type _HasId = Expect<Equal<typeof fault.id, string>>
+}
+
+// Types registry guards, tags, and serialization contracts.
+{
+  const value: unknown = AppFault.create("TimeoutError")
+  const tags = AppFault.tags
+  const fault = AppFault.create("NotFoundError", { id: "123" })
+  const serialized = fault.toSerializable()
+  const registrySerialized = AppFault.toSerializable(fault)
+  const generic = fromSerializable(serialized)
+  const restored = AppFault.fromSerializable(serialized)
+
+  if (AppFault.is(value)) {
+    type _Narrowed = Expect<Equal<typeof value, NotFoundError | TimeoutError>>
+  }
+
+  type _Tags = Expect<Equal<typeof tags, ReadonlyArray<"NotFoundError" | "TimeoutError">>>
+  type _Serialized = Expect<Equal<typeof serialized, SerializableFault>>
+  type _RegistrySerialized = Expect<Equal<typeof registrySerialized, SerializableFault>>
+  type _Generic = Expect<Equal<typeof generic, Fault>>
+  type _Restored = Expect<Equal<typeof restored, Fault | NotFoundError | TimeoutError>>
+}
+
+// Exposes the registry fault union as Type.
+{
+  const MergedFault = merge(AppFault, DbFault)
+
+  type _AppFault = Expect<Equal<typeof AppFault.Type, NotFoundError | TimeoutError>>
+  type _DbFault = Expect<Equal<typeof DbFault.Type, DatabaseError>>
+  type _Merged = Expect<
+    Equal<typeof MergedFault.Type, NotFoundError | TimeoutError | DatabaseError>
+  >
+}
+
+// Types the registry.matchTag handler instance.
+{
+  const fault = AppFault.create("NotFoundError", { id: "123" })
+
+  AppFault.matchTag(fault, "NotFoundError", (e) => {
+    type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+    type _HasId = Expect<Equal<typeof e.id, string>>
+    return e.id
+  })
+}
+
+// Types registry.matchTags handler instances.
+{
+  const fault = AppFault.create("NotFoundError", { id: "123" })
+
+  AppFault.matchTags(fault, {
+    NotFoundError: (e) => {
+      type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+      type _HasId = Expect<Equal<typeof e.id, string>>
+      return e.id
+    },
+    TimeoutError: (e) => {
+      type _IsTimeout = Expect<Equal<typeof e, TimeoutError>>
+      return "timeout"
+    },
+  })
+}
+
+// Narrows matchTag handler and return types.
+{
+  const err = new NotFoundError({ id: "123" }) as AppError
+
+  const withoutFallback = matchTag(err, "NotFoundError", (e) => {
+    type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+    return e.id
+  })
+
+  const withFallback = matchTag(
+    err,
+    "NotFoundError",
+    (e) => {
+      type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+      return e.id
+    },
+    (e) => {
+      type _IsExclude = Expect<Equal<typeof e, TimeoutError | PaymentError>>
+      return e._tag
+    }
+  )
+
+  const heterogeneousResult = matchTag(
+    err,
+    "NotFoundError",
+    () => "found" as const,
+    () => 404 as const
+  )
+
+  type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
+  type _WithFallback = Expect<Equal<typeof withFallback, string>>
+  type _HeterogeneousResult = Expect<Equal<typeof heterogeneousResult, "found" | 404>>
+}
+
+// Narrows matchTags handlers and return type.
+{
+  const err = new TimeoutError() as AppError
+
+  const withoutFallback = matchTags(err, {
+    NotFoundError: (e) => {
+      type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+      return e.id
+    },
+    TimeoutError: (e) => {
+      type _IsTimeout = Expect<Equal<typeof e, TimeoutError>>
+      return 408 as const
+    },
+  })
+
+  const withFallback = matchTags(
+    err,
+    {
+      NotFoundError: (e) => {
+        type _IsNotFound = Expect<Equal<typeof e, NotFoundError>>
+        return e.id
+      },
+    },
+    (e) => {
+      type _IsAppError = Expect<Equal<typeof e, AppError>>
+      return false as const
+    }
+  )
+
+  type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | 408 | undefined>>
+  type _WithFallback = Expect<Equal<typeof withFallback, string | false>>
+}
+
+// Returns R from an exhaustive matchTags map without fallback.
+{
+  const err = new TimeoutError() as AppError
+
+  const result = matchTags(err, {
+    NotFoundError: () => "not-found" as const,
+    PaymentError: () => "payment" as const,
+    TimeoutError: () => 408 as const,
+  })
+
+  type _Result = Expect<Equal<typeof result, "not-found" | "payment" | 408>>
+}
+
+// Returns R or undefined from a partial matchTags map without fallback.
+{
+  const err = new TimeoutError() as AppError
+
+  const result = matchTags(err, {
+    TimeoutError: () => 408 as const,
+  })
+
+  type _Result = Expect<Equal<typeof result, 408 | undefined>>
+}
+
+// Keeps undefined for variable maps with optional handlers.
+{
+  const err = new TimeoutError() as AppError
+  const handlers: Partial<{
+    NotFoundError: (error: NotFoundError) => "not-found"
+    PaymentError: (error: PaymentError) => "payment"
+    TimeoutError: (error: TimeoutError) => 408
+  }> = {
+    TimeoutError: () => 408,
+  }
+
+  const result = matchTags(err, handlers)
+
+  type _Result = Expect<Equal<typeof result, "not-found" | "payment" | 408 | undefined>>
+}
+
+// Keeps undefined when a required handler may be undefined.
+{
+  const err = new TimeoutError() as AppError
+  const handlers: {
+    NotFoundError: ((error: NotFoundError) => "not-found") | undefined
+    PaymentError: (error: PaymentError) => "payment"
+    TimeoutError: (error: TimeoutError) => 408
+  } = {
+    NotFoundError: undefined,
+    PaymentError: () => "payment",
+    TimeoutError: () => 408,
+  }
+
+  const result = matchTags(err, handlers)
+
+  type _Result = Expect<Equal<typeof result, "not-found" | "payment" | 408 | undefined>>
+}
+
+// Narrows registry.matchTag return type with fallback.
+{
+  const fault = AppFault.create("NotFoundError", { id: "123" })
+
+  const withoutFallback = AppFault.matchTag(fault, "NotFoundError", (e) => e.id)
+  const withFallback = AppFault.matchTag(
+    fault,
+    "NotFoundError",
+    () => "found" as const,
+    (e) => {
+      type _IsUnknown = Expect<Equal<typeof e, unknown>>
+      return 404 as const
+    }
+  )
+
+  type _WithoutFallback = Expect<Equal<typeof withoutFallback, string | undefined>>
+  type _WithFallback = Expect<Equal<typeof withFallback, "found" | 404>>
+}
+
+// Narrows registry.matchTags return type with fallback.
+{
+  const fault = AppFault.create("NotFoundError", { id: "123" })
+
+  const withoutFallback = AppFault.matchTags(fault, {
+    NotFoundError: () => "not-found" as const,
+    TimeoutError: () => 408 as const,
+  })
+  const withFallback = AppFault.matchTags(
+    fault,
+    {
+      NotFoundError: () => "not-found" as const,
+    },
+    (e) => {
+      type _IsUnknown = Expect<Equal<typeof e, unknown>>
+      return false as const
+    }
+  )
+
+  type _WithoutFallback = Expect<Equal<typeof withoutFallback, "not-found" | 408 | undefined>>
+  type _WithFallback = Expect<Equal<typeof withFallback, "not-found" | false>>
+}
+
+// Preserves merge type inference across three or more modules.
+{
+  const MergedFault = merge(AppFault, DbFault, BillingFault)
+
+  const nf = MergedFault.create("NotFoundError", { id: "123" })
+  const db = MergedFault.create("DatabaseError", { query: "SELECT 1" })
+  const pay = MergedFault.create("PaymentError", { invoiceId: "inv_1" })
+
+  type _NfIsNotFound = Expect<Equal<typeof nf, NotFoundError>>
+  type _DbIsDatabase = Expect<Equal<typeof db, DatabaseError>>
+  type _PayIsPayment = Expect<Equal<typeof pay, PaymentError>>
+  type _NfHasId = Expect<Equal<typeof nf.id, string>>
+  type _DbHasQuery = Expect<Equal<typeof db.query, string>>
+  type _PayHasInvoiceId = Expect<Equal<typeof pay.invoiceId, string>>
+}
+
+// Preserves subclass type through fluent methods.
+{
+  const fault = new NotFoundError({ id: "123" })
+    .withDescription("new message", "new details")
+    .withMessage("gone")
+    .withDetails("not here")
+    .withMeta({ key: "val" })
+    .withCause(new Error("root"))
+
+  type _StillNotFound = Expect<Equal<typeof fault, NotFoundError>>
+}
+
+// ── Negative type tests ──────────────────────────────────────────────────────
+// These verify that invalid usage produces compile-time errors.
+// The function bodies never execute — only the type checker matters.
+
+// ── Registered constructor contract (#66) ────────────────────────────────────
+// registry.fromSerializable revives through `new Class(payloadFields)`, so a
+// registered constructor must take the fields object as its only parameter.
+
+class PositionalError extends Tagged("PositionalError")<{ id: string }>() {
+  constructor(id: string) {
+    super({ id })
+  }
+}
+
+class ExtraParamError extends Tagged("ExtraParamError")<{ id: string }>() {
+  constructor(fields: { id: string }, _retryable: boolean) {
+    super(fields)
+  }
+}
+
+class DerivedMessageError extends Tagged("DerivedMessageError")<{ id: string }>() {
+  constructor(fields: { id: string }) {
+    super(fields)
+    this.message = `Missing ${fields.id}`
+  }
+}
+
+class FieldlessDefaultsError extends Tagged("FieldlessDefaultsError")() {
+  constructor() {
+    super()
+    this.message = "Timed out"
+  }
+
+  isRetryable(): boolean {
+    return true
+  }
+
+  get summary(): string {
+    return `${this._tag}: ${this.message}`
+  }
+}
+
+function _registeredConstructorContract() {
+  // @ts-expect-error -- positional constructors cannot be revived from payload fields
+  registry({ PositionalError })
+
+  // @ts-expect-error -- a second constructor parameter cannot be supplied on revive
+  registry({ ExtraParamError })
+
+  // @ts-expect-error -- one invalid entry rejects the call even next to valid ones
+  registry({ DerivedMessageError, PositionalError })
+
+  const Valid = registry({
+    DerivedMessageError,
+    FieldlessDefaultsError,
+    NotFoundError,
+    TimeoutError,
+  })
+  type _KeepsInference = Expect<
+    Equal<ReturnType<typeof Valid.create<"DerivedMessageError">>, DerivedMessageError>
+  >
+}
+
+function _negativeTypeTests() {
+  // @ts-expect-error -- registry state is internal
+  void AppFault.__faultier
+
+  // @ts-expect-error -- "BadTag" is not a registered tag
+  AppFault.create("BadTag", {})
+
+  // @ts-expect-error -- id should be string, not number
+  AppFault.create("NotFoundError", { id: 123 })
+
+  // @ts-expect-error -- NotFoundError requires { id: string }
+  AppFault.create("NotFoundError")
+
+  // @ts-expect-error -- "BadTag" is not a registered tag
+  AppFault.wrap(new Error("root")).as("BadTag", {})
+
+  // @ts-expect-error -- "BadTag" is not a registered tag
+  AppFault.matchTag({}, "BadTag", () => "nope")
+
+  // @ts-expect-error -- "BadTag" is not in AppError union
+  matchTag(new TimeoutError() as AppError, "BadTag", () => "nope")
+
+  AppFault.matchTags(
+    {},
+    {
+      // @ts-expect-error -- "BadTag" is not a registered tag
+      BadTag: () => "nope",
+    }
+  )
+
+  matchTags(new TimeoutError() as AppError, {
+    // @ts-expect-error -- "BadTag" is not in AppError union
+    BadTag: () => "nope",
+  })
+
+  const MergedFault = merge(AppFault, DbFault)
+
+  // @ts-expect-error -- "BadTag" is not in any merged registry
+  MergedFault.create("BadTag", {})
+
+  const fault = AppFault.create("TimeoutError")
+
+  // @ts-expect-error -- flatten field must be "message" | "details"
+  fault.flatten({ field: "bad-field" })
+
+  // @ts-expect-error -- metadata values must be JSON-safe SerializableValue values
+  fault.withMeta({ createdAt: new Date() })
+
+  // @ts-expect-error -- Tagged fields must contain only JSON-safe SerializableValue values
+  class NonSerializableFieldsError extends Tagged("NonSerializableFieldsError")<{
+    createdAt: Date
+  }>() {}
+
+  void NonSerializableFieldsError
+}
+
+// Suppress unused function warning — this exists only for type checking
+void _negativeTypeTests

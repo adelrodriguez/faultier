@@ -32,7 +32,7 @@ Use `pnpm test` to run tests. Use `describe` to group tests by function or featu
 - `describe` labels should be the exact function or class being tested (for example: `describe("Fault")`, `describe("withCause")`).
 - A `__tests__/` directory tests only the files it is a sibling of: tests import only from modules in their `__tests__/` directory's parent directory, never from directories outside that scope.
 - `src/__tests__/` therefore holds the public API tests (importing only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`), and internal `src/lib/` modules get colocated suites in `src/lib/__tests__/`.
-- Public API type changes must be covered in `src/__tests__/types.test.ts`.
+- Public API type changes must be covered in `src/__tests__/types.test-d.ts`.
 - Type assertions are enforced by `pnpm run check` and `pnpm run typecheck`, not Vitest.
 
 ```ts#index.test.ts
