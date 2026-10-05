@@ -2,7 +2,7 @@ name: release
 
 on:
   workflow_run:
-    workflows: ["tests"]
+    workflows: ["build"]
     branches: [main]
     types: [completed]
 
@@ -11,13 +11,17 @@ permissions:
   pull-requests: write
   id-token: write # Required for OIDC
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+# Only runs that will do work share the group, so a skipped stale
+# workflow_run cannot cancel or replace the run for the current commit.
+concurrency: ${{ github.workflow }}-${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha == github.sha)) && github.ref || github.run_id }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_sha == github.sha
     steps:
       - name: checkout code
         uses: actions/checkout@v7

@@ -1,4 +1,4 @@
-name: tests
+name: test
 
 on:
   push:
@@ -9,9 +9,17 @@ on:
       - main
       - release-please
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: checkout code
@@ -31,6 +39,3 @@ jobs:
 
       - name: run tests
         run: pnpm test
-
-      - name: verify package
-        run: pnpm run test:package
