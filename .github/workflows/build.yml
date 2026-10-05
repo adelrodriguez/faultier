@@ -13,8 +13,10 @@ on:
 permissions:
   contents: read
 
+# Only runs that will do work share the group, so a skipped stale
+# workflow_run cannot cancel or replace the run for the current commit.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha == github.sha)) && github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
