@@ -44,7 +44,7 @@ src/
     └── wire.ts
 ```
 
-See [`CONTEXT.md`](CONTEXT.md) for the domain glossary, behavioral model, and detailed module responsibilities.
+See [`GLOSSARY.md`](GLOSSARY.md) for the domain glossary, behavioral model, and detailed module responsibilities.
 
 ## Development Workflow
 
