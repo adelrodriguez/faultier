@@ -17,9 +17,5 @@ export default defineConfig({
       files: ["src/lib/registry.ts"],
       rules: { "typescript/no-invalid-void-type": "off" },
     },
-    {
-      files: ["src/__tests__/types.test-d.ts"],
-      rules: { "typescript/no-unnecessary-type-parameters": "off" },
-    },
   ],
 })
