@@ -128,7 +128,7 @@ Allows users to define custom serialization logic for context objects.
 - A `__tests__/` directory tests only the files in its parent directory
 - Public tests live in `src/__tests__/` and import only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`
 - Unit tests for `src/lib/` modules live in `src/lib/__tests__/` and import only from `src/lib/`
-- Public API type changes require coverage in `src/__tests__/types.test.ts`
+- Public API type changes require coverage in `src/__tests__/types.test-d.ts`
 - Type assertions are checked by `pnpm run check` and `pnpm run typecheck`, not Vitest
 
 ## Changesets Workflow
