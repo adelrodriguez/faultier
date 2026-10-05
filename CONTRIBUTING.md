@@ -89,7 +89,7 @@ pnpm run build
 pnpm run dev
 
 # Build and verify all published entry points
-pnpm run test:package
+pnpm run build:verify
 ```
 
 ## Making Changes
@@ -181,7 +181,7 @@ Ensure your PR meets these requirements:
 - [ ] All tests pass (`pnpm test`)
 - [ ] Type checking passes (`pnpm run typecheck`)
 - [ ] Linting and formatting pass (`pnpm run check`)
-- [ ] Package verification passes for entrypoint/build changes (`pnpm run test:package`)
+- [ ] Package verification passes for entrypoint/build changes (`pnpm run build:verify`)
 - [ ] Changeset added (if applicable)
 - [ ] Documentation updated (if needed)
 

@@ -43,6 +43,7 @@
   "scripts": {
     "analyze": "adamantite analyze",
     "build": "tsdown",
+    "build:verify": "pnpm run build && node scripts/verify-package.ts",
     "bump:deps": "pnpm update --interactive",
     "check": "adamantite check",
     "dev": "tsdown --watch",
@@ -50,7 +51,6 @@
     "release": "changeset publish",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:package": "pnpm run build && node scripts/verify-package.ts",
     "test:watch": "vitest",
     "typecheck": "adamantite check",
     "version": "changeset version"
