@@ -1,5 +1,33 @@
 # faultier
 
+## 3.3.0
+
+### Minor Changes
+
+- e4ccdb8: Add `findCause(err, Class)` and `registry.findCause(err, tag)` to get a typed fault out of the cause chain without `unwrap().find(...)` and a hand-written type guard.
+
+  ```ts
+  Faultier.findCause(err, NotFoundError) // NotFoundError | undefined
+  AppFault.findCause(err, "NotFoundError") // NotFoundError | undefined
+  ```
+
+  Both take any caught value, return `undefined` for non-Faults, and search from the head, so the fault itself can match. `findCause` works with any class, including native errors such as `TypeError`. `registry.findCause` uses the same membership rule as `registry.is`: the tag must be registered and the instance must come from the registered constructor.
+
+- a5c26b5: `fromSerializable` and `registry.fromSerializable` now throw `InvalidPayloadError` from `faultier/errors` for a malformed wire payload, instead of a bare `Error`. Its `reason` field names the failed check (`expected __faultier: true`, `_tag must be a string`, or `meta must be an object`).
+
+  The message is unchanged (`Invalid Faultier payload: <reason>`), so code that matches on it keeps working. Code that checks `error.name === "Error"` or `error.constructor === Error` must switch to `instanceof InvalidPayloadError`.
+
+- 89d3f46: Add `isSerializableFault(value)`, a type guard for wire payloads received over RPC or HTTP. It returns `true` only when the envelope fields (`_tag`, `name`, `message`, `details`, `stack`, `meta`) and the whole cause chain match `SerializableFault`, so `fromSerializable` will accept the value without throwing. As with `fromSerializable`, payload and `meta` values are not deep-validated.
+- c2daf15: Add a top-level `toSerializable(value)` that serializes any caught value without a registry: Faults encode themselves, native `Error`s become `UnknownError`, and other thrown values become `UnknownThrown`. `registry.toSerializable` now delegates to it.
+
+### Patch Changes
+
+- 45fd999: Make `registry.is` a constant-time tag lookup instead of an `instanceof` check against every registered constructor, which speeds up `matchTag` and `matchTags` on large merged registries.
+
+  `registry.is` now returns `false` for a subclass of a registered constructor whose `_tag` is not itself registered, consistent with `matchTag` and `matchTags` dispatching by `_tag`.
+
+- 6714e9e: `registry.create` and `registry.wrap(...).as` now throw `TypeError: Unknown Fault registry tag '<tag>'.` for a tag the registry does not contain, instead of an opaque `... is not a constructor` error. This includes inherited object keys such as `toString`.
+
 ## 3.2.0
 
 ### Minor Changes
