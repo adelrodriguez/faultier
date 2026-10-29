@@ -317,6 +317,14 @@ describe("registry", () => {
     expect(Faults.is(new DerivedFault())).toBe(false)
   })
 
+  it("creates and wraps faults registered under numeric keys", () => {
+    class NumericError extends Tagged("1")() {}
+    const Faults = registry({ 1: NumericError })
+
+    expect(Faults.create(1)).toBeInstanceOf(NumericError)
+    expect(Faults.wrap(new Error("root")).as(1)).toBeInstanceOf(NumericError)
+  })
+
   it("throws a TypeError naming the tag when create receives an unregistered tag", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
 

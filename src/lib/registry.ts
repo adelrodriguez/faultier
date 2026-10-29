@@ -141,7 +141,7 @@ export function createRegistry<const M extends Record<string, AnyFaultCtor>>(
   }
 
   function create<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]> {
-    const ctor = tagToCtor.get(tag as string)
+    const ctor = tagToCtor.get(String(tag))
     if (!ctor) {
       throw new TypeError(`Unknown Fault registry tag '${String(tag)}'.`)
     }
