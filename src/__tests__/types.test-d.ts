@@ -13,6 +13,7 @@ import type {
 
 import {
   type Fault,
+  findCause,
   fromSerializable,
   matchTag,
   matchTags,
@@ -122,8 +123,8 @@ type AppError = NotFoundError | TimeoutError | PaymentError
   expectTypeOf(AppFault.findCause(value, "NotFoundError")).toEqualTypeOf<
     NotFoundError | undefined
   >()
-  expectTypeOf(fault.findCause(TimeoutError)).toEqualTypeOf<TimeoutError | undefined>()
-  expectTypeOf(fault.findCause(TypeError)).toEqualTypeOf<TypeError | undefined>()
+  expectTypeOf(findCause(value, TimeoutError)).toEqualTypeOf<TimeoutError | undefined>()
+  expectTypeOf(findCause(value, TypeError)).toEqualTypeOf<TypeError | undefined>()
 
   expectTypeOf(tags).toEqualTypeOf<ReadonlyArray<"NotFoundError" | "TimeoutError">>()
   expectTypeOf(serialized).toEqualTypeOf<SerializableFault>()

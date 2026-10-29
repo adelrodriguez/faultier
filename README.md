@@ -186,17 +186,18 @@ const outer = new NotFoundError({ resource: "user", id: "123" })
 
 outer.unwrap() // [outer, inner, root] — full chain as array
 outer.getTags() // ["NotFoundError", "TimeoutError"] — all tags in chain
-outer.findCause(TimeoutError) // inner — first chain node that is a TimeoutError
 outer.getContext() // merged metadata from all faults (head wins on conflicts)
 ```
 
 The chain follows native `Error.cause` links too, so a root cause nested inside a plain `Error` is still reachable.
 
-To find a cause by tag from a caught `unknown`, use the registry. Like `registry.is`, it
-matches by the registered constructor, so a foreign fault with the same tag is skipped:
+To get a typed fault out of the chain, search from the head by class or by registry tag. The
+registry version matches like `registry.is`, by the registered constructor, so a foreign fault
+with the same tag is skipped:
 
 ```ts
-const notFound = AppFault.findCause(err, "NotFoundError") // NotFoundError | undefined
+Faultier.findCause(outer, TimeoutError) // inner, typed as TimeoutError | undefined
+AppFault.findCause(err, "NotFoundError") // NotFoundError | undefined
 ```
 
 Use `flatten()` to convert a cause chain to a string:
@@ -375,7 +376,6 @@ must not be dropped.
 | `withCause(cause)`                   | Chain a cause (fluent)                                        |
 | `unwrap()`                           | Cause chain as array `[head, ..., leaf]`                      |
 | `getTags()`                          | `_tag` values from all Faults in the chain                    |
-| `findCause(Class)`                   | First chain node that is an instance of `Class`, or undefined |
 | `getContext()`                       | Merged metadata from all Faults (head wins on conflicts)      |
 | `flatten(options?)`                  | Cause chain to string (see [Error Chaining](#error-chaining)) |
 | `toSerializable()`                   | Serialize to wire format                                      |
@@ -397,20 +397,21 @@ must not be dropped.
 
 ### Top-level (`Faultier.*`)
 
-| Method                   | Description                                                  |
-| ------------------------ | ------------------------------------------------------------ |
-| `Tagged(tag)<Fields>()`  | Create a tagged Fault subclass with `_tag` as discriminant   |
-| `registry({ ...ctors })` | Create a scoped fault registry from tagged constructors      |
-| `merge(a, b, ...rest)`   | Merge registries into one union (throws on conflicting tags) |
-| `matchTag(...)`          | Match one tag in a typed Fault union                         |
-| `matchTags(...)`         | Match several tags in a typed Fault union                    |
-| `isFault(value)`         | Type guard for Fault instances (not cross-realm safe)        |
-| `toSerializable(error)`  | Serialize any error (Fault, Error, or unknown thrown value)  |
-| `fromSerializable(data)` | Reconstruct a generic Fault (no subclass restoration)        |
+| Method                    | Description                                                   |
+| ------------------------- | ------------------------------------------------------------- |
+| `Tagged(tag)<Fields>()`   | Create a tagged Fault subclass with `_tag` as discriminant    |
+| `registry({ ...ctors })`  | Create a scoped fault registry from tagged constructors       |
+| `merge(a, b, ...rest)`    | Merge registries into one union (throws on conflicting tags)  |
+| `matchTag(...)`           | Match one tag in a typed Fault union                          |
+| `matchTags(...)`          | Match several tags in a typed Fault union                     |
+| `isFault(value)`          | Type guard for Fault instances (not cross-realm safe)         |
+| `findCause(error, Class)` | First chain node that is an instance of `Class`, or undefined |
+| `toSerializable(error)`   | Serialize any error (Fault, Error, or unknown thrown value)   |
+| `fromSerializable(data)`  | Reconstruct a generic Fault (no subclass restoration)         |
 
 ### Exports
 
-**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `toSerializable`, `fromSerializable`
+**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `findCause`, `toSerializable`, `fromSerializable`
 
 **`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
 

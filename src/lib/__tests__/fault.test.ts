@@ -1,7 +1,7 @@
 import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
-import { Fault, isFault, isReservedKey } from "../fault"
+import { Fault, findCause, isFault, isReservedKey } from "../fault"
 import { Tagged } from "../tagged"
 import { RESERVED_FAULT_KEYS } from "../wire"
 
@@ -180,29 +180,6 @@ describe("Fault", () => {
     expect(head.getTags()).toEqual(["ServiceError", "DatabaseError"])
   })
 
-  it("finds the first chain node that is an instance of the given class", () => {
-    class DatabaseError extends Tagged("DatabaseError")<{ table: string }>() {}
-    class ServiceError extends Tagged("ServiceError")() {}
-
-    const leaf = new DatabaseError({ table: "users" })
-    const mid = new Error("mid", { cause: leaf })
-    const head = new ServiceError().withCause(mid)
-
-    expect(head.findCause(DatabaseError)).toBe(leaf)
-    expect(head.findCause(ServiceError)).toBe(head)
-    expect(head.findCause(Error)).toBe(head)
-    expect(head.findCause(TypeError)).toBeUndefined()
-  })
-
-  it("finds causes by constructor identity, not by tag", () => {
-    class DatabaseError extends Tagged("DatabaseError")() {}
-    class ForeignDatabaseError extends Tagged("DatabaseError")() {}
-
-    const head = new ExampleFault().withCause(new ForeignDatabaseError())
-
-    expect(head.findCause(DatabaseError)).toBeUndefined()
-  })
-
   it("skips empty values in message flatten path", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}
@@ -298,6 +275,45 @@ describe("Fault", () => {
       name: "ExampleFault",
       stack: fault.stack,
     })
+  })
+})
+
+describe("findCause", () => {
+  it("finds the first chain node that is an instance of the given class", () => {
+    class DatabaseError extends Tagged("DatabaseError")<{ table: string }>() {}
+    class ServiceError extends Tagged("ServiceError")() {}
+
+    const leaf = new DatabaseError({ table: "users" })
+    const mid = new Error("mid", { cause: leaf })
+    const head = new ServiceError().withCause(mid)
+
+    expect(findCause(head, DatabaseError)).toBe(leaf)
+    expect(findCause(head, ServiceError)).toBe(head)
+    expect(findCause(head, Error)).toBe(head)
+    expect(findCause(head, TypeError)).toBeUndefined()
+  })
+
+  it("finds causes by constructor identity, not by tag", () => {
+    class DatabaseError extends Tagged("DatabaseError")() {}
+    class ForeignDatabaseError extends Tagged("DatabaseError")() {}
+
+    const head = new ExampleFault().withCause(new ForeignDatabaseError())
+
+    expect(findCause(head, DatabaseError)).toBeUndefined()
+  })
+
+  it("returns undefined for values that are not faults", () => {
+    const leaf = new ExampleFault()
+
+    expect(findCause(new Error("plain", { cause: leaf }), ExampleFault)).toBeUndefined()
+    expect(findCause("ExampleFault", ExampleFault)).toBeUndefined()
+  })
+
+  it("leaves findCause free as a payload field name", () => {
+    class LookupError extends Tagged("LookupError")<{ findCause: string }>() {}
+
+    expect(isReservedKey("findCause")).toBe(false)
+    expect(new LookupError({ findCause: "saved" }).findCause).toBe("saved")
   })
 })
 

@@ -176,10 +176,6 @@ export abstract class Fault extends Error {
       .map((item) => item._tag)
   }
 
-  findCause<T>(ctor: abstract new (...args: never[]) => T): T | undefined {
-    return this.unwrap().find((item): item is T => item instanceof ctor)
-  }
-
   getContext(): Record<string, unknown> {
     const faults = this.unwrap().filter((item): item is Fault => item instanceof Fault)
     // A Map (not a plain object) so keys like "constructor" or "__proto__"
@@ -243,6 +239,16 @@ export abstract class Fault extends Error {
 
 export function isFault(value: unknown): value is Fault {
   return value instanceof Fault
+}
+
+// Standalone rather than a Fault method, so "findCause" stays usable as a
+// payload field name instead of becoming a reserved key.
+export function findCause<T>(
+  err: unknown,
+  ctor: abstract new (...args: never[]) => T
+): T | undefined {
+  if (!(err instanceof Fault)) return undefined
+  return err.unwrap().find((item): item is T => item instanceof ctor)
 }
 
 // Serializes any caught value: Faults encode themselves; anything else is

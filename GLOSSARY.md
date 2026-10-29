@@ -21,7 +21,7 @@
 - Generic and registry reconstruction share validation, payload restoration, cause recursion, and depth accounting.
 - Reserved keys follow one rule with two policies: `Tagged` construction rejects them (`ReservedFieldError`), while deserialization renames colliding wire keys with repeated `__payload_` prefixes until safe and unique (wire data must not be dropped).
 - Cause traversal, serialization, and deserialization stop after 100 nested fault edges.
-- `unwrap()` and related helpers order chains from head to leaf. Metadata merging gives the head precedence. `findCause()` returns the first match from the head, which includes the head itself.
+- `unwrap()` and related helpers order chains from head to leaf. Metadata merging gives the head precedence. `findCause()` and `registry.findCause()` return the first match from the head, which includes the head itself.
 - Cause traversal and the wire format follow native `Error.cause` links as well as Fault causes, so Faults below a native error stay visible. Both kinds of edge share the 100-edge budget.
 
 ## Public Entrypoints
