@@ -1,7 +1,7 @@
 import type { FaultRegistry } from "./registry"
 import type { AnyFaultCtor } from "./registry-state"
 import { RegistryMergeConflictError } from "./errors"
-import { registryFromEntries } from "./registry"
+import { createRegistry } from "./registry"
 import { getRegistryState } from "./registry-state"
 
 type AnyFaultRegistry = FaultRegistry<Record<string, AnyFaultCtor>>
@@ -41,5 +41,5 @@ export function merge<
     }
   }
 
-  return registryFromEntries([...tagToCtor])
+  return createRegistry([...tagToCtor])
 }

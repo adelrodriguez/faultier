@@ -118,26 +118,10 @@ type RevivableCtors<M extends Record<string, AnyFaultCtor>> = {
 export function registry<const M extends Record<string, AnyFaultCtor>>(
   ctors: M & RevivableCtors<M>
 ): FaultRegistry<M> {
-  return createRegistry<M>(ctors, Object.entries(ctors))
+  return createRegistry<M>(Object.entries(ctors))
 }
 
-export function registryFromEntries(
-  entries: readonly FaultCtorEntry[]
-): FaultRegistry<Record<string, AnyFaultCtor>> {
-  const ctors: Record<string, AnyFaultCtor> = {}
-  for (const [tag, ctor] of entries) {
-    Object.defineProperty(ctors, tag, {
-      configurable: true,
-      enumerable: true,
-      value: ctor,
-      writable: true,
-    })
-  }
-  return createRegistry(ctors, entries)
-}
-
-function createRegistry<const M extends Record<string, AnyFaultCtor>>(
-  ctors: M,
+export function createRegistry<const M extends Record<string, AnyFaultCtor>>(
   entries: readonly FaultCtorEntry[]
 ): FaultRegistry<M> {
   const tagToCtor = new Map<string, AnyFaultCtor>()
@@ -157,7 +141,10 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
   }
 
   function create<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]> {
-    const ctor = ctors[tag]
+    const ctor = tagToCtor.get(tag as string)
+    if (!ctor) {
+      throw new TypeError(`Unknown Fault registry tag '${String(tag)}'.`)
+    }
     // Safe: instantiate() validates the instance and preserves the selected constructor type.
     // oxlint-disable-next-line typescript/no-unsafe-return
     return instantiate(ctor, args as unknown[])

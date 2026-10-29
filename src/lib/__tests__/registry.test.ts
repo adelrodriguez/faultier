@@ -317,6 +317,17 @@ describe("registry", () => {
     expect(Faults.is(new DerivedFault())).toBe(false)
   })
 
+  it("throws a TypeError naming the tag when create receives an unregistered tag", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+
+    // @ts-expect-error -- exercises the runtime guard for a tag the registry does not know
+    expect(() => Faults.create("Nope")).toThrow(new TypeError("Unknown Fault registry tag 'Nope'."))
+    // @ts-expect-error -- an inherited Object.prototype key is not a registered tag
+    expect(() => Faults.create("toString")).toThrow(
+      new TypeError("Unknown Fault registry tag 'toString'.")
+    )
+  })
+
   it("uses fallback when an omitted tag matches an inherited property", () => {
     class ConstructorError extends Tagged("constructor")() {}
     const Faults = registry({ constructor: ConstructorError })
