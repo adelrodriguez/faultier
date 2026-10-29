@@ -29,6 +29,7 @@ assertExports(
     "findCause",
     "fromSerializable",
     "isFault",
+    "isSerializableFault",
     "matchTag",
     "matchTags",
     "merge",

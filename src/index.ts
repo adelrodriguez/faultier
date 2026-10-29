@@ -86,3 +86,12 @@ export { toSerializable } from "./lib/fault"
  * Use `registry.fromSerializable` when you want subclass reconstruction for registered tags.
  */
 export { fromSerializable } from "./lib/reviver"
+
+/**
+ * Type guard for wire payloads.
+ *
+ * Returns `true` only when the value's envelope fields and cause chain match
+ * `SerializableFault`, so `fromSerializable` will accept it. Payload and `meta`
+ * values are not deep-validated. Use it to check data received over RPC or HTTP.
+ */
+export { isSerializableFault } from "./lib/reviver"

@@ -10,6 +10,7 @@ describe("index", () => {
       "findCause",
       "fromSerializable",
       "isFault",
+      "isSerializableFault",
       "matchTag",
       "matchTags",
       "merge",
