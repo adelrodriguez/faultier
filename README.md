@@ -295,6 +295,9 @@ Fault instances serialize to a plain object with `__faultier: true`:
 ```ts
 const json = outer.toSerializable()
 
+// Serialize any caught value (Fault, Error, or unknown thrown value)
+const caught = Faultier.toSerializable(err)
+
 // Generic reconstruction (no subclass restoration)
 const generic = Faultier.fromSerializable(json)
 
@@ -302,7 +305,7 @@ const generic = Faultier.fromSerializable(json)
 const restored = AuthFault.fromSerializable(json)
 ```
 
-`registry.toSerializable(err)` supports Fault instances, native `Error`, and non-Error thrown values (serialized as `UnknownThrown`).
+`Faultier.toSerializable(err)` and `registry.toSerializable(err)` support Fault instances, native `Error`, and non-Error thrown values (serialized as `UnknownThrown`).
 
 Registry reconstruction calls `new Class(payloadFields)`, so a registered class's
 constructor must take its fields object as its only parameter. `registry()` rejects other
@@ -392,11 +395,12 @@ must not be dropped.
 | `matchTag(...)`          | Match one tag in a typed Fault union                         |
 | `matchTags(...)`         | Match several tags in a typed Fault union                    |
 | `isFault(value)`         | Type guard for Fault instances (not cross-realm safe)        |
+| `toSerializable(error)`  | Serialize any error (Fault, Error, or unknown thrown value)  |
 | `fromSerializable(data)` | Reconstruct a generic Fault (no subclass restoration)        |
 
 ### Exports
 
-**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `fromSerializable`
+**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `toSerializable`, `fromSerializable`
 
 **`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
 

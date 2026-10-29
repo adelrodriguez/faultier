@@ -23,7 +23,17 @@ function assertExports(namespace: object, expected: string[], entrypoint: string
 
 assertExports(
   Faultier,
-  ["Fault", "Tagged", "fromSerializable", "isFault", "matchTag", "matchTags", "merge", "registry"],
+  [
+    "Fault",
+    "Tagged",
+    "fromSerializable",
+    "isFault",
+    "matchTag",
+    "matchTags",
+    "merge",
+    "registry",
+    "toSerializable",
+  ],
   "faultier"
 )
 assertExports(

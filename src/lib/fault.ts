@@ -241,6 +241,32 @@ export function isFault(value: unknown): value is Fault {
   return value instanceof Fault
 }
 
+// Serializes any caught value: Faults encode themselves; anything else is
+// wrapped in an UnknownError/UnknownThrown envelope.
+export function toSerializable(value: unknown): SerializableFault {
+  if (value instanceof Fault) {
+    return value.toSerializable()
+  }
+
+  if (value instanceof Error) {
+    return {
+      __faultier: true,
+      _tag: "UnknownError",
+      cause: toCause(value, 0),
+      message: value.message,
+      name: "UnknownError",
+    }
+  }
+
+  return {
+    __faultier: true,
+    _tag: "UnknownThrown",
+    cause: toCause(value, 0),
+    message: "UnknownThrown",
+    name: "UnknownThrown",
+  }
+}
+
 /**
  * The single reserved-key rule, shared by construction (reject), serialization
  * (exclude), and deserialization (rename): a key is reserved when it is a wire

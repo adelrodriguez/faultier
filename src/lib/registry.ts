@@ -1,6 +1,6 @@
 import type { SerializableFault } from "./wire"
 import { RegistryMergeConflictError, RegistryTagMismatchError } from "./errors"
-import { Fault, toCause } from "./fault"
+import { Fault, toSerializable } from "./fault"
 import { dispatchTag, dispatchTags, type HandlerResult } from "./match"
 import { deserializeFault } from "./reviver"
 
@@ -22,32 +22,6 @@ type CreateArgs<Ctor extends AnyFaultCtor> =
 type RegistryMatchHandlers<M extends Record<string, AnyFaultCtor>> = Partial<{
   [K in keyof M]: (fault: InstanceType<M[K]>) => unknown
 }>
-
-// Registry policy for serializing arbitrary caught values: Faults encode
-// themselves; anything else is wrapped in an UnknownError/UnknownThrown envelope.
-function toSerializableValue(value: unknown): SerializableFault {
-  if (value instanceof Fault) {
-    return value.toSerializable()
-  }
-
-  if (value instanceof Error) {
-    return {
-      __faultier: true,
-      _tag: "UnknownError",
-      cause: toCause(value, 0),
-      message: value.message,
-      name: "UnknownError",
-    }
-  }
-
-  return {
-    __faultier: true,
-    _tag: "UnknownThrown",
-    cause: toCause(value, 0),
-    message: "UnknownThrown",
-    name: "UnknownThrown",
-  }
-}
 
 function constructFault(ctor: AnyFaultCtor, args: unknown[]): Fault {
   const value: unknown = Reflect.construct(ctor, args)
@@ -204,9 +178,7 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
 
     matchTags,
 
-    toSerializable(err: unknown): SerializableFault {
-      return toSerializableValue(err)
-    },
+    toSerializable,
 
     fromSerializable(json: SerializableFault): InstanceType<M[keyof M]> | Fault {
       return deserializeFault(json, (tag, payload) => {

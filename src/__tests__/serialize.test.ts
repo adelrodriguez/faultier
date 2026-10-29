@@ -3,7 +3,7 @@ import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import type { SerializableFault, SerializableValue } from "../types"
-import { Fault, fromSerializable, Tagged } from "../index"
+import { Fault, fromSerializable, Tagged, toSerializable } from "../index"
 
 // Test-side mirror of the internal isReservedKey rule: wire envelope keys
 // (documented in GLOSSARY.md) plus anything reachable through Fault's
@@ -253,6 +253,51 @@ describe("toSerializable", () => {
         }
       )
     )
+  })
+
+  it("serializes a Fault with its own encoding", () => {
+    class NotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
+    const fault = new NotFoundError({ id: "123" }).withCause(new Error("root"))
+
+    expect(toSerializable(fault)).toStrictEqual(fault.toSerializable())
+  })
+
+  it("serializes a native Error as UnknownError", () => {
+    const error = new Error("boom")
+
+    expect(toSerializable(error)).toStrictEqual({
+      __faultier: true,
+      _tag: "UnknownError",
+      cause: { kind: "error", message: "boom", name: "Error", stack: error.stack },
+      message: "boom",
+      name: "UnknownError",
+    })
+  })
+
+  it("serializes non-Error thrown values as UnknownThrown", () => {
+    expect(toSerializable("boom")).toStrictEqual({
+      __faultier: true,
+      _tag: "UnknownThrown",
+      cause: { kind: "thrown", value: "boom" },
+      message: "UnknownThrown",
+      name: "UnknownThrown",
+    })
+    expect(toSerializable(42).cause).toStrictEqual({ kind: "thrown", value: 42 })
+    expect(toSerializable(null).cause).toStrictEqual({ kind: "thrown", value: null })
+  })
+
+  it("normalizes non-serializable thrown values", () => {
+    const cyclic: { self?: unknown } = {}
+    cyclic.self = cyclic
+
+    expect(toSerializable(cyclic).cause).toStrictEqual({ kind: "thrown", value: "[object Object]" })
+  })
+
+  it("round-trips UnknownError through fromSerializable", () => {
+    const restored = fromSerializable(toSerializable(new Error("boom")))
+
+    expect(restored._tag).toBe("UnknownError")
+    expect(restored.message).toBe("boom")
   })
 })
 
