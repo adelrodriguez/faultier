@@ -86,9 +86,22 @@ export const RESERVED_FAULT_KEYS: ReadonlySet<string> = new Set<string>([
   "details",
 ])
 
-// Collects own payload fields, skipping excluded keys and function values.
 // defineProperty (not assignment) so a "__proto__" key becomes an own data
 // property instead of triggering the Object.prototype.__proto__ setter.
+export function definePayloadField(
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown
+): void {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  })
+}
+
+// Collects own payload fields, skipping excluded keys and function values.
 export function collectPayloadFields(
   source: Record<string, unknown>,
   isExcluded: (key: string) => boolean
@@ -101,12 +114,7 @@ export function collectPayloadFields(
     const value = source[key]
     if (typeof value === "function") continue
 
-    Object.defineProperty(payload, key, {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    })
+    definePayloadField(payload, key, value)
   }
 
   return payload

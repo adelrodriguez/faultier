@@ -1,6 +1,7 @@
 import { Fault, isReservedKey } from "./fault"
 import {
   collectPayloadFields,
+  definePayloadField,
   MAX_CAUSE_DEPTH,
   RESERVED_FAULT_KEYS,
   type SerializableCause,
@@ -64,15 +65,6 @@ function extractPayloadFields(json: SerializableFault): Record<string, unknown> 
   // Exclude only envelope keys here (not the full reserved rule): a wire key
   // that shadows a Fault method must be renamed by preparePayload, not dropped.
   return collectPayloadFields(json, (key) => RESERVED_FAULT_KEYS.has(key))
-}
-
-function definePayloadField(target: Record<string, unknown>, key: string, value: unknown): void {
-  Object.defineProperty(target, key, {
-    configurable: true,
-    enumerable: true,
-    value,
-    writable: true,
-  })
 }
 
 function preparePayload(payload: Record<string, unknown>): PreparedPayload {
