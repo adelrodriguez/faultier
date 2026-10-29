@@ -20,13 +20,8 @@ type PreparedPayload = {
 }
 
 class DeserializedFault extends Fault {
-  // Static factory because Fault's constructor is protected; a bare public
-  // constructor would be flagged as useless.
-  static create(tag: string): DeserializedFault {
-    return new DeserializedFault(tag)
-  }
-
-  private constructor(tag: string) {
+  // Widens Fault's protected constructor to public.
+  public constructor(tag: string) {
     super(tag)
   }
 }
@@ -162,7 +157,7 @@ export function deserializeFault(json: unknown, resolveFault?: FaultResolver, de
 
   const payload = preparePayload(extractPayloadFields(json))
   const resolvedFault = resolveFault?.(json._tag, payload.constructorPayload)
-  const fault = resolvedFault ?? DeserializedFault.create(json._tag)
+  const fault = resolvedFault ?? new DeserializedFault(json._tag)
 
   // A resolved constructor already applied constructorPayload; the generic
   // fallback needs both buckets restored directly.
