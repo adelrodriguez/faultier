@@ -186,10 +186,18 @@ const outer = new NotFoundError({ resource: "user", id: "123" })
 
 outer.unwrap() // [outer, inner, root] — full chain as array
 outer.getTags() // ["NotFoundError", "TimeoutError"] — all tags in chain
+outer.findCause(TimeoutError) // inner — first chain node that is a TimeoutError
 outer.getContext() // merged metadata from all faults (head wins on conflicts)
 ```
 
 The chain follows native `Error.cause` links too, so a root cause nested inside a plain `Error` is still reachable.
+
+To find a cause by tag from a caught `unknown`, use the registry. Like `registry.is`, it
+matches by the registered constructor, so a foreign fault with the same tag is skipped:
+
+```ts
+const notFound = AppFault.findCause(err, "NotFoundError") // NotFoundError | undefined
+```
 
 Use `flatten()` to convert a cause chain to a string:
 
@@ -367,23 +375,25 @@ must not be dropped.
 | `withCause(cause)`                   | Chain a cause (fluent)                                        |
 | `unwrap()`                           | Cause chain as array `[head, ..., leaf]`                      |
 | `getTags()`                          | `_tag` values from all Faults in the chain                    |
+| `findCause(Class)`                   | First chain node that is an instance of `Class`, or undefined |
 | `getContext()`                       | Merged metadata from all Faults (head wins on conflicts)      |
 | `flatten(options?)`                  | Cause chain to string (see [Error Chaining](#error-chaining)) |
 | `toSerializable()`                   | Serialize to wire format                                      |
 
 ### Registry
 
-| Method                                     | Description                                                 |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| `tags`                                     | Registered tags in deterministic order                      |
-| `typeof registry.Type`                     | Union of the registry's fault types (type-only)             |
-| `create(tag, fields?)`                     | Create a fault by tag                                       |
-| `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                    |
-| `is(error)`                                | Type guard for any fault in the registry                    |
-| `matchTag(error, tag, handler, fallback?)` | Single tag matching                                         |
-| `matchTags(error, handlers, fallback?)`    | Multiple tag matching                                       |
-| `toSerializable(error)`                    | Serialize any error (Fault, Error, or unknown thrown value) |
-| `fromSerializable(data)`                   | Reconstruct a fault, restoring registered subclasses        |
+| Method                                     | Description                                                  |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `tags`                                     | Registered tags in deterministic order                       |
+| `typeof registry.Type`                     | Union of the registry's fault types (type-only)              |
+| `create(tag, fields?)`                     | Create a fault by tag                                        |
+| `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                     |
+| `is(error)`                                | Type guard for any fault in the registry                     |
+| `findCause(error, tag)`                    | First registered fault with `tag` in the chain, or undefined |
+| `matchTag(error, tag, handler, fallback?)` | Single tag matching                                          |
+| `matchTags(error, handlers, fallback?)`    | Multiple tag matching                                        |
+| `toSerializable(error)`                    | Serialize any error (Fault, Error, or unknown thrown value)  |
+| `fromSerializable(data)`                   | Reconstruct a fault, restoring registered subclasses         |
 
 ### Top-level (`Faultier.*`)
 

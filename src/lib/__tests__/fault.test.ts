@@ -180,6 +180,29 @@ describe("Fault", () => {
     expect(head.getTags()).toEqual(["ServiceError", "DatabaseError"])
   })
 
+  it("finds the first chain node that is an instance of the given class", () => {
+    class DatabaseError extends Tagged("DatabaseError")<{ table: string }>() {}
+    class ServiceError extends Tagged("ServiceError")() {}
+
+    const leaf = new DatabaseError({ table: "users" })
+    const mid = new Error("mid", { cause: leaf })
+    const head = new ServiceError().withCause(mid)
+
+    expect(head.findCause(DatabaseError)).toBe(leaf)
+    expect(head.findCause(ServiceError)).toBe(head)
+    expect(head.findCause(Error)).toBe(head)
+    expect(head.findCause(TypeError)).toBeUndefined()
+  })
+
+  it("finds causes by constructor identity, not by tag", () => {
+    class DatabaseError extends Tagged("DatabaseError")() {}
+    class ForeignDatabaseError extends Tagged("DatabaseError")() {}
+
+    const head = new ExampleFault().withCause(new ForeignDatabaseError())
+
+    expect(head.findCause(DatabaseError)).toBeUndefined()
+  })
+
   it("skips empty values in message flatten path", () => {
     class DatabaseError extends Tagged("DatabaseError")() {}
     class ServiceError extends Tagged("ServiceError")() {}

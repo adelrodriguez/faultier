@@ -119,6 +119,12 @@ type AppError = NotFoundError | TimeoutError | PaymentError
     expectTypeOf(value).toEqualTypeOf<NotFoundError | TimeoutError>()
   }
 
+  expectTypeOf(AppFault.findCause(value, "NotFoundError")).toEqualTypeOf<
+    NotFoundError | undefined
+  >()
+  expectTypeOf(fault.findCause(TimeoutError)).toEqualTypeOf<TimeoutError | undefined>()
+  expectTypeOf(fault.findCause(TypeError)).toEqualTypeOf<TypeError | undefined>()
+
   expectTypeOf(tags).toEqualTypeOf<ReadonlyArray<"NotFoundError" | "TimeoutError">>()
   expectTypeOf(serialized).toEqualTypeOf<SerializableFault>()
   expectTypeOf(registrySerialized).toEqualTypeOf<SerializableFault>()
@@ -430,6 +436,9 @@ function _negativeTypeTests() {
 
   // @ts-expect-error -- "BadTag" is not a registered tag
   AppFault.create("BadTag", {})
+
+  // @ts-expect-error -- "BadTag" is not a registered tag
+  AppFault.findCause(new Error("boom"), "BadTag")
 
   // @ts-expect-error -- id should be string, not number
   AppFault.create("NotFoundError", { id: 123 })

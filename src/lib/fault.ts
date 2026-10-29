@@ -176,6 +176,10 @@ export abstract class Fault extends Error {
       .map((item) => item._tag)
   }
 
+  findCause<T>(ctor: abstract new (...args: never[]) => T): T | undefined {
+    return this.unwrap().find((item): item is T => item instanceof ctor)
+  }
+
   getContext(): Record<string, unknown> {
     const faults = this.unwrap().filter((item): item is Fault => item instanceof Fault)
     // A Map (not a plain object) so keys like "constructor" or "__proto__"
