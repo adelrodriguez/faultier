@@ -19,6 +19,7 @@ import {
   merge,
   registry,
   Tagged,
+  toSerializable,
 } from "../index"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,6 +111,7 @@ type AppError = NotFoundError | TimeoutError | PaymentError
   const fault = AppFault.create("NotFoundError", { id: "123" })
   const serialized = fault.toSerializable()
   const registrySerialized = AppFault.toSerializable(fault)
+  const standaloneSerialized = toSerializable(value)
   const generic = fromSerializable(serialized)
   const restored = AppFault.fromSerializable(serialized)
 
@@ -120,6 +122,7 @@ type AppError = NotFoundError | TimeoutError | PaymentError
   expectTypeOf(tags).toEqualTypeOf<ReadonlyArray<"NotFoundError" | "TimeoutError">>()
   expectTypeOf(serialized).toEqualTypeOf<SerializableFault>()
   expectTypeOf(registrySerialized).toEqualTypeOf<SerializableFault>()
+  expectTypeOf(standaloneSerialized).toEqualTypeOf<SerializableFault>()
   expectTypeOf(generic).toEqualTypeOf<Fault>()
   expectTypeOf(restored).toEqualTypeOf<Fault | NotFoundError | TimeoutError>()
 }

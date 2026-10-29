@@ -13,6 +13,7 @@ describe("index", () => {
       "matchTags",
       "merge",
       "registry",
+      "toSerializable",
     ])
   })
 })

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import type { SerializableFault } from "../wire"
 import { RegistryMergeConflictError, RegistryTagMismatchError } from "../errors"
-import { Fault } from "../fault"
+import { Fault, toSerializable } from "../fault"
 import { merge, registry } from "../registry"
 import { Tagged } from "../tagged"
 
@@ -237,48 +237,12 @@ describe("registry", () => {
     expect((restored as NormalizedError).value).toBe(42)
   })
 
-  it("serializes unknown errors as UnknownError", () => {
+  it("serializes arbitrary values like the standalone toSerializable", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
-
     const error = new Error("boom")
 
-    const serialized = Faults.toSerializable(error)
-
-    expect(serialized).toEqual({
-      __faultier: true,
-      _tag: "UnknownError",
-      cause: { kind: "error", message: "boom", name: "Error", stack: error.stack },
-      message: "boom",
-      name: "UnknownError",
-    })
-  })
-
-  it("serializes non-Error thrown values as UnknownThrown", () => {
-    const Faults = registry({ NotFoundError, TimeoutError })
-
-    const serializedString = Faults.toSerializable("boom")
-    const serializedNumber = Faults.toSerializable(42)
-    const serializedNull = Faults.toSerializable(null)
-
-    expect(serializedString).toEqual({
-      __faultier: true,
-      _tag: "UnknownThrown",
-      cause: { kind: "thrown", value: "boom" },
-      message: "UnknownThrown",
-      name: "UnknownThrown",
-    })
-    expect(serializedNumber.cause).toEqual({ kind: "thrown", value: 42 })
-    expect(serializedNull.cause).toEqual({ kind: "thrown", value: null })
-  })
-
-  it("normalizes non-serializable UnknownThrown values", () => {
-    const Faults = registry({ NotFoundError, TimeoutError })
-    const cyclic: { self?: unknown } = {}
-    cyclic.self = cyclic
-
-    const serialized = Faults.toSerializable(cyclic)
-
-    expect(serialized.cause).toEqual({ kind: "thrown", value: "[object Object]" })
+    expect(Faults.toSerializable(error)).toStrictEqual(toSerializable(error))
+    expect(Faults.toSerializable("boom")).toStrictEqual(toSerializable("boom"))
   })
 
   it("supports destructured is", () => {

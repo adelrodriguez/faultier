@@ -65,6 +65,14 @@ export { matchTag } from "./lib/match"
 export { matchTags } from "./lib/match"
 
 /**
+ * Serializes any caught value to the wire format.
+ *
+ * Faults encode themselves; native `Error`s become `UnknownError` and any other
+ * thrown value becomes `UnknownThrown`.
+ */
+export { toSerializable } from "./lib/fault"
+
+/**
  * Deserializes a generic fault from the wire format.
  *
  * Use `registry.fromSerializable` when you want subclass reconstruction for registered tags.
