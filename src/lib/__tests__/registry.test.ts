@@ -298,6 +298,25 @@ describe("registry", () => {
     expect(AppFaults.is(billingFault)).toBe(false)
   })
 
+  it("returns false from registry.is for a subclass with an unregistered tag", () => {
+    class BaseFault extends Fault {
+      static readonly _tag: string = "BaseFault"
+
+      constructor() {
+        super(new.target._tag)
+      }
+    }
+
+    class DerivedFault extends BaseFault {
+      static override readonly _tag = "DerivedFault"
+    }
+
+    const Faults = registry({ BaseFault })
+
+    expect(Faults.is(new BaseFault())).toBe(true)
+    expect(Faults.is(new DerivedFault())).toBe(false)
+  })
+
   it("uses fallback when an omitted tag matches an inherited property", () => {
     class ConstructorError extends Tagged("constructor")() {}
     const Faults = registry({ constructor: ConstructorError })

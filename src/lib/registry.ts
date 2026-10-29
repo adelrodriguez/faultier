@@ -165,10 +165,8 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
 
   function is(err: unknown): err is InstanceType<M[keyof M]> {
     if (!(err instanceof Fault)) return false
-    for (const ctor of tagToCtor.values()) {
-      if (err instanceof ctor) return true
-    }
-    return false
+    const ctor = tagToCtor.get(err._tag)
+    return ctor !== undefined && err instanceof ctor
   }
 
   function matchTag<RH, K extends keyof M>(
