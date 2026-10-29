@@ -37,3 +37,13 @@ export class RegistryMergeConflictError extends Fault {
     this.conflictingTag = args.conflictingTag
   }
 }
+
+export class InvalidPayloadError extends Fault {
+  static readonly _tag = "InvalidPayloadError"
+  readonly reason: string
+
+  constructor(args: { reason: string }) {
+    super(InvalidPayloadError._tag, `Invalid Faultier payload: ${args.reason}`)
+    this.reason = args.reason
+  }
+}

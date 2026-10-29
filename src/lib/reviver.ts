@@ -1,3 +1,4 @@
+import { InvalidPayloadError } from "./errors"
 import { Fault, isReservedKey } from "./fault"
 import {
   collectPayloadFields,
@@ -33,11 +34,11 @@ function assertSerializableFault(value: unknown): asserts value is SerializableF
     || !("__faultier" in value)
     || value.__faultier !== true
   ) {
-    throw new Error("Invalid Faultier payload: expected __faultier: true")
+    throw new InvalidPayloadError({ reason: "expected __faultier: true" })
   }
 
   if (!("_tag" in value) || typeof value._tag !== "string") {
-    throw new Error("Invalid Faultier payload: _tag must be a string")
+    throw new InvalidPayloadError({ reason: "_tag must be a string" })
   }
 
   if (
@@ -45,7 +46,7 @@ function assertSerializableFault(value: unknown): asserts value is SerializableF
     && value.meta !== undefined
     && (typeof value.meta !== "object" || value.meta === null)
   ) {
-    throw new Error("Invalid Faultier payload: meta must be an object")
+    throw new InvalidPayloadError({ reason: "meta must be an object" })
   }
 }
 

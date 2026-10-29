@@ -38,7 +38,12 @@ assertExports(
 )
 assertExports(
   FaultierErrors,
-  ["RegistryMergeConflictError", "RegistryTagMismatchError", "ReservedFieldError"],
+  [
+    "InvalidPayloadError",
+    "RegistryMergeConflictError",
+    "RegistryTagMismatchError",
+    "ReservedFieldError",
+  ],
   "faultier/errors"
 )
 assertExports(FaultierTypes, [], "faultier/types")

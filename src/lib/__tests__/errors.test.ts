@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { RegistryMergeConflictError, RegistryTagMismatchError, ReservedFieldError } from "../errors"
+import {
+  InvalidPayloadError,
+  RegistryMergeConflictError,
+  RegistryTagMismatchError,
+  ReservedFieldError,
+} from "../errors"
 
 describe("ReservedFieldError", () => {
   it("exposes its tag, name, field, and message", () => {
@@ -38,5 +43,16 @@ describe("RegistryMergeConflictError", () => {
     expect(error.name).toBe("RegistryMergeConflictError")
     expect(error.conflictingTag).toBe("ConflictError")
     expect(error.message).toBe("Registry merge conflict for tag 'ConflictError'.")
+  })
+})
+
+describe("InvalidPayloadError", () => {
+  it("exposes its tag, name, reason, and message", () => {
+    const error = new InvalidPayloadError({ reason: "_tag must be a string" })
+
+    expect(error._tag).toBe("InvalidPayloadError")
+    expect(error.name).toBe("InvalidPayloadError")
+    expect(error.reason).toBe("_tag must be a string")
+    expect(error.message).toBe("Invalid Faultier payload: _tag must be a string")
   })
 })

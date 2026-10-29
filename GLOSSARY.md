@@ -18,7 +18,7 @@
 - Standalone matching accepts a typed Fault union. Registry matching accepts `unknown`, checks membership, then uses the same tag dispatch.
 - `Fault.toSerializable()` encodes a fault. `fromSerializable()` reconstructs a generic Fault, while `registry.fromSerializable()` restores registered subclasses when possible.
 - Registry reconstruction calls the registered constructor with the payload fields object. `registry()` therefore rejects, at the type level, constructors that do not take the fields object as their only parameter; call-site sugar belongs in static factories.
-- Generic and registry reconstruction share validation, payload restoration, cause recursion, and depth accounting.
+- Generic and registry reconstruction share validation, payload restoration, cause recursion, and depth accounting. A malformed envelope throws `InvalidPayloadError`.
 - Reserved keys follow one rule with two policies: `Tagged` construction rejects them (`ReservedFieldError`), while deserialization renames colliding wire keys with repeated `__payload_` prefixes until safe and unique (wire data must not be dropped).
 - Cause traversal, serialization, and deserialization stop after 100 nested fault edges.
 - `unwrap()` and related helpers order chains from head to leaf. Metadata merging gives the head precedence.
