@@ -27,18 +27,20 @@ class DeserializedFault extends Fault {
   }
 }
 
-function assertSerializableFault(value: unknown): asserts value is SerializableFault {
+// The envelope rule fromSerializable enforces at every fault it revives:
+// returns why a value is not a revivable envelope, or undefined when it is one.
+function findPayloadIssue(value: unknown): string | undefined {
   if (
     typeof value !== "object"
     || value === null
     || !("__faultier" in value)
     || value.__faultier !== true
   ) {
-    throw new InvalidPayloadError({ reason: "expected __faultier: true" })
+    return "expected __faultier: true"
   }
 
   if (!("_tag" in value) || typeof value._tag !== "string") {
-    throw new InvalidPayloadError({ reason: "_tag must be a string" })
+    return "_tag must be a string"
   }
 
   if (
@@ -46,7 +48,71 @@ function assertSerializableFault(value: unknown): asserts value is SerializableF
     && value.meta !== undefined
     && (typeof value.meta !== "object" || value.meta === null)
   ) {
-    throw new InvalidPayloadError({ reason: "meta must be an object" })
+    return "meta must be an object"
+  }
+
+  return undefined
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string"
+}
+
+// Mirrors the serializer's depth budget (toCause and serializeFault): it never
+// writes a cause past MAX_CAUSE_DEPTH, so one found there is rejected rather
+// than left unchecked.
+function isSerializableCause(cause: unknown, depth: number): boolean {
+  if (typeof cause !== "object" || cause === null || !("kind" in cause)) return false
+
+  if (cause.kind === "thrown") return true
+
+  if (cause.kind === "fault") {
+    return "value" in cause && isFaultEnvelope(cause.value, depth + 1)
+  }
+
+  if (cause.kind === "error") {
+    return (
+      "name" in cause
+      && typeof cause.name === "string"
+      && "message" in cause
+      && typeof cause.message === "string"
+      && isOptionalString(Reflect.get(cause, "stack"))
+      && (!("cause" in cause)
+        || cause.cause === undefined
+        || (depth + 1 < MAX_CAUSE_DEPTH && isSerializableCause(cause.cause, depth + 1)))
+    )
+  }
+
+  return false
+}
+
+function isFaultEnvelope(value: unknown, depth: number): value is SerializableFault {
+  return (
+    typeof value === "object"
+    && value !== null
+    && findPayloadIssue(value) === undefined
+    && "name" in value
+    && typeof value.name === "string"
+    && isOptionalString(Reflect.get(value, "message"))
+    && isOptionalString(Reflect.get(value, "details"))
+    && isOptionalString(Reflect.get(value, "stack"))
+    && (!("cause" in value)
+      || value.cause === undefined
+      || (depth < MAX_CAUSE_DEPTH && isSerializableCause(value.cause, depth)))
+  )
+}
+
+// Stricter than fromSerializable, which tolerates a missing name or malformed
+// causes: true only when the value really is a SerializableFault.
+export function isSerializableFault(value: unknown): value is SerializableFault {
+  return isFaultEnvelope(value, 0)
+}
+
+function assertSerializableFault(value: unknown): asserts value is SerializableFault {
+  const issue = findPayloadIssue(value)
+
+  if (issue !== undefined) {
+    throw new InvalidPayloadError({ reason: issue })
   }
 }
 

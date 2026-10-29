@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 
 import type { SerializableFault, SerializableValue } from "../types"
 import { InvalidPayloadError } from "../errors"
-import { Fault, fromSerializable, Tagged, toSerializable } from "../index"
+import { Fault, fromSerializable, isSerializableFault, Tagged, toSerializable } from "../index"
 
 // Test-side mirror of the internal isReservedKey rule: wire envelope keys
 // (documented in GLOSSARY.md) plus anything reachable through Fault's
@@ -299,6 +299,58 @@ describe("toSerializable", () => {
 
     expect(restored._tag).toBe("UnknownError")
     expect(restored.message).toBe("boom")
+  })
+})
+
+function withCause(cause: unknown) {
+  return { __faultier: true, _tag: "Outer", cause, name: "Outer" }
+}
+
+describe("isSerializableFault", () => {
+  it("returns true for a wire payload that survived JSON transport", () => {
+    const body = JSON.stringify(toSerializable(new Error("boom")))
+    const received: unknown = JSON.parse(body)
+
+    expect(isSerializableFault(received)).toBe(true)
+  })
+
+  it("returns false for values fromSerializable rejects", () => {
+    expect(isSerializableFault({ __faultier: false, _tag: "X" })).toBe(false)
+    expect(isSerializableFault({ __faultier: true, _tag: 1 })).toBe(false)
+    expect(isSerializableFault({ __faultier: true, _tag: "X", meta: "nope" })).toBe(false)
+    expect(isSerializableFault(new Error("boom"))).toBe(false)
+    expect(isSerializableFault(null)).toBe(false)
+  })
+
+  it("returns false when a typed envelope field has the wrong type", () => {
+    expect(isSerializableFault({ __faultier: true, _tag: "X" })).toBe(false)
+    expect(isSerializableFault({ __faultier: true, _tag: "X", message: 42, name: "X" })).toBe(false)
+    expect(isSerializableFault({ __faultier: true, _tag: "X", details: 1, name: "X" })).toBe(false)
+    expect(isSerializableFault({ __faultier: true, _tag: "X", name: "X", stack: false })).toBe(
+      false
+    )
+  })
+
+  it("returns false when a nested cause fromSerializable visits is invalid", () => {
+    const invalidFault = { __faultier: true, _tag: "Inner", meta: null, name: "Inner" }
+
+    expect(() =>
+      fromSerializable(withCause({ kind: "fault", value: invalidFault }) as SerializableFault)
+    ).toThrow()
+    expect(isSerializableFault(withCause({ kind: "fault", value: invalidFault }))).toBe(false)
+    expect(
+      isSerializableFault(
+        withCause({
+          cause: { kind: "fault", value: invalidFault },
+          kind: "error",
+          message: "m",
+          name: "E",
+        })
+      )
+    ).toBe(false)
+    expect(isSerializableFault(withCause({ kind: "error", name: "E" }))).toBe(false)
+    expect(isSerializableFault(withCause({ kind: "unknown" }))).toBe(false)
+    expect(isSerializableFault(withCause(null))).toBe(false)
   })
 })
 

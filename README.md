@@ -400,21 +400,22 @@ must not be dropped.
 
 ### Top-level (`Faultier.*`)
 
-| Method                    | Description                                                   |
-| ------------------------- | ------------------------------------------------------------- |
-| `Tagged(tag)<Fields>()`   | Create a tagged Fault subclass with `_tag` as discriminant    |
-| `registry({ ...ctors })`  | Create a scoped fault registry from tagged constructors       |
-| `merge(a, b, ...rest)`    | Merge registries into one union (throws on conflicting tags)  |
-| `matchTag(...)`           | Match one tag in a typed Fault union                          |
-| `matchTags(...)`          | Match several tags in a typed Fault union                     |
-| `isFault(value)`          | Type guard for Fault instances (not cross-realm safe)         |
-| `findCause(error, Class)` | First chain node that is an instance of `Class`, or undefined |
-| `toSerializable(error)`   | Serialize any error (Fault, Error, or unknown thrown value)   |
-| `fromSerializable(data)`  | Reconstruct a generic Fault (no subclass restoration)         |
+| Method                       | Description                                                   |
+| ---------------------------- | ------------------------------------------------------------- |
+| `Tagged(tag)<Fields>()`      | Create a tagged Fault subclass with `_tag` as discriminant    |
+| `registry({ ...ctors })`     | Create a scoped fault registry from tagged constructors       |
+| `merge(a, b, ...rest)`       | Merge registries into one union (throws on conflicting tags)  |
+| `matchTag(...)`              | Match one tag in a typed Fault union                          |
+| `matchTags(...)`             | Match several tags in a typed Fault union                     |
+| `isFault(value)`             | Type guard for Fault instances (not cross-realm safe)         |
+| `findCause(error, Class)`    | First chain node that is an instance of `Class`, or undefined |
+| `isSerializableFault(value)` | Type guard for well-formed wire payloads (causes included)    |
+| `toSerializable(error)`      | Serialize any error (Fault, Error, or unknown thrown value)   |
+| `fromSerializable(data)`     | Reconstruct a generic Fault (no subclass restoration)         |
 
 ### Exports
 
-**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `findCause`, `toSerializable`, `fromSerializable`
+**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `isSerializableFault`, `findCause`, `toSerializable`, `fromSerializable`
 
 **`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`, `InvalidPayloadError`
 
