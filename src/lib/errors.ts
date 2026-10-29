@@ -40,6 +40,8 @@ export class RegistryMergeConflictError extends Fault {
 
 export class InvalidPayloadError extends Fault {
   static readonly _tag = "InvalidPayloadError"
+  // Type-only: narrows the instance tag so matchTag and matchTags can select this error.
+  declare readonly _tag: typeof InvalidPayloadError._tag
   readonly reason: string
 
   constructor(args: { reason: string }) {

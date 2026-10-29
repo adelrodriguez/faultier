@@ -10,6 +10,7 @@ import type {
   SerializableValue,
   TagOf,
 } from "../types"
+import { InvalidPayloadError } from "../errors"
 
 import {
   type Fault,
@@ -163,6 +164,25 @@ type AppError = NotFoundError | TimeoutError | PaymentError
       expectTypeOf(e).toEqualTypeOf<TimeoutError>()
       return "timeout"
     },
+  })
+}
+
+// Narrows library errors by tag in standalone matchers.
+{
+  const err = new InvalidPayloadError({ reason: "_tag must be a string" }) as
+    | InvalidPayloadError
+    | TimeoutError
+
+  expectTypeOf(err._tag).toEqualTypeOf<"InvalidPayloadError" | "TimeoutError">()
+
+  matchTag(err, "InvalidPayloadError", (e) => {
+    expectTypeOf(e).toEqualTypeOf<InvalidPayloadError>()
+    expectTypeOf(e.reason).toEqualTypeOf<string>()
+  })
+
+  matchTags(err, {
+    InvalidPayloadError: (e) => expectTypeOf(e).toEqualTypeOf<InvalidPayloadError>(),
+    TimeoutError: (e) => expectTypeOf(e).toEqualTypeOf<TimeoutError>(),
   })
 }
 
