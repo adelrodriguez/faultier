@@ -1,9 +1,14 @@
 import type { SerializableFault } from "./wire"
-import { RegistryTagMismatchError } from "./errors"
+import { RegistryMergeConflictError, RegistryTagMismatchError } from "./errors"
 import { Fault, toCause } from "./fault"
 import { dispatchTag, dispatchTags, type HandlerResult } from "./match"
-import { type AnyFaultCtor, setRegistryState } from "./registry-state"
 import { deserializeFault } from "./reviver"
+
+type AnyFaultCtor = new (...args: never[]) => Fault
+
+// Each registry's constructor map, keyed by the registry object, so merge can
+// read it without exposing it on the public registry surface.
+const registryTagToCtors = new WeakMap<object, ReadonlyMap<string, AnyFaultCtor>>()
 
 type FaultCtorEntry = readonly [string, AnyFaultCtor]
 
@@ -121,7 +126,7 @@ export function registry<const M extends Record<string, AnyFaultCtor>>(
   return createRegistry<M>(Object.entries(ctors))
 }
 
-export function createRegistry<const M extends Record<string, AnyFaultCtor>>(
+function createRegistry<const M extends Record<string, AnyFaultCtor>>(
   entries: readonly FaultCtorEntry[]
 ): FaultRegistry<M> {
   const tagToCtor = new Map<string, AnyFaultCtor>()
@@ -236,7 +241,52 @@ export function createRegistry<const M extends Record<string, AnyFaultCtor>>(
 
   // Safe: Type is a phantom member that exists only at the type level.
   const faultRegistry = instance as FaultRegistry<M>
-  setRegistryState(faultRegistry, { tagToCtor })
+  registryTagToCtors.set(faultRegistry, tagToCtor)
 
   return faultRegistry
+}
+
+type AnyFaultRegistry = FaultRegistry<Record<string, AnyFaultCtor>>
+
+type RegistryCtorMap<M extends AnyFaultRegistry> = M extends FaultRegistry<infer MM> ? MM : never
+
+type MergeCtorMaps<
+  Registries extends readonly AnyFaultRegistry[],
+  Acc extends Record<string, AnyFaultCtor> = Record<never, never>,
+> = Registries extends readonly [
+  infer Head extends AnyFaultRegistry,
+  ...infer Tail extends readonly AnyFaultRegistry[],
+]
+  ? MergeCtorMaps<Tail, Acc & RegistryCtorMap<Head>>
+  : Acc
+
+type MergedRegistry<
+  Registries extends readonly [AnyFaultRegistry, AnyFaultRegistry, ...AnyFaultRegistry[]],
+> = FaultRegistry<MergeCtorMaps<Registries>>
+
+export function merge<
+  const Registries extends readonly [AnyFaultRegistry, AnyFaultRegistry, ...AnyFaultRegistry[]],
+>(...registries: Registries): MergedRegistry<Registries> {
+  const tagToCtor = new Map<string, AnyFaultCtor>()
+
+  for (const current of registries) {
+    const currentTagToCtor = registryTagToCtors.get(current)
+    if (!currentTagToCtor) {
+      throw new TypeError("Invalid Fault registry")
+    }
+
+    for (const [tag, ctor] of currentTagToCtor) {
+      if (!tagToCtor.has(tag)) {
+        tagToCtor.set(tag, ctor)
+        continue
+      }
+
+      const existing = tagToCtor.get(tag)
+      if (existing !== ctor) {
+        throw new RegistryMergeConflictError({ conflictingTag: tag })
+      }
+    }
+  }
+
+  return createRegistry([...tagToCtor])
 }

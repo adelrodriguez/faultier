@@ -36,10 +36,8 @@ src/
     ├── fault.ts
     ├── tagged.ts
     ├── registry.ts
-    ├── merge.ts
     ├── match.ts
     ├── reviver.ts
-    ├── registry-state.ts
     ├── errors.ts
     └── wire.ts
 ```

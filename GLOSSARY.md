@@ -42,10 +42,8 @@ src/
     ├── errors.ts             # Library error classes
     ├── fault.ts              # Fault, isFault, and Fault encoding
     ├── match.ts              # Shared matching runtime and standalone signatures
-    ├── merge.ts              # Registry composition
-    ├── registry.ts           # Registry construction, methods, and unknown-value envelopes
+    ├── registry.ts           # Registry construction, methods, composition, and unknown-value envelopes
     ├── reviver.ts            # Wire payload validation and Fault reconstruction
-    ├── registry-state.ts     # Constructor types and private registry state
     ├── tagged.ts             # Tagged subclass factory
     └── wire.ts               # Wire format contract: types, reserved keys, payload collection
 ```
