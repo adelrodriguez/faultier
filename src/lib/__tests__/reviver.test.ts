@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util"
 import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
+import { InvalidPayloadError } from "../errors"
 import { Fault, isReservedKey } from "../fault"
 import { fromSerializable } from "../reviver"
 import { RESERVED_FAULT_KEYS, type SerializableFault } from "../wire"
@@ -169,7 +170,8 @@ describe("fromSerializable", () => {
           expect(revived).toBeInstanceOf(Fault)
           expect(revived._tag).toBe((input as SerializableFault)._tag)
         } else {
-          expect(revive).toThrow(`Invalid Faultier payload: ${rejection}`)
+          expect(revive).toThrow(InvalidPayloadError)
+          expect(revive).toThrow(expect.objectContaining({ reason: rejection }))
         }
       })
     )

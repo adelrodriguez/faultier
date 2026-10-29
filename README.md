@@ -307,6 +307,9 @@ const restored = AuthFault.fromSerializable(json)
 
 `Faultier.toSerializable(err)` and `registry.toSerializable(err)` support Fault instances, native `Error`, and non-Error thrown values (serialized as `UnknownThrown`).
 
+Both `fromSerializable` functions validate the envelope and throw `InvalidPayloadError` from
+`faultier/errors` when it is malformed; its `reason` says which check failed.
+
 Registry reconstruction calls `new Class(payloadFields)`, so a registered class's
 constructor must take its fields object as its only parameter. `registry()` rejects other
 signatures at compile time. A constructor with that signature can still derive a default
@@ -402,7 +405,7 @@ must not be dropped.
 
 **`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `toSerializable`, `fromSerializable`
 
-**`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`
+**`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`, `InvalidPayloadError`
 
 **`faultier/types`:** `FaultRegistry`, `FlattenOptions`, `FlattenField`, `TagOf`, `ByTag`, `SerializableValue`, `SerializableFault`, `SerializableCause`
 

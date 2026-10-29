@@ -3,6 +3,7 @@ import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import type { SerializableFault, SerializableValue } from "../types"
+import { InvalidPayloadError } from "../errors"
 import { Fault, fromSerializable, Tagged, toSerializable } from "../index"
 
 // Test-side mirror of the internal isReservedKey rule: wire envelope keys
@@ -302,9 +303,9 @@ describe("toSerializable", () => {
 })
 
 describe("fromSerializable", () => {
-  it("throws for invalid payloads", () => {
+  it("throws InvalidPayloadError for invalid payloads", () => {
     expect(() => fromSerializable({ __faultier: false } as unknown as SerializableFault)).toThrow(
-      "Invalid Faultier payload"
+      new InvalidPayloadError({ reason: "expected __faultier: true" })
     )
   })
 
