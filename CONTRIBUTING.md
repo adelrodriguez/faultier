@@ -62,14 +62,11 @@ pnpm run test:coverage
 ### Code Quality
 
 ```bash
-# Check linting and formatting
+# Check linting, formatting, and types
 pnpm run check
 
 # Apply formatting and auto-fix linting issues
 pnpm run fix
-
-# Type checking
-pnpm run typecheck
 
 # Find unused code and dependencies
 pnpm run analyze
@@ -128,7 +125,7 @@ Allows users to define custom serialization logic for context objects.
 - Unit tests for `src/lib/` modules live in `src/lib/__tests__/` and import only from `src/lib/`
 - Public API type changes require coverage in `src/__tests__/types.test-d.ts`
 - Write type assertions with `expectTypeOf` from `vitest`
-- Type assertions are checked by `pnpm run check` and `pnpm run typecheck`, not Vitest
+- Type assertions are checked by `pnpm run check`, not Vitest
 
 ## Changesets Workflow
 
@@ -178,8 +175,7 @@ Ensure your PR meets these requirements:
 
 - [ ] Code follows the project's style guidelines
 - [ ] All tests pass (`pnpm test`)
-- [ ] Type checking passes (`pnpm run typecheck`)
-- [ ] Linting and formatting pass (`pnpm run check`)
+- [ ] Linting, formatting, and type checking pass (`pnpm run check`)
 - [ ] Package verification passes for entrypoint/build changes (`pnpm run build:verify`)
 - [ ] Changeset added (if applicable)
 - [ ] Documentation updated (if needed)

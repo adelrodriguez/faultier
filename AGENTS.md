@@ -7,7 +7,7 @@
 
 ## Validation
 
-- Always run `pnpm run fix`, `pnpm run check`, `pnpm run typecheck`, and `pnpm test` after code changes.
+- Always run `pnpm run fix`, `pnpm run check`, and `pnpm test` after code changes.
 
 ## pnpm and Node.js
 
@@ -34,7 +34,7 @@ Use `pnpm test` to run tests. Use `describe` to group tests by function or featu
 - `src/__tests__/` therefore holds the public API tests (importing only from `src/index.ts`, `src/errors.ts`, or `src/types.ts`), and internal `src/lib/` modules get colocated suites in `src/lib/__tests__/`.
 - Public API type changes must be covered in `src/__tests__/types.test-d.ts`.
 - Write type assertions with `expectTypeOf` from `vitest`.
-- Type assertions are enforced by `pnpm run check` and `pnpm run typecheck`, not Vitest.
+- Type assertions are enforced by `pnpm run check`, not Vitest.
 
 ```ts#index.test.ts
 import { expect, it } from "vitest";

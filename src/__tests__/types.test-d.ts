@@ -1,4 +1,4 @@
-// Compile-time checks only: `pnpm run check` and `pnpm run typecheck` enforce this file, and Vitest never runs it.
+// Compile-time checks only: `pnpm run check` enforces this file, and Vitest never runs it.
 import { expectTypeOf } from "vitest"
 import type {
   ByTag,
