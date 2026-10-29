@@ -51,6 +51,7 @@ export type FaultRegistry<M extends Record<string, AnyFaultCtor>> = {
     as<K extends keyof M>(tag: K, ...args: CreateArgs<M[K]>): InstanceType<M[K]>
   }
   is(this: void, err: unknown): err is InstanceType<M[keyof M]>
+  findCause<K extends keyof M>(this: void, err: unknown, tag: K): InstanceType<M[K]> | undefined
   matchTag<RH, K extends keyof M>(
     this: void,
     err: unknown,
@@ -135,6 +136,17 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
     return ctor !== undefined && err instanceof ctor
   }
 
+  function findCause<K extends keyof M>(err: unknown, tag: K): InstanceType<M[K]> | undefined {
+    const ctor = tagToCtor.get(String(tag))
+    if (!ctor || !(err instanceof Fault)) return undefined
+
+    // Same membership rule as is(): the registered tag and constructor identity.
+    const found = err.unwrap().find((item) => item instanceof ctor && item._tag === String(tag))
+    // Safe: found is an instance of the constructor registered under tag.
+    // oxlint-disable-next-line typescript/no-unsafe-return
+    return found as InstanceType<M[K]> | undefined
+  }
+
   // The overloads are declared once, on FaultRegistry; `instance` checks these against them.
   function matchTag(
     this: void,
@@ -173,6 +185,8 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
     },
 
     is,
+
+    findCause,
 
     matchTag,
 

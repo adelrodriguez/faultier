@@ -191,6 +191,15 @@ outer.getContext() // merged metadata from all faults (head wins on conflicts)
 
 The chain follows native `Error.cause` links too, so a root cause nested inside a plain `Error` is still reachable.
 
+To get a typed fault out of the chain, search from the head by class or by registry tag. The
+registry version matches like `registry.is`, by the registered constructor, so a foreign fault
+with the same tag is skipped:
+
+```ts
+Faultier.findCause(outer, TimeoutError) // inner, typed as TimeoutError | undefined
+AppFault.findCause(err, "NotFoundError") // NotFoundError | undefined
+```
+
 Use `flatten()` to convert a cause chain to a string:
 
 ```ts
@@ -376,34 +385,36 @@ must not be dropped.
 
 ### Registry
 
-| Method                                     | Description                                                 |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| `tags`                                     | Registered tags in deterministic order                      |
-| `typeof registry.Type`                     | Union of the registry's fault types (type-only)             |
-| `create(tag, fields?)`                     | Create a fault by tag                                       |
-| `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                    |
-| `is(error)`                                | Type guard for any fault in the registry                    |
-| `matchTag(error, tag, handler, fallback?)` | Single tag matching                                         |
-| `matchTags(error, handlers, fallback?)`    | Multiple tag matching                                       |
-| `toSerializable(error)`                    | Serialize any error (Fault, Error, or unknown thrown value) |
-| `fromSerializable(data)`                   | Reconstruct a fault, restoring registered subclasses        |
+| Method                                     | Description                                                  |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `tags`                                     | Registered tags in deterministic order                       |
+| `typeof registry.Type`                     | Union of the registry's fault types (type-only)              |
+| `create(tag, fields?)`                     | Create a fault by tag                                        |
+| `wrap(error).as(tag, fields?)`             | Wrap an existing error as a tagged fault                     |
+| `is(error)`                                | Type guard for any fault in the registry                     |
+| `findCause(error, tag)`                    | First registered fault with `tag` in the chain, or undefined |
+| `matchTag(error, tag, handler, fallback?)` | Single tag matching                                          |
+| `matchTags(error, handlers, fallback?)`    | Multiple tag matching                                        |
+| `toSerializable(error)`                    | Serialize any error (Fault, Error, or unknown thrown value)  |
+| `fromSerializable(data)`                   | Reconstruct a fault, restoring registered subclasses         |
 
 ### Top-level (`Faultier.*`)
 
-| Method                   | Description                                                  |
-| ------------------------ | ------------------------------------------------------------ |
-| `Tagged(tag)<Fields>()`  | Create a tagged Fault subclass with `_tag` as discriminant   |
-| `registry({ ...ctors })` | Create a scoped fault registry from tagged constructors      |
-| `merge(a, b, ...rest)`   | Merge registries into one union (throws on conflicting tags) |
-| `matchTag(...)`          | Match one tag in a typed Fault union                         |
-| `matchTags(...)`         | Match several tags in a typed Fault union                    |
-| `isFault(value)`         | Type guard for Fault instances (not cross-realm safe)        |
-| `toSerializable(error)`  | Serialize any error (Fault, Error, or unknown thrown value)  |
-| `fromSerializable(data)` | Reconstruct a generic Fault (no subclass restoration)        |
+| Method                    | Description                                                   |
+| ------------------------- | ------------------------------------------------------------- |
+| `Tagged(tag)<Fields>()`   | Create a tagged Fault subclass with `_tag` as discriminant    |
+| `registry({ ...ctors })`  | Create a scoped fault registry from tagged constructors       |
+| `merge(a, b, ...rest)`    | Merge registries into one union (throws on conflicting tags)  |
+| `matchTag(...)`           | Match one tag in a typed Fault union                          |
+| `matchTags(...)`          | Match several tags in a typed Fault union                     |
+| `isFault(value)`          | Type guard for Fault instances (not cross-realm safe)         |
+| `findCause(error, Class)` | First chain node that is an instance of `Class`, or undefined |
+| `toSerializable(error)`   | Serialize any error (Fault, Error, or unknown thrown value)   |
+| `fromSerializable(data)`  | Reconstruct a generic Fault (no subclass restoration)         |
 
 ### Exports
 
-**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `toSerializable`, `fromSerializable`
+**`faultier`:** `Fault`, `Tagged`, `registry`, `merge`, `matchTag`, `matchTags`, `isFault`, `findCause`, `toSerializable`, `fromSerializable`
 
 **`faultier/errors`:** `ReservedFieldError`, `RegistryTagMismatchError`, `RegistryMergeConflictError`, `InvalidPayloadError`
 

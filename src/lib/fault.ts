@@ -241,6 +241,16 @@ export function isFault(value: unknown): value is Fault {
   return value instanceof Fault
 }
 
+// Standalone rather than a Fault method, so "findCause" stays usable as a
+// payload field name instead of becoming a reserved key.
+export function findCause<T>(
+  err: unknown,
+  ctor: abstract new (...args: never[]) => T
+): T | undefined {
+  if (!(err instanceof Fault)) return undefined
+  return err.unwrap().find((item): item is T => item instanceof ctor)
+}
+
 // Serializes any caught value: Faults encode themselves; anything else is
 // wrapped in an UnknownError/UnknownThrown envelope.
 export function toSerializable(value: unknown): SerializableFault {

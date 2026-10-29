@@ -7,6 +7,7 @@ describe("index", () => {
     expect(Object.keys(Faultier).toSorted()).toEqual([
       "Fault",
       "Tagged",
+      "findCause",
       "fromSerializable",
       "isFault",
       "matchTag",

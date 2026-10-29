@@ -245,6 +245,47 @@ describe("registry", () => {
     expect(Faults.toSerializable("boom")).toStrictEqual(toSerializable("boom"))
   })
 
+  it("finds a registered fault in the cause chain by tag", () => {
+    const Faults = registry({ NotFoundError, TimeoutError })
+    const leaf = Faults.create("NotFoundError", { id: "123" })
+    const head = Faults.wrap(new Error("mid", { cause: leaf })).as("TimeoutError")
+    const { findCause } = Faults
+
+    expect(findCause(head, "NotFoundError")).toBe(leaf)
+    expect(findCause(head, "TimeoutError")).toBe(head)
+    expect(findCause(leaf, "TimeoutError")).toBeUndefined()
+  })
+
+  it("returns undefined from findCause for values that are not faults", () => {
+    const Faults = registry({ NotFoundError })
+    const leaf = Faults.create("NotFoundError", { id: "123" })
+
+    expect(Faults.findCause(new Error("plain", { cause: leaf }), "NotFoundError")).toBeUndefined()
+    expect(Faults.findCause("NotFoundError", "NotFoundError")).toBeUndefined()
+  })
+
+  it("skips faults from other registries and unregistered subclasses in findCause", () => {
+    class ForeignNotFoundError extends Tagged("NotFoundError")<{ id: string }>() {}
+
+    class BaseFault extends Fault {
+      static readonly _tag: string = "BaseFault"
+
+      constructor() {
+        super(new.target._tag)
+      }
+    }
+
+    class DerivedFault extends BaseFault {
+      static override readonly _tag = "DerivedFault"
+    }
+
+    const Faults = registry({ BaseFault, NotFoundError })
+    const head = new DerivedFault().withCause(new ForeignNotFoundError({ id: "123" }))
+
+    expect(Faults.findCause(head, "NotFoundError")).toBeUndefined()
+    expect(Faults.findCause(head, "BaseFault")).toBeUndefined()
+  })
+
   it("supports destructured is", () => {
     const Faults = registry({ NotFoundError, TimeoutError })
     const { is } = Faults

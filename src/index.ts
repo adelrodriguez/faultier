@@ -14,6 +14,14 @@ export { Fault } from "./lib/fault"
 export { isFault } from "./lib/fault"
 
 /**
+ * Finds the first node in a fault's cause chain, head included, that is an
+ * instance of the given class. Returns `undefined` for non-Fault values.
+ *
+ * Use `registry.findCause` to find a registered fault by tag.
+ */
+export { findCause } from "./lib/fault"
+
+/**
  * Factory for creating tagged Fault subclasses.
  *
  * The two calls allow the tag and field types to be inferred independently.

@@ -14,6 +14,7 @@ import { InvalidPayloadError } from "../errors"
 
 import {
   type Fault,
+  findCause,
   fromSerializable,
   matchTag,
   matchTags,
@@ -119,6 +120,12 @@ type AppError = NotFoundError | TimeoutError | PaymentError
   if (AppFault.is(value)) {
     expectTypeOf(value).toEqualTypeOf<NotFoundError | TimeoutError>()
   }
+
+  expectTypeOf(AppFault.findCause(value, "NotFoundError")).toEqualTypeOf<
+    NotFoundError | undefined
+  >()
+  expectTypeOf(findCause(value, TimeoutError)).toEqualTypeOf<TimeoutError | undefined>()
+  expectTypeOf(findCause(value, TypeError)).toEqualTypeOf<TypeError | undefined>()
 
   expectTypeOf(tags).toEqualTypeOf<ReadonlyArray<"NotFoundError" | "TimeoutError">>()
   expectTypeOf(serialized).toEqualTypeOf<SerializableFault>()
@@ -450,6 +457,9 @@ function _negativeTypeTests() {
 
   // @ts-expect-error -- "BadTag" is not a registered tag
   AppFault.create("BadTag", {})
+
+  // @ts-expect-error -- "BadTag" is not a registered tag
+  AppFault.findCause(new Error("boom"), "BadTag")
 
   // @ts-expect-error -- id should be string, not number
   AppFault.create("NotFoundError", { id: 123 })

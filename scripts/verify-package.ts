@@ -26,6 +26,7 @@ assertExports(
   [
     "Fault",
     "Tagged",
+    "findCause",
     "fromSerializable",
     "isFault",
     "matchTag",
