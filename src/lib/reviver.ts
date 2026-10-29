@@ -120,7 +120,7 @@ function deserializeCause(
   if (cause.kind === "fault") {
     // Invariant: allow at most MAX_CAUSE_DEPTH nested fault edges.
     if (depth >= MAX_CAUSE_DEPTH) return undefined
-    return deserializeFaultInternal(cause.value, resolveFault, depth + 1)
+    return deserializeFault(cause.value, resolveFault, depth + 1)
   }
 
   if (cause.kind === "error") {
@@ -165,15 +165,7 @@ export function fromSerializable(json: SerializableFault): Fault {
   return deserializeFault(json)
 }
 
-export function deserializeFault(json: SerializableFault, resolveFault?: FaultResolver): Fault {
-  return deserializeFaultInternal(json, resolveFault, 0)
-}
-
-function deserializeFaultInternal(
-  json: unknown,
-  resolveFault: FaultResolver | undefined,
-  depth: number
-): Fault {
+export function deserializeFault(json: unknown, resolveFault?: FaultResolver, depth = 0): Fault {
   assertSerializableFault(json)
 
   const payload = preparePayload(extractPayloadFields(json))
