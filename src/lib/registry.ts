@@ -161,49 +161,26 @@ function createRegistry<const M extends Record<string, AnyFaultCtor>>(
     return ctor !== undefined && err instanceof ctor
   }
 
-  function matchTag<RH, K extends keyof M>(
+  // The overloads are declared once, on FaultRegistry; `instance` checks these against them.
+  function matchTag(
     this: void,
     err: unknown,
-    tag: K,
-    handler: (e: InstanceType<M[K]>) => RH
-  ): RH | undefined
-  function matchTag<RH, RF, K extends keyof M>(
-    this: void,
-    err: unknown,
-    tag: K,
-    handler: (e: InstanceType<M[K]>) => RH,
-    fallback: (err: unknown) => RF
-  ): RH | RF
-  function matchTag<RH, RF, K extends keyof M>(
-    this: void,
-    err: unknown,
-    tag: K,
-    handler: (e: InstanceType<M[K]>) => RH,
-    fallback?: (err: unknown) => RF
-  ): RH | RF | undefined {
+    tag: PropertyKey,
+    handler: (e: never) => unknown,
+    fallback?: (err: unknown) => unknown
+  ): unknown {
     if (!is(err)) return fallback?.(err)
-    return dispatchTag(err, tag, handler, fallback) as RH | RF | undefined
+    return dispatchTag(err, tag, handler, fallback)
   }
 
-  function matchTags<const H extends RegistryMatchHandlers<M>>(
+  function matchTags(
     this: void,
     err: unknown,
-    handlers: H
-  ): HandlerResult<H> | undefined
-  function matchTags<const H extends RegistryMatchHandlers<M>, RF>(
-    this: void,
-    err: unknown,
-    handlers: H,
-    fallback: (err: unknown) => RF
-  ): HandlerResult<H> | RF
-  function matchTags<const H extends RegistryMatchHandlers<M>, RF>(
-    this: void,
-    err: unknown,
-    handlers: H,
-    fallback?: (err: unknown) => RF
-  ): HandlerResult<H> | RF | undefined {
+    handlers: object,
+    fallback?: (err: unknown) => unknown
+  ): unknown {
     if (!is(err)) return fallback?.(err)
-    return dispatchTags(err, handlers, fallback) as HandlerResult<H> | RF | undefined
+    return dispatchTags(err, handlers, fallback)
   }
 
   const instance: Omit<FaultRegistry<M>, "Type"> = {
