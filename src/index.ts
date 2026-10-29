@@ -52,7 +52,7 @@ export { registry } from "./lib/registry"
  * Throws `RegistryMergeConflictError` from `faultier/errors` when duplicate tags map to
  * different constructors.
  */
-export { merge } from "./lib/merge"
+export { merge } from "./lib/registry"
 
 /**
  * Standalone union-driven tag matcher for a single tag.
