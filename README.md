@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> `faultier` has moved to [`@sanely/errors`](https://www.npmjs.com/package/@sanely/errors). Its code now lives in [adelrodriguez/sanely](https://github.com/adelrodriguez/sanely/tree/main/packages/errors). This repository is archived, and `faultier` is deprecated on npm.
+
 ![Faultier Banner](./.github/assets/banner.webp)
 
 <div align="center">
